@@ -1,0 +1,37 @@
+# ===== Rust / Cargo =====
+/target
+/src-tauri/target
+**/*.rs.bk
+
+# ===== Node / Tauri / Frontend =====
+node_modules/
+dist/
+.tauri/
+
+# ===== Environment / Secrets =====
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ===== OS / Environment =====
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+*.tmp
+
+# ===== Editor / IDE =====
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ===== Build Output / Logs =====
+*.exe
+*.dll
+*.so
+*.dylib
+*.log
