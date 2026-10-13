@@ -35,3 +35,6 @@ $RECYCLE.BIN/
 *.so
 *.dylib
 *.log
+
+# ===== Local References (decompiled proprietary help files) =====
+docs/references/

@@ -1,6 +1,26 @@
-[package]
-name = "vivivi"
+[workspace]
+resolver = "3"
+members = [
+    "crates/vivivi-core",
+    "crates/vivivi-vi",
+    "crates/vivivi-modes",
+    "crates/vivivi-app",
+]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
+authors = ["vivivi developers"]
+license = "MIT"
+repository = "https://github.com/tkshnkgwr/vivivi"
 
-[dependencies]
+[workspace.dependencies]
+vivivi-core = { path = "crates/vivivi-core" }
+vivivi-vi = { path = "crates/vivivi-vi" }
+vivivi-modes = { path = "crates/vivivi-modes" }
+
+thiserror = "2.0"
+anyhow = "1.0"
+unicode-width = "0.2"
+encoding_rs = "0.8"
+regex = "1.11"

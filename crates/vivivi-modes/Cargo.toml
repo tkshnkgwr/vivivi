@@ -1,0 +1,13 @@
+[package]
+name = "vivivi-modes"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+vivivi-core.workspace = true
+unicode-width.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]

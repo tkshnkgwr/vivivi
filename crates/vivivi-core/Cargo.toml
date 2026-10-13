@@ -1,0 +1,14 @@
+[package]
+name = "vivivi-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+unicode-width.workspace = true
+encoding_rs.workspace = true
+regex.workspace = true
+
+[dev-dependencies]

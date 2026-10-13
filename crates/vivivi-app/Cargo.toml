@@ -1,0 +1,18 @@
+[package]
+name = "vivivi-app"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "vivivi"
+path = "src/main.rs"
+
+[dependencies]
+vivivi-core.workspace = true
+vivivi-vi.workspace = true
+vivivi-modes.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
