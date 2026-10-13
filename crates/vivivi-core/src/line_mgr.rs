@@ -1,8 +1,8 @@
-//! Line manager for line length, line wrapping, and offsets.
+//! 行マネージャ（行長・行折り返し・オフセット管理）。
 
 #[derive(Debug, Clone, Default)]
 pub struct LineMgr {
-    // Line management metadata, flags (bookmark, folding, etc.)
+    // 行管理メタデータ・フラグ（ブックマーク、折りたたみ等）
 }
 
 impl LineMgr {

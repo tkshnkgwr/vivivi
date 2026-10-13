@@ -19,7 +19,7 @@
 
 `vivivi` is a ground-up reimagining in **Rust** of the classic C++ / Qt text editor "**OpenViVi**", engineered for memory safety, concurrency, and uncompromising performance.
 
-It faithfully ports the core Vi editing mechanics and data structures while integrating unique, high-productivity features from commercial editions (ViVi 3 & 4), such as **Inline CSV/TSV mode** and **Unicode Box-Drawing (Keisen) auto-joining mode**.
+It faithfully ports the core Vi editing mechanics and data structures while integrating unique, high-productivity features from commercial editions (ViVi 3 & 4), such as **Inline CSV/TSV mode**, **Unicode Box-Drawing (Keisen) auto-joining mode**, and **Character Conversions**, alongside essential daily driver features from Gvim: **Window Splitting (`:split` / `:vsplit`)**, **Visual Block multi-line editing**, and **Outline navigation**.
 
 ---
 
@@ -31,16 +31,25 @@ It faithfully ports the core Vi editing mechanics and data structures while inte
   - Automatically merges contiguous typings into single undo steps.
   - Combines compound vi actions (e.g. `dd`, `cw`, `:%s`) into atomic undo blocks.
   - Tracks save points to accurately restore `is_modified == false`.
-- ⌨️ **Faithful Vi Command Engine**:
+- ⌨️ **Faithful Vi Command Engine & Visual Block Editing**:
   - State machine supporting Normal, Insert, Replace, Visual, VisualLine, VisualBlock, and CommandLine modes.
+  - **Full Visual Block Support**: `Ctrl-v` selection, block yank (`y`), block delete (`d`/`x`), multi-line block insert (`I`/`A` $\to$ `Esc`), and space-padded block paste (`p`/`P`).
   - Full register support (unnamed, named `"a` - `"z`, system clipboard).
+- 🪟 **Split & Multi-Window Views (Gvim-compatible)**:
+  - Horizontal (`:split`) and vertical (`:vsplit`) layout splitting.
+  - `Ctrl-w` window keybindings (`Ctrl-w w` cycle, `Ctrl-w c` close, `Ctrl-w o` single window).
+- 🌲 **Outline Analysis & Side Pane**:
+  - Symbol hierarchy extraction for Markdown headings, Rust, C/C++, and Python.
+  - Toggle with `F8` / `:outline`, navigate with `Ctrl-o` + `j`/`k`, and jump immediately with `Enter`.
+- 🔤 **Rich Character Conversions**:
+  - Batch whole-buffer conversion via ex commands: `:%zenkaku`, `:%hankaku`, `:%hiragana`, `:%katakana` (with automatic voiced mark synthesis).
 - 📊 **Inline CSV/TSV Alignment & Editing**:
   - Formats separated values into clean columnar tables with full CJK wide-character support.
   - Transparently hides quote marks while reading, exposing raw text on the cursor line for precision editing.
 - 📐 **Unicode Box-Drawing (Keisen) Auto-Joining**:
   - Seamlessly draws and connects Unicode box characters (U+2500 - U+254B) using `Ctrl + Arrow keys`, automatically resolving corners, T-junctions, and cross intersections.
-- 📦 **Decoupled Multi-Crate Architecture (Cargo Workspace)**:
-  - Strict separation between editing engine and UI layers, enabling exhaustive headless unit test coverage.
+- 🌐 **Charset & Newline Auto-Detection**:
+  - Auto-detects UTF-8, Shift_JIS (CP932), EUC-JP, and CRLF / LF, preserving original formatting on save.
 
 ---
 
@@ -48,10 +57,10 @@ It faithfully ports the core Vi editing mechanics and data structures while inte
 
 ```mermaid
 graph TD
-    App["vivivi-app (CLI / TUI Entrypoint)"]
+    App["vivivi-app (TUI / CLI Entrypoint)"]
     Core["vivivi-core (GapBuffer, UndoMgr, Cursor, Encodings)"]
     Vi["vivivi-vi (Vi State Machine, Command Parser, Registers, Ex)"]
-    Modes["vivivi-modes (Inline CSV, Keisen Box Drawing)"]
+    Modes["vivivi-modes (CSV, Keisen, Outline, Conversions, Syntax)"]
 
     App --> Vi
     App --> Modes
@@ -60,12 +69,12 @@ graph TD
     Modes --> Core
 ```
 
-| Crate Name     | Responsibilities & Roles                                     | Dependencies  |
-| :------------- | :----------------------------------------------------------- | :------------ |
-| `vivivi-core`  | GapBuffer, line manager, cursor, Undo/Redo, encodings        | None          |
-| `vivivi-vi`    | Vi state machine, command parsing, registers, ex commands    | `vivivi-core` |
-| `vivivi-modes` | Inline CSV/TSV mode, Unicode box-drawing (keisen) mode       | `vivivi-core` |
-| `vivivi-app`   | Application binary and execution entrypoint                  | All crates    |
+| Crate Name     | Responsibilities & Roles                                                   | Dependencies  |
+| :------------- | :------------------------------------------------------------------------- | :------------ |
+| `vivivi-core`  | GapBuffer, line manager, cursor, Undo/Redo, charset & newline detection    | None          |
+| `vivivi-vi`    | Vi state machine, command parser, registers, block editing, ex commands    | `vivivi-core` |
+| `vivivi-modes` | CSV/TSV mode, Unicode box drawing, outline parser, conversions, syntax     | `vivivi-core` |
+| `vivivi-app`   | Full-screen TUI (Ratatui + crossterm), window splitting, main loop         | All crates    |
 
 ---
 
@@ -84,7 +93,7 @@ cd vivivi
 # Build workspace
 cargo build
 
-# Run application
+# Run application (TUI)
 cargo run
 
 # Build optimized release binary
@@ -93,28 +102,18 @@ cargo build --release
 
 ### Run Tests
 ```powershell
-# Run unit tests across all crates (15 tests passed)
+# Run unit tests across all crates (all 47 tests passing)
 cargo test
 ```
 
 ---
 
-## 📚 Documentation Index
-
-Comprehensive documentation is available in both English and Japanese under the [`docs/`](./docs) directory:
-
-| Document | Japanese (JA) | English (EN) | Description |
-| :--- | :--- | :--- | :--- |
-| **Architecture** | [ja/ARCHITECTURE.md](./docs/ja/ARCHITECTURE.md) | [en/ARCHITECTURE.md](./docs/en/ARCHITECTURE.md) | System design & multi-crate architecture |
-| **Specifications**| [ja/SPECIFICATION.md](./docs/ja/SPECIFICATION.md) | [en/SPECIFICATION.md](./docs/en/SPECIFICATION.md) | Detailed specifications (Buffer, Undo, Vi, CSV, Keisen) |
-| **Development** | [ja/DEVELOPMENT.md](./docs/ja/DEVELOPMENT.md) | [en/DEVELOPMENT.md](./docs/en/DEVELOPMENT.md) | Developer workflows & setup |
-| **Testing** | [ja/TESTING.md](./docs/ja/TESTING.md) | [en/TESTING.md](./docs/en/TESTING.md) | Test strategy & test suites |
-| **Test Report** | [ja/TEST_REPORT.md](./docs/ja/TEST_REPORT.md) | [en/TEST_REPORT.md](./docs/en/TEST_REPORT.md) | Test execution logs |
-| **User Guide** | [ja/USER_GUIDE.md](./docs/ja/USER_GUIDE.md) | [en/USER_GUIDE.md](./docs/en/USER_GUIDE.md) | Keybindings & operating manual |
-| **Roadmap** | [ja/TODO.md](./docs/ja/TODO.md) | [en/TODO.md](./docs/en/TODO.md) | Upcoming tasks & progress |
-
----
-
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the **[MIT License](LICENSE)**.
+
+```text
+Copyright (c) 2026 tkshnkgwr
+Portions of the vi command engine and specifications are adapted from openViVi:
+https://github.com/vivisuke/openViVi (MIT License)
+```

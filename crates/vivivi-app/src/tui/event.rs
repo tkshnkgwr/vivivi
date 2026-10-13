@@ -30,6 +30,89 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) {
         return;
     }
 
+    // F8: アウトライン表示のトグル
+    if key.code == KeyCode::F(8) {
+        app.toggle_outline();
+        return;
+    }
+
+    // アウトラインペインにフォーカスがある場合のキーハンドリング
+    if app.show_outline && app.outline_focus {
+        match key.code {
+            KeyCode::Esc => {
+                app.outline_focus = false;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                app.selected_outline_idx = app.selected_outline_idx.saturating_sub(1);
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if !app.outline_items.is_empty() {
+                    app.selected_outline_idx =
+                        (app.selected_outline_idx + 1).min(app.outline_items.len() - 1);
+                }
+            }
+            KeyCode::Enter => {
+                app.jump_to_selected_outline();
+            }
+            _ => {}
+        }
+        return;
+    }
+
+    // Ctrl-W ウィンドウプレフィックス処理
+    if app.ctrl_w_pending {
+        app.ctrl_w_pending = false;
+        match key.code {
+            KeyCode::Char('w') | KeyCode::Char('W') => {
+                app.cycle_window();
+            }
+            KeyCode::Char('s') => {
+                app.split_horizontal();
+            }
+            KeyCode::Char('v') => {
+                app.split_vertical();
+            }
+            KeyCode::Char('c') | KeyCode::Char('q') => {
+                app.close_window();
+            }
+            KeyCode::Char('o') => {
+                app.only_window();
+            }
+            KeyCode::Char('h') | KeyCode::Char('k') | KeyCode::Left | KeyCode::Up => {
+                if app.windows.len() > 1 {
+                    app.active_window = if app.active_window == 0 {
+                        app.windows.len() - 1
+                    } else {
+                        app.active_window - 1
+                    };
+                    app.cursor = app.windows[app.active_window].cursor.clone();
+                    app.scroll = app.windows[app.active_window].scroll;
+                }
+            }
+            KeyCode::Char('l') | KeyCode::Char('j') | KeyCode::Right | KeyCode::Down => {
+                app.cycle_window();
+            }
+            _ => {}
+        }
+        return;
+    }
+
+    // ノーマルモードでの Ctrl-W 開始および Ctrl-O アウトラインフォーカス
+    if app.mode() == ViMode::Normal && key.modifiers.contains(KeyModifiers::CONTROL) {
+        if key.code == KeyCode::Char('w') {
+            app.ctrl_w_pending = true;
+            app.status_message =
+                Some("Ctrl-W: [w:巡回, s:水平分割, v:垂直分割, c:閉じる, o:単一化]".to_string());
+            return;
+        }
+        if key.code == KeyCode::Char('o') && app.show_outline {
+            app.outline_focus = true;
+            app.status_message =
+                Some("アウトラインペイン選択中 (Enter:ジャンプ, Esc:エディタ復帰)".to_string());
+            return;
+        }
+    }
+
     // 2. 罫線モード有効時の矢印キー操作 (Ctrl+矢印で描画、Shift+矢印で消去)
     if app.keisen_mode.is_active {
         let is_ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
@@ -71,6 +154,7 @@ fn handle_insert_mode(app: &mut App, key: KeyEvent) {
             }
         }
         KeyCode::Char(c) => {
+            app.vi.record_inserted_char(c);
             let cur = app.cursor_pos();
             let pos = app.buffer.cursor_to_position(cur);
             app.buffer.insert_char(pos, c);
@@ -204,6 +288,52 @@ fn execute_ex_command(app: &mut App, cmd: &str) {
         "align right" | "right" => {
             app.align_keisen_box(vivivi_modes::BoxAlignment::Right);
         }
+
+        // --- 画面分割 (:split, :vsplit, :close, :only) ---
+        "split" | "sp" => {
+            app.split_horizontal();
+        }
+        "vsplit" | "vs" => {
+            app.split_vertical();
+        }
+        "close" | "c" => {
+            app.close_window();
+        }
+        "only" => {
+            app.only_window();
+        }
+
+        // --- アウトライン (:outline) ---
+        "outline" => {
+            app.toggle_outline();
+        }
+
+        // --- 文字変換 (:zenkaku, :hankaku, :hiragana, :katakana, etc.) ---
+        "zenkaku" | "%zenkaku" => {
+            app.convert_buffer_text(vivivi_modes::ConversionType::ToZenkakuAlphanumeric);
+        }
+        "hankaku" | "%hankaku" => {
+            app.convert_buffer_text(vivivi_modes::ConversionType::ToHankakuAlphanumeric);
+        }
+        "hiragana" | "%hiragana" => {
+            app.convert_buffer_text(vivivi_modes::ConversionType::ToHiragana);
+        }
+        "katakana" | "%katakana" => {
+            app.convert_buffer_text(vivivi_modes::ConversionType::ToKatakana);
+        }
+        "hankata" | "%hankata" => {
+            app.convert_buffer_text(vivivi_modes::ConversionType::ToHankakuKatakana);
+        }
+        "zenkata" | "%zenkata" => {
+            app.convert_buffer_text(vivivi_modes::ConversionType::ToZenkakuKatakana);
+        }
+        "toupper" | "%toupper" => {
+            app.convert_buffer_text(vivivi_modes::ConversionType::ToUppercase);
+        }
+        "tolower" | "%tolower" => {
+            app.convert_buffer_text(vivivi_modes::ConversionType::ToLowercase);
+        }
+
         _ => {
             app.status_message = Some(format!("未対応のexコマンド: {trimmed}"));
         }

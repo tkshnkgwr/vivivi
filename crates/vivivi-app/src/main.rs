@@ -64,7 +64,7 @@ fn run_console_demo() {
     println!("Lines: {}", buf.line_count());
     println!("Initial text:\n{}", buf);
 
-    // Test Undo/Redo & GapBuffer integration
+    // Undo/Redo と GapBuffer の統合動作テスト
     buf.open_undo_block();
     let pos = buf.cursor_to_position(CursorPosition::new(0, 14));
     buf.insert_text(pos, " [Rust Edition]");
@@ -89,7 +89,7 @@ fn run_console_demo() {
     vi.feed_char('\x1b');
     println!("After Escape key, Mode: {}", vi.mode().name());
 
-    // --- Phase 2: Keisen Demo ---
+    // --- フェーズ 2: 罫線モードのデモ ---
     println!("\n=== Phase 2 Demo: Keisen Mode ===");
     let mut keisen_buf = TextBuffer::new();
     let mut keisen_cur = CursorPosition::new(0, 0);
@@ -117,7 +117,7 @@ fn run_console_demo() {
     KeisenMode::align_box_text(&mut box_buf, 0, BoxAlignment::Center);
     println!("Centered box text: {}", box_buf);
 
-    // --- Phase 2: CSV Demo ---
+    // --- フェーズ 2: インラインCSVモードのデモ ---
     println!("\n=== Phase 2 Demo: Inline CSV Mode ===");
     let mut csv_mgr = CsvMode::default();
     let sample_csv = ["id,name,score", "1,\"Alice Smith\",95", "2,\"Bob\",80"];

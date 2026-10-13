@@ -18,7 +18,7 @@ pub struct TextBuffer {
 }
 
 impl TextBuffer {
-    /// Creates a new empty `TextBuffer`.
+    /// 空の新しい `TextBuffer` を生成します。
     pub fn new() -> Self {
         Self {
             data: GapBuffer::new(),
@@ -26,7 +26,7 @@ impl TextBuffer {
         }
     }
 
-    /// Creates a `TextBuffer` from initial text string.
+    /// 初期文字列から `TextBuffer` を生成します。
     pub fn from_text(text: &str) -> Self {
         let chars: Vec<char> = text.chars().collect();
         let mut data = GapBuffer::with_capacity(chars.len() + 64);
@@ -38,32 +38,32 @@ impl TextBuffer {
         Self { data, undo_mgr }
     }
 
-    /// Number of Unicode scalar characters stored in the buffer.
+    /// バッファ内に格納されている Unicode スカラー文字の総数を返します。
     pub fn len(&self) -> usize {
         self.data.len()
     }
 
-    /// Is the buffer empty?
+    /// バッファが空かどうかを判定します。
     pub fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 
-    /// Has the buffer been modified since last save?
+    /// 前回の保存以降、バッファが変更されたかどうかを返します。
     pub fn is_modified(&self) -> bool {
         self.undo_mgr.is_modified()
     }
 
-    /// Marks the buffer state as saved.
+    /// 現在のバッファ状態を「保存済み（未変更）」として記録します。
     pub fn on_saved(&mut self) {
         self.undo_mgr.on_saved();
     }
 
-    /// Returns the character at character offset `pos`.
+    /// 文字オフセット `pos` にある文字を取得します。
     pub fn char_at(&self, pos: usize) -> Option<char> {
         self.data.get(pos).copied()
     }
 
-    /// Returns a substring from character offset `pos` of length `len`.
+    /// 文字オフセット `pos` から長さ `len` の部分文字列を取得します。
     pub fn get_text(&self, pos: usize, len: usize) -> String {
         let end = (pos + len).min(self.data.len());
         let mut s = String::with_capacity(end.saturating_sub(pos));
@@ -75,20 +75,20 @@ impl TextBuffer {
         s
     }
 
-    /// Basic insert without recording undo actions (used by undo/redo application).
+    /// Undo 履歴を記録せずに直接テキストを挿入します（Undo/Redo 適用処理用）。
     pub fn basic_insert_text(&mut self, pos: usize, text: &str) {
         let chars: Vec<char> = text.chars().collect();
         self.data.insert_slice(pos, &chars);
     }
 
-    /// Basic delete without recording undo actions (used by undo/redo application).
+    /// Undo 履歴を記録せずに直接テキストを削除します（Undo/Redo 適用処理用）。
     pub fn basic_delete_text(&mut self, pos: usize, len: usize) -> String {
         let deleted = self.get_text(pos, len);
         self.data.remove_range(pos, pos + len);
         deleted
     }
 
-    /// Inserts text at character offset `pos`, recording to the Undo manager.
+    /// 文字オフセット `pos` にテキストを挿入し、Undo マネージャに記録します。
     pub fn insert_text(&mut self, pos: usize, text: &str) {
         if text.is_empty() {
             return;
@@ -97,14 +97,14 @@ impl TextBuffer {
         self.undo_mgr.push_insert(pos, text);
     }
 
-    /// Inserts a single character at character offset `pos`, recording to the Undo manager.
+    /// 文字オフセット `pos` に単一文字を挿入し、Undo マネージャに記録します。
     pub fn insert_char(&mut self, pos: usize, ch: char) {
         let mut s = String::with_capacity(4);
         s.push(ch);
         self.insert_text(pos, &s);
     }
 
-    /// Deletes `len` characters starting at offset `pos`, recording to the Undo manager.
+    /// 文字オフセット `pos` から `len` 文字を削除し、Undo マネージャに記録します。
     pub fn delete_text(&mut self, pos: usize, len: usize, is_backspace: bool) -> String {
         if len == 0 || pos >= self.data.len() {
             return String::new();
@@ -114,7 +114,7 @@ impl TextBuffer {
         deleted
     }
 
-    /// Deletes characters in range `[start, end)`, recording to the Undo manager.
+    /// 範囲 `[start, end)` の文字を削除し、Undo マネージャに記録します。
     pub fn delete_range(&mut self, start: usize, end: usize) -> String {
         if end <= start {
             return String::new();
@@ -122,27 +122,27 @@ impl TextBuffer {
         self.delete_text(start, end - start, false)
     }
 
-    /// Opens an undo transaction block.
+    /// Undo トランザクションブロックを開始します。
     pub fn open_undo_block(&mut self) {
         self.undo_mgr.open_block();
     }
 
-    /// Closes an undo transaction block.
+    /// Undo トランザクションブロックを終了します。
     pub fn close_undo_block(&mut self) {
         self.undo_mgr.close_block();
     }
 
-    /// Closes all active undo transaction blocks.
+    /// アクティブなすべての Undo トランザクションブロックを一括終了します。
     pub fn close_all_undo_blocks(&mut self) {
         self.undo_mgr.close_all_blocks();
     }
 
-    /// Prohibits merging the last insert action with subsequent typings.
+    /// 直前の文字挿入アクションと以降のキータイピングのマージを禁止します。
     pub fn prohibit_merge_undo(&mut self) {
         self.undo_mgr.prohibit_merge();
     }
 
-    /// Executes an Undo step. Returns true if undo was performed.
+    /// Undo ステップを実行します。実行された場合は true を返します。
     pub fn undo(&mut self) -> bool {
         if let Some(actions) = self.undo_mgr.pop_undo() {
             for action in actions {
@@ -169,7 +169,7 @@ impl TextBuffer {
         }
     }
 
-    /// Executes a Redo step. Returns true if redo was performed.
+    /// Redo ステップを実行します。実行された場合は true を返します。
     pub fn redo(&mut self) -> bool {
         if let Some(actions) = self.undo_mgr.pop_redo() {
             for action in actions {
@@ -196,7 +196,7 @@ impl TextBuffer {
         }
     }
 
-    /// Total number of lines in the document (1-indexed minimum of 1).
+    /// 文書内の総行数を返します（最低でも 1 行）。
     pub fn line_count(&self) -> usize {
         let mut count = 1;
         for i in 0..self.data.len() {
@@ -207,7 +207,7 @@ impl TextBuffer {
         count
     }
 
-    /// Converts a 0-indexed line number into character offset where the line starts.
+    /// 0始まりの行番号を開始する文字オフセット位置へ変換します。
     pub fn line_start_position(&self, target_line: usize) -> usize {
         if target_line == 0 {
             return 0;
@@ -224,7 +224,7 @@ impl TextBuffer {
         self.data.len()
     }
 
-    /// Converts a character offset into a 0-indexed line number.
+    /// 文字オフセット位置を 0 始まりの行番号へ変換します。
     pub fn position_to_line(&self, pos: usize) -> usize {
         let limit = pos.min(self.data.len());
         let mut line = 0;
@@ -236,7 +236,7 @@ impl TextBuffer {
         line
     }
 
-    /// Converts a character offset into a `CursorPosition` (line and column).
+    /// 文字オフセット位置を行・列座標（CursorPosition）へ変換します。
     pub fn position_to_cursor(&self, pos: usize) -> CursorPosition {
         let line = self.position_to_line(pos);
         let line_start = self.line_start_position(line);
@@ -244,19 +244,19 @@ impl TextBuffer {
         CursorPosition::new(line, col)
     }
 
-    /// Converts a `CursorPosition` (line and column) into a character offset.
+    /// 行・列座標（CursorPosition）を文字オフセット位置へ変換します。
     pub fn cursor_to_position(&self, cursor: CursorPosition) -> usize {
         let line_start = self.line_start_position(cursor.line);
         let next_line_start = self.line_start_position(cursor.line + 1);
         let line_len = if cursor.line + 1 < self.line_count() {
-            next_line_start.saturating_sub(line_start + 1) // exclude newline
+            next_line_start.saturating_sub(line_start + 1) // 改行文字を除く
         } else {
             self.data.len().saturating_sub(line_start)
         };
         line_start + cursor.col.min(line_len)
     }
 
-    /// Returns the content of specified line without the trailing newline.
+    /// 指定行の文字列（末尾の改行コードを除く）を返します。
     pub fn line_text(&self, line: usize) -> Option<String> {
         if line >= self.line_count() {
             return None;
@@ -275,7 +275,7 @@ impl TextBuffer {
         Some(text)
     }
 
-    /// Alias for `line_text(line)`.
+    /// `line_text(line)` の別名エイリアスです。
     pub fn get_line(&self, line: usize) -> Option<String> {
         self.line_text(line)
     }
@@ -315,13 +315,13 @@ mod tests {
     fn test_undo_block() {
         let mut buf = TextBuffer::from_text("12345");
         buf.open_undo_block();
-        buf.delete_text(0, 2, false); // deletes "12" -> "345"
-        buf.insert_text(0, "ABC"); // inserts "ABC" -> "ABC345"
+        buf.delete_text(0, 2, false); // "12" を削除 -> "345"
+        buf.insert_text(0, "ABC"); // "ABC" を挿入 -> "ABC345"
         buf.close_undo_block();
 
         assert_eq!(buf.to_string(), "ABC345");
 
-        // One undo reverts both operations in the block!
+        // 1回のUndoでブロック内の両操作が一括アンドゥされる
         assert!(buf.undo());
         assert_eq!(buf.to_string(), "12345");
 
@@ -338,8 +338,8 @@ mod tests {
         assert_eq!(buf.line_text(2), Some("gamma".to_string()));
 
         assert_eq!(buf.line_start_position(0), 0);
-        assert_eq!(buf.line_start_position(1), 6); // "alpha\n" is 6 chars
-        assert_eq!(buf.line_start_position(2), 11); // "alpha\nbeta\n" is 11 chars
+        assert_eq!(buf.line_start_position(1), 6); // "alpha\n" は 6 文字
+        assert_eq!(buf.line_start_position(2), 11); // "alpha\nbeta\n" は 11 文字
 
         assert_eq!(buf.position_to_line(0), 0);
         assert_eq!(buf.position_to_line(5), 0);
@@ -350,29 +350,29 @@ mod tests {
     #[test]
     fn test_prohibit_merge_and_newlines() {
         let mut buf = TextBuffer::new();
-        // Type 'a', 'b', 'c'
+        // 'a', 'b', 'c' を入力
         buf.insert_text(0, "a");
         buf.insert_text(1, "b");
         buf.insert_text(2, "c");
 
-        // Cursor moved or mode changed: prohibit merge
+        // カーソル移動やモード変更によりマージ禁止を設定
         buf.prohibit_merge_undo();
 
-        // Type 'd', 'e'
+        // 'd', 'e' を入力
         buf.insert_text(3, "d");
         buf.insert_text(4, "e");
 
         assert_eq!(buf.to_string(), "abcde");
 
-        // First undo should only revert "de"
+        // 最初のUndoは "de" のみをアンドゥ
         assert!(buf.undo());
         assert_eq!(buf.to_string(), "abc");
 
-        // Second undo reverts "abc"
+        // 2回目のUndoで "abc" をアンドゥ
         assert!(buf.undo());
         assert_eq!(buf.to_string(), "");
 
-        // Redo brings back "abc", then "abcde"
+        // Redoで "abc"、続いて "abcde" が復元される
         assert!(buf.redo());
         assert_eq!(buf.to_string(), "abc");
         assert!(buf.redo());
@@ -382,12 +382,12 @@ mod tests {
     #[test]
     fn test_cursor_and_position_conversion() {
         let buf = TextBuffer::from_text("hello\nworld");
-        let cur = buf.position_to_cursor(7); // 'o' in "world" (line 1, col 1)
+        let cur = buf.position_to_cursor(7); // "world" の 'o' (行 1, 列 1)
         assert_eq!(cur.line, 1);
         assert_eq!(cur.col, 1);
 
         let pos = buf.cursor_to_position(CursorPosition::new(1, 3));
-        assert_eq!(pos, 9); // 'l' in "world"
+        assert_eq!(pos, 9); // "world" の 'l'
         assert_eq!(buf.char_at(pos), Some('l'));
     }
 }

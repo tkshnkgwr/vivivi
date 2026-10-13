@@ -116,6 +116,15 @@ pub enum ViCommand {
     SearchPrev,
     /// カーソル下の単語を検索 (`*` / `#`)
     SearchWordUnderCursor { forward: bool },
+    /// ビジュアルモードでの操作 (削除、ヤンク、変更)
+    VisualOperate {
+        op: Operator,
+        register: Option<char>,
+    },
+    /// ビジュアルモードでの大文字・小文字反転 (`~`)
+    VisualSwapCase,
+    /// ビジュアルブロックでの一括挿入 (`I` または `A`)
+    VisualBlockInsert { at_end: bool },
     /// exコマンドの実行 (`:w`, `:q`, `:%s/...` 等)
     ExCommand(String),
 }

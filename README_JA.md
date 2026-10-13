@@ -19,7 +19,7 @@
 
 `vivivi` は、長年親しまれてきた C++ / Qt 製テキストエディタ「**OpenViVi**」の洗練されたvi編集体験と優れたデータ構造をベースに、メモリ安全性と並行処理性能に優れた **Rust** で完全に再構築するプロジェクトです。
 
-また、有償版（ViVi 3 / ViVi 4）に搭載されていた強力な独自機能である **「インラインCSV/TSV表示・編集モード」** や **「Unicode罫線自動結合モード」** も忠実に再現・統合しています。
+元祖ViVi（ViVi 3 / ViVi 4）に搭載されていた強力な独自機能である **「インラインCSV/TSV表示・編集モード」**、**「Unicode罫線自動結合モード」**、**「文字変換機能」** に加え、Gvim常用機能である **「画面分割（Split / Vsplit）」**、**「BOX選択・矩形一括編集（VisualBlock）」**、**「アウトライン解析サイドペイン」** も忠実に統合しています。
 
 ---
 
@@ -30,16 +30,25 @@
 - 🔄 **トランザクション対応 Undo/Redo**:
   - 連続キー入力の自動マージ（1回の `u` で取り消し可能）と、Vi複合コマンド（`dd`, `cw`, `:%s` 等）をアトミックに戻す「Undoブロック」を実装。
   - 保存点（Save Point）の自動追跡により、Undoで保存時の状態に戻った際は `is_modified == false` に完全復帰。
-- ⌨️ **忠実な Vi コマンドエンジン**:
+- ⌨️ **忠実な Vi コマンドエンジン & 矩形編集**:
   - Normal, Insert, Replace, Visual, VisualLine, VisualBlock, CommandLine の各モードを状態機械としてモデル化。
+  - **BOX選択・矩形編集完全対応**: `Ctrl-v` 選択、矩形ヤンク（`y`）、矩形削除（`d`/`x`）、矩形一括挿入（`I`/`A` $\to$ `Esc` 反映）、スペース自動補填矩形ペースト（`p`/`P`）。
   - レジスタ管理（無名レジスタ、名前付きレジスタ `"a`〜`"z`、クリップボード連携）。
+- 🪟 **画面分割・マルチビュー (Gvim互換)**:
+  - 水平分割（`:split`）および垂直分割（`:vsplit`）による複数ウィンドウ並行表示。
+  - `Ctrl-w` 系統キーバインド（`Ctrl-w w` ウィンドウ巡回、`Ctrl-w c` クローズ、`Ctrl-w o` 単一ウィンドウ化等）。
+- 🌲 **アウトライン解析・サイドペイン**:
+  - Markdown（見出し階層）、Rust、C/C++、Python等のシンボルツリー解析。
+  - `F8` / `:outline` によるトグル表示、`Ctrl-o` でのサイドペイン操作と `Enter` での該当行即時ジャンプ。
+- 🔤 **多彩な文字変換機能**:
+  - `:%zenkaku`, `:%hankaku`, `:%hiragana`, `:%katakana` 等のexコマンドによるバッファ全文一括変換（全角/半角英数、カタカナ/ひらがな、半角カナ濁点自動結合対応）。
 - 📊 **インライン CSV/TSV 表示・編集モード**:
   - 各列の最大幅に合わせてインラインで自動整列。全角文字（CJK）の表示幅も正しく計算。
   - 閲覧時はクォート記号を非表示にし、カーソル行のみ生テキストで直接編集可能。
 - 📐 **Unicode 罫線自動結合描画モード**:
   - Unicode 罫線ブロック（U+2500〜U+254B）の交差判定に基づき、`Ctrl + 矢印キー` で十字（`┼`）やT字（`┬`, `┴`, `├`, `┤`）へ自動変換して接続。
-- 📦 **UI非依存のマルチクレート設計 (Cargo Workspace)**:
-  - エディタのコアロジックを UI から完全に分離し、高カバレッジな単体テストを実現。
+- 🌐 **文字コード・改行自動判別**:
+  - UTF-8, Shift_JIS (CP932), EUC-JP / CRLF, LF, CR を自動判別し、保存時も元の文字コードと改行体系を完全維持。
 
 ---
 
@@ -47,10 +56,10 @@
 
 ```mermaid
 graph TD
-    App["vivivi-app (CLI / TUI エントリポイント)"]
+    App["vivivi-app (TUI / CLI エントリポイント)"]
     Core["vivivi-core (GapBuffer・UndoMgr・カーソル・エンコーディング)"]
     Vi["vivivi-vi (Vi状態機械・コマンドパーサー・レジスタ・ex)"]
-    Modes["vivivi-modes (インラインCSV・罫線描画)"]
+    Modes["vivivi-modes (CSV・罫線・アウトライン・文字変換・シンタックス)"]
 
     App --> Vi
     App --> Modes
@@ -59,12 +68,12 @@ graph TD
     Modes --> Core
 ```
 
-| クレート名     | 役割・責務                                                   | 依存クレート  |
-| :------------- | :----------------------------------------------------------- | :------------ |
-| `vivivi-core`  | テキストバッファ、行管理、カーソル、Undo/Redo、エンコーディング | なし          |
-| `vivivi-vi`    | Vi状態機械、コマンドパーサー、レジスタ、exコマンド           | `vivivi-core` |
-| `vivivi-modes` | インラインCSV/TSVモード、Unicode罫線描画・結合モード         | `vivivi-core` |
-| `vivivi-app`   | アプリケーション本体・実行エントリポイント                   | 全クレート    |
+| クレート名     | 役割・責務                                                             | 依存クレート  |
+| :------------- | :--------------------------------------------------------------------- | :------------ |
+| `vivivi-core`  | テキストバッファ、行管理、カーソル、Undo/Redo、文字コード・改行判別    | なし          |
+| `vivivi-vi`    | Vi状態機械、コマンドパーサー、レジスタ、矩形編集、exコマンド           | `vivivi-core` |
+| `vivivi-modes` | CSV/TSVモード、Unicode罫線描画、アウトライン解析、文字変換、シンタックス | `vivivi-core` |
+| `vivivi-app`   | フルスクリーンTUI（Ratatui + crossterm）、画面分割、メインループ       | 全クレート    |
 
 ---
 
@@ -83,7 +92,7 @@ cd vivivi
 # ワークスペース全体のビルド
 cargo build
 
-# アプリケーションの実行
+# アプリケーションの実行 (TUI)
 cargo run
 
 # リリースバイナリのビルド
@@ -92,28 +101,18 @@ cargo build --release
 
 ### テスト実行
 ```powershell
-# 全クレートの単体テスト実行 (全15テスト合格)
+# 全クレートの単体テスト実行 (全47テスト完全合格)
 cargo test
 ```
 
 ---
 
-## 📚 ドキュメント一覧
-
-詳細なドキュメントは [`docs/`](./docs) ディレクトリに日・英で配備されています：
-
-| ドキュメント | 日本語版 (JA) | 英語版 (EN) | 概要 |
-| :--- | :--- | :--- | :--- |
-| **アーキテクチャ** | [ja/ARCHITECTURE.md](./docs/ja/ARCHITECTURE.md) | [en/ARCHITECTURE.md](./docs/en/ARCHITECTURE.md) | システム設計・マルチクレート構造 |
-| **機能仕様書** | [ja/SPECIFICATION.md](./docs/ja/SPECIFICATION.md) | [en/SPECIFICATION.md](./docs/en/SPECIFICATION.md) | バッファ、Undo、Vi、CSV、罫線仕様 |
-| **開発者ガイド** | [ja/DEVELOPMENT.md](./docs/ja/DEVELOPMENT.md) | [en/DEVELOPMENT.md](./docs/en/DEVELOPMENT.md) | 環境構築・ビルド・開発フロー |
-| **テスト計画** | [ja/TESTING.md](./docs/ja/TESTING.md) | [en/TESTING.md](./docs/en/TESTING.md) | テスト戦略・検証方法 |
-| **テスト報告書** | [ja/TEST_REPORT.md](./docs/ja/TEST_REPORT.md) | [en/TEST_REPORT.md](./docs/en/TEST_REPORT.md) | 単体テスト結果記録 |
-| **ユーザーガイド** | [ja/USER_GUIDE.md](./docs/ja/USER_GUIDE.md) | [en/USER_GUIDE.md](./docs/en/USER_GUIDE.md) | 操作方法・キーバインド |
-| **ロードマップ** | [ja/TODO.md](./docs/ja/TODO.md) | [en/TODO.md](./docs/en/TODO.md) | 開発進捗・タスク一覧 |
-
----
-
 ## 📄 ライセンス
 
-本プロジェクトは [MIT License](LICENSE) のもとで公開されています。
+本プロジェクトは **[MIT License](LICENSE)** のもとで公開されています。
+
+```text
+Copyright (c) 2026 tkshnkgwr
+Portions of the vi command engine and specifications are adapted from openViVi:
+https://github.com/vivisuke/openViVi (MIT License)
+```

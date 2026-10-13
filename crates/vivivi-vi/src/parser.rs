@@ -127,6 +127,52 @@ impl CommandParser {
             return Some(ViCommand::EnterMode(ViMode::Normal));
         }
 
+        // Visual モード（Visual, VisualLine, VisualBlock）中のキー処理
+        if matches!(
+            mode,
+            ViMode::Visual | ViMode::VisualLine | ViMode::VisualBlock
+        ) {
+            match ch {
+                'd' | 'x' => {
+                    let reg = self.selected_register.take();
+                    self.reset();
+                    return Some(ViCommand::VisualOperate {
+                        op: Operator::Delete,
+                        register: reg,
+                    });
+                }
+                'y' => {
+                    let reg = self.selected_register.take();
+                    self.reset();
+                    return Some(ViCommand::VisualOperate {
+                        op: Operator::Yank,
+                        register: reg,
+                    });
+                }
+                'c' => {
+                    let reg = self.selected_register.take();
+                    self.reset();
+                    return Some(ViCommand::VisualOperate {
+                        op: Operator::Change,
+                        register: reg,
+                    });
+                }
+                '~' => {
+                    self.reset();
+                    return Some(ViCommand::VisualSwapCase);
+                }
+                'I' if mode == ViMode::VisualBlock => {
+                    self.reset();
+                    return Some(ViCommand::VisualBlockInsert { at_end: false });
+                }
+                'A' if mode == ViMode::VisualBlock => {
+                    self.reset();
+                    return Some(ViCommand::VisualBlockInsert { at_end: true });
+                }
+                _ => {}
+            }
+        }
+
         match &self.state {
             ParserState::WaitingForRegister => {
                 self.selected_register = Some(ch);

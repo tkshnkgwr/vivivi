@@ -98,7 +98,7 @@ pub fn tokenize_line(line: &str, lang: SyntaxLang) -> Vec<SyntaxToken> {
         }
 
         // 2. コメント判定
-        // C-style line comment: //
+        // C言語スタイル行コメント: //
         if (lang == SyntaxLang::Rust || lang == SyntaxLang::Cpp || lang == SyntaxLang::JavaScript)
             && ch == '/'
             && i + 1 < len
@@ -111,7 +111,7 @@ pub fn tokenize_line(line: &str, lang: SyntaxLang) -> Vec<SyntaxToken> {
             break;
         }
 
-        // Python / Shell line comment: #
+        // Python / シェルスタイル行コメント: #
         if lang == SyntaxLang::Python && ch == '#' {
             tokens.push(SyntaxToken {
                 text: chars[i..].iter().collect(),

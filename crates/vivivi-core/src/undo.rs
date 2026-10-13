@@ -25,6 +25,7 @@ pub enum UndoAction {
 }
 
 impl UndoAction {
+    /// 逆操作アクション（アンドゥ時に適用する操作）を生成します。
     pub fn inverse(&self) -> UndoAction {
         match self {
             Self::Insert { pos, text, .. } => Self::Delete {
@@ -54,28 +55,30 @@ impl UndoAction {
     }
 }
 
-/// A transactional group of Undo actions (e.g. from a single vi command like `dd` or `cw`).
+/// 単一の Vi コマンド（`dd` や `cw` など）に起因する一連のアクションをアトミックにまとめるトランザクションブロック。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct UndoBlock {
     pub actions: Vec<UndoAction>,
 }
 
+/// アンドゥ・リドゥ履歴管理マネージャ本体。
 #[derive(Debug, Clone, Default)]
 pub struct UndoMgr {
     undo_stack: Vec<UndoBlock>,
     redo_stack: Vec<UndoBlock>,
     current_block: Option<UndoBlock>,
     block_nest_level: usize,
-    /// The index in `undo_stack` where the document was saved.
+    /// ドキュメント保存時の `undo_stack` の長さ（保存点）
     save_point: Option<usize>,
 }
 
 impl UndoMgr {
+    /// 新しい `UndoMgr` を生成します。
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Starts an undo transaction block. Multiple nested calls are supported.
+    /// Undo トランザクションブロックを開始します。多重ネスト呼び出しに対応しています。
     pub fn open_block(&mut self) {
         if self.block_nest_level == 0 {
             self.current_block = Some(UndoBlock::default());
@@ -83,7 +86,7 @@ impl UndoMgr {
         self.block_nest_level += 1;
     }
 
-    /// Closes an undo transaction block. When nest level reaches 0, the block is finalized.
+    /// Undo トランザクションブロックを終了します。ネスト深度が 0 に達した時点でブロックが確定します。
     pub fn close_block(&mut self) {
         if self.block_nest_level > 0 {
             self.block_nest_level -= 1;
@@ -97,7 +100,7 @@ impl UndoMgr {
         }
     }
 
-    /// Closes all nested undo transaction blocks immediately.
+    /// ネストされたすべての Undo トランザクションブロックを直ちに一括確定・クローズします。
     pub fn close_all_blocks(&mut self) {
         if self.block_nest_level > 0 {
             self.block_nest_level = 0;
@@ -110,12 +113,12 @@ impl UndoMgr {
         }
     }
 
-    /// Are we currently inside an open undo block?
+    /// 現在開いている Undo トランザクションブロックの内部にいるかどうかを返します。
     pub fn is_block_opened(&self) -> bool {
         self.block_nest_level > 0
     }
 
-    /// Marks the latest insert action so it will not merge with subsequent typing.
+    /// 最新の文字挿入アクションをマークし、以降のタイピングとの自動マージを禁止します。
     pub fn prohibit_merge(&mut self) {
         if let Some(ref mut block) = self.current_block {
             if let Some(UndoAction::Insert { prohibit_merge, .. }) = block.actions.last_mut() {
@@ -128,13 +131,13 @@ impl UndoMgr {
         }
     }
 
-    /// Records a text insertion, merging consecutive single-character typings if contiguous.
+    /// 文字挿入操作を記録します。連続した単一文字タイピングは自動的にマージ統合されます。
     pub fn push_insert(&mut self, pos: usize, text: &str) {
         if text.is_empty() {
             return;
         }
 
-        // Try merging with the last insert action
+        // 直前の挿入操作とのマージを試行
         let last_action = if let Some(ref mut block) = self.current_block {
             block.actions.last_mut()
         } else {
@@ -177,7 +180,7 @@ impl UndoMgr {
         }
     }
 
-    /// Records a text deletion.
+    /// 文字削除操作を記録します。
     pub fn push_delete(&mut self, pos: usize, text: &str, is_backspace: bool) {
         if text.is_empty() {
             return;
@@ -198,7 +201,7 @@ impl UndoMgr {
         }
     }
 
-    /// Records a text replacement.
+    /// 文字置換操作を記録します。
     pub fn push_replace(&mut self, pos: usize, old_text: &str, new_text: &str) {
         if old_text == new_text {
             return;
@@ -219,7 +222,7 @@ impl UndoMgr {
         }
     }
 
-    /// Pops an undo block from the undo stack, returning actions to reverse (in reverse execution order).
+    /// Undo スタックからブロックをポップし、逆順の取り消しアクション列を返します。
     pub fn pop_undo(&mut self) -> Option<Vec<UndoAction>> {
         self.close_all_blocks();
         let block = self.undo_stack.pop()?;
@@ -229,7 +232,7 @@ impl UndoMgr {
         Some(reverse_actions)
     }
 
-    /// Pops a redo block from the redo stack, returning original actions to re-apply.
+    /// Redo スタックからブロックをポップし、再適用する元の操作アクション列を返します。
     pub fn pop_redo(&mut self) -> Option<Vec<UndoAction>> {
         self.close_all_blocks();
         let block = self.redo_stack.pop()?;
@@ -238,20 +241,22 @@ impl UndoMgr {
         Some(forward_actions)
     }
 
+    /// Undo 可能かどうかを返します。
     pub fn can_undo(&self) -> bool {
         !self.undo_stack.is_empty()
     }
 
+    /// Redo 可能かどうかを返します。
     pub fn can_redo(&self) -> bool {
         !self.redo_stack.is_empty()
     }
 
-    /// Marks the current state as saved.
+    /// 現在の状態を「保存済み（未変更）」としてマークします。
     pub fn on_saved(&mut self) {
         self.save_point = Some(self.undo_stack.len());
     }
 
-    /// Checks whether the buffer has been modified since the last save point.
+    /// 最後に保存した時点からバッファが変更されているかどうかを返します。
     pub fn is_modified(&self) -> bool {
         match self.save_point {
             Some(pt) => pt != self.undo_stack.len(),
@@ -259,6 +264,7 @@ impl UndoMgr {
         }
     }
 
+    /// すべての Undo/Redo 履歴をクリアします。
     pub fn clear(&mut self) {
         self.undo_stack.clear();
         self.redo_stack.clear();
@@ -313,7 +319,7 @@ mod tests {
 
         let reverse = undo_mgr.pop_undo().unwrap();
         assert_eq!(reverse.len(), 2);
-        // Inverse in reverse order: delete "new", then insert "old"
+        // 逆順に取り消し: "new" を削除、次に "old" を挿入
         assert_eq!(
             reverse[0],
             UndoAction::Delete {

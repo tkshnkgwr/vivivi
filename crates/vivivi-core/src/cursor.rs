@@ -1,6 +1,6 @@
-//! Text cursor and selection models.
+//! テキストカーソルおよび選択範囲モデル。
 
-/// Represents a 0-indexed line and column position.
+/// 0始まりの行番号と列番号を表すカーソル座標構造体。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CursorPosition {
     pub line: usize,
@@ -13,7 +13,7 @@ impl CursorPosition {
     }
 }
 
-/// Text cursor with an anchor for selection.
+/// 選択アンカー（開始点）を持つテキストカーソル構造体。
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TextCursor {
     pub pos: CursorPosition,
@@ -28,10 +28,12 @@ impl TextCursor {
         }
     }
 
+    /// 選択範囲が存在するかどうかを返します。
     pub fn has_selection(&self) -> bool {
         self.anchor.is_some() && self.anchor != Some(self.pos)
     }
 
+    /// 選択範囲を解除します。
     pub fn clear_selection(&mut self) {
         self.anchor = None;
     }

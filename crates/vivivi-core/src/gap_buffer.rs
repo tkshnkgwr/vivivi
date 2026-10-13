@@ -24,12 +24,12 @@ impl<T: Default + Clone> Default for GapBuffer<T> {
 }
 
 impl<T: Default + Clone> GapBuffer<T> {
-    /// Creates a new empty `GapBuffer` with default capacity.
+    /// デフォルト容量で空の新しい `GapBuffer` を生成します。
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Creates a new `GapBuffer` with at least the specified initial gap capacity.
+    /// 指定した初期ギャップ容量を持つ新しい `GapBuffer` を生成します。
     pub fn with_capacity(capacity: usize) -> Self {
         let cap = capacity.max(8);
         Self {
@@ -39,32 +39,32 @@ impl<T: Default + Clone> GapBuffer<T> {
         }
     }
 
-    /// Number of elements stored (excluding the gap).
+    /// バッファに格納されている有効要素数（ギャップを除く）を返します。
     pub fn len(&self) -> usize {
         self.data.len() - self.gap_len
     }
 
-    /// Is the buffer empty?
+    /// バッファが空かどうかを判定します。
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    /// Total capacity (elements + gap size).
+    /// 物理メモリ配列の総容量（データ要素数 + ギャップサイズ）を返します。
     pub fn capacity(&self) -> usize {
         self.data.len()
     }
 
-    /// Current index of the gap.
+    /// ギャップの現在の開始位置インデックスを返します。
     pub fn gap_start(&self) -> usize {
         self.gap_start
     }
 
-    /// Current length of the gap.
+    /// ギャップの現在の空き要素数を返します。
     pub fn gap_len(&self) -> usize {
         self.gap_len
     }
 
-    /// Physical buffer index corresponding to a logical index.
+    /// 論理インデックスを物理配列のインデックスへ変換します。
     #[inline]
     fn to_physical_index(&self, index: usize) -> usize {
         if index < self.gap_start {
@@ -74,7 +74,7 @@ impl<T: Default + Clone> GapBuffer<T> {
         }
     }
 
-    /// Moves the gap to logical index `index`.
+    /// ギャップを指定した論理インデックス `index` へ移動させます。
     pub fn move_gap(&mut self, index: usize) {
         let index = index.min(self.len());
         if index == self.gap_start {
@@ -82,7 +82,7 @@ impl<T: Default + Clone> GapBuffer<T> {
         }
 
         if index < self.gap_start {
-            // Gap moves left: shift elements between [index, gap_start) to the right side of the gap
+            // ギャップが左へ移動：[index, gap_start) の要素をギャップの右側へシフト
             let count = self.gap_start - index;
             for i in (0..count).rev() {
                 let src = index + i;
@@ -90,7 +90,7 @@ impl<T: Default + Clone> GapBuffer<T> {
                 self.data[dst] = std::mem::take(&mut self.data[src]);
             }
         } else {
-            // Gap moves right: shift elements between [gap_start + gap_len, index + gap_len) to the left side of the gap
+            // ギャップが右へ移動：[gap_start + gap_len, index + gap_len) の要素をギャップの左側へシフト
             let count = index - self.gap_start;
             for i in 0..count {
                 let src = self.gap_start + self.gap_len + i;
@@ -102,7 +102,7 @@ impl<T: Default + Clone> GapBuffer<T> {
         self.gap_start = index;
     }
 
-    /// Ensures the gap has at least `required` elements available.
+    /// ギャップの空き容量が少なくとも `required` 要素分あることを保証（必要に応じて自動拡張）します。
     pub fn reserve_gap(&mut self, required: usize) {
         if self.gap_len >= required {
             return;
@@ -115,7 +115,7 @@ impl<T: Default + Clone> GapBuffer<T> {
         let old_len = self.data.len();
         self.data.resize(old_len + extra, T::default());
 
-        // Shift the data after the gap to the end of the new buffer
+        // ギャップ後方のデータを新しいバッファの末尾側へシフト
         let post_gap_elements = old_len - (self.gap_start + self.gap_len);
         for i in (0..post_gap_elements).rev() {
             let src = self.gap_start + self.gap_len + i;
@@ -126,7 +126,7 @@ impl<T: Default + Clone> GapBuffer<T> {
         self.gap_len += extra;
     }
 
-    /// Gets a reference to the element at logical index `index`.
+    /// 論理インデックス `index` にある要素の不変参照を取得します。
     pub fn get(&self, index: usize) -> Option<&T> {
         if index < self.len() {
             Some(&self.data[self.to_physical_index(index)])
@@ -135,7 +135,7 @@ impl<T: Default + Clone> GapBuffer<T> {
         }
     }
 
-    /// Gets a mutable reference to the element at logical index `index`.
+    /// 論理インデックス `index` にある要素の可変参照を取得します。
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         if index < self.len() {
             let phys = self.to_physical_index(index);
@@ -145,7 +145,7 @@ impl<T: Default + Clone> GapBuffer<T> {
         }
     }
 
-    /// Inserts a single element at logical index `index`.
+    /// 論理インデックス `index` に単一要素を挿入します。
     pub fn insert(&mut self, index: usize, val: T) {
         self.move_gap(index);
         self.reserve_gap(1);
@@ -155,7 +155,7 @@ impl<T: Default + Clone> GapBuffer<T> {
         self.gap_len -= 1;
     }
 
-    /// Inserts a slice of elements at logical index `index`.
+    /// 論理インデックス `index` に要素のスライスを一括挿入します。
     pub fn insert_slice(&mut self, index: usize, slice: &[T]) {
         if slice.is_empty() {
             return;
@@ -170,7 +170,7 @@ impl<T: Default + Clone> GapBuffer<T> {
         self.gap_len -= slice.len();
     }
 
-    /// Removes a single element at logical index `index` and returns it.
+    /// 論理インデックス `index` の要素を削除して返します。
     pub fn remove(&mut self, index: usize) -> Option<T> {
         if index >= self.len() {
             return None;
@@ -181,7 +181,7 @@ impl<T: Default + Clone> GapBuffer<T> {
         Some(removed)
     }
 
-    /// Removes a range of elements `[start, end)`.
+    /// 範囲 `[start, end)` の要素を一括削除します。
     pub fn remove_range(&mut self, start: usize, end: usize) {
         let start = start.min(self.len());
         let end = end.min(self.len());
@@ -197,7 +197,7 @@ impl<T: Default + Clone> GapBuffer<T> {
         self.gap_len += count;
     }
 
-    /// Clears all elements from the buffer.
+    /// バッファ内のすべての要素をクリアします。
     pub fn clear(&mut self) {
         let cap = self.data.len();
         self.data.fill_with(T::default);
@@ -205,7 +205,7 @@ impl<T: Default + Clone> GapBuffer<T> {
         self.gap_len = cap;
     }
 
-    /// Returns all elements as an iterator.
+    /// バッファ内のすべての要素をイテレータとして返します。
     pub fn iter(&self) -> GapBufferIter<'_, T> {
         GapBufferIter {
             buffer: self,
@@ -239,7 +239,7 @@ impl std::fmt::Display for GapBuffer<char> {
 }
 
 impl GapBuffer<char> {
-    /// Helper to create a character gap buffer from a string slice.
+    /// 文字列スライスから文字単位の GapBuffer を生成するヘルパーです。
     pub fn from_text(s: &str) -> Self {
         let chars: Vec<char> = s.chars().collect();
         let mut buf = Self::with_capacity(chars.len() + 32);
@@ -283,11 +283,11 @@ mod tests {
         gb.insert_slice(5, &insert_text);
         assert_eq!(gb.to_string(), "Hello beautiful World!");
 
-        // Move gap to start and insert
+        // ギャップを先頭へ移動して挿入
         gb.insert(0, '>');
         assert_eq!(gb.to_string(), ">Hello beautiful World!");
 
-        // Move gap to end and insert
+        // ギャップを末尾へ移動して挿入
         let end = gb.len();
         gb.insert(end, '<');
         assert_eq!(gb.to_string(), ">Hello beautiful World!<");
