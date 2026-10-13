@@ -38,6 +38,8 @@ pub enum Motion {
     DocumentStart,
     /// 文書末尾または指定行へ移動 (`G` / `[count]G`)
     DocumentEnd(Option<usize>),
+    /// 対応する括弧へ移動 (`%`)
+    MatchingParen,
 }
 
 /// オペレータ（操作種別）。

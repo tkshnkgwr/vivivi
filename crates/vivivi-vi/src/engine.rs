@@ -468,6 +468,14 @@ impl ViEngine {
                     self.move_end_word(buffer, cursor, true);
                 }
             }
+            Motion::MatchingParen => {
+                let current_pos = buffer.cursor_to_position(cursor.pos);
+                if let Some((_, match_pos)) =
+                    vivivi_core::get_cursor_matching_paren(buffer, current_pos)
+                {
+                    cursor.pos = buffer.position_to_cursor(match_pos);
+                }
+            }
         }
     }
 
@@ -1003,5 +1011,20 @@ mod tests {
         // :w で保存要求
         let res = vi.execute(&ViCommand::ExCommand("w".to_string()), &mut buf, &mut cur);
         assert!(res.save_requested);
+    }
+
+    #[test]
+    fn test_matching_paren_jump() {
+        let mut vi = ViEngine::new();
+        let mut buf = TextBuffer::from_text("fn main() { println!(\"hello\"); }");
+        let mut cur = TextCursor::new(0, 10); // '{' at 10
+
+        // % で対応する '}' (31) へジャンプ
+        vi.execute(&ViCommand::Move(Motion::MatchingParen), &mut buf, &mut cur);
+        assert_eq!(cur.pos.col, 31);
+
+        // 再度 % で元の '{' (10) へ戻る
+        vi.execute(&ViCommand::Move(Motion::MatchingParen), &mut buf, &mut cur);
+        assert_eq!(cur.pos.col, 10);
     }
 }

@@ -2,6 +2,8 @@
 
 pub mod csv;
 pub mod keisen;
+pub mod syntax;
 
 pub use csv::{CsvCell, CsvMode, CsvOptions, Delimiter};
 pub use keisen::{BoxAlignment, KeisenDirection, KeisenMode, KeisenType};
+pub use syntax::{SyntaxLang, SyntaxToken, TokenType, tokenize_line};

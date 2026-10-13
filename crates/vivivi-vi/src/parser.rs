@@ -300,6 +300,7 @@ impl CommandParser {
                     .or(if count > 1 { Some(count) } else { None });
                 Some(Motion::DocumentEnd(target_line))
             }
+            '%' => Some(Motion::MatchingParen),
             _ => None,
         }
     }

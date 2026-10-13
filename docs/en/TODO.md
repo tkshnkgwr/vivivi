@@ -26,6 +26,7 @@
 - [x] Transparent quote display and active-line raw view in CSV mode.
 
 ### Phase 3: Frontend Implementation (`vivivi-app`)
-- [ ] Terminal UI (Ratatui + crossterm) frontend implementation (interactive Vi editing & realtime render).
-- [ ] File I/O and charset auto-detection (Shift_JIS, UTF-8, EUC-JP).
+- [x] Terminal UI (Ratatui + crossterm) frontend implementation (interactive Vi editing & realtime render).
+- [x] File I/O and charset/newline auto-detection (UTF-8, Shift_JIS, EUC-JP / CRLF, LF).
+- [x] Syntax highlighting (Rust, C++, Python, JS, JSON), matching paren highlight, and paren jump (`%`).
 - [ ] Desktop GUI (egui / eframe) frontend implementation (rich graphic borders & font rendering).

@@ -14,5 +14,7 @@ vivivi-core.workspace = true
 vivivi-vi.workspace = true
 vivivi-modes.workspace = true
 anyhow.workspace = true
+ratatui.workspace = true
+crossterm.workspace = true
 
 [dev-dependencies]

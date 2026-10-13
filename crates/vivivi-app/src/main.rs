@@ -1,9 +1,61 @@
-use vivivi_core::{CursorPosition, TextBuffer};
-use vivivi_modes::{CsvMode, KeisenMode};
+mod tui;
+
+use std::env;
+use std::path::PathBuf;
+
+use tui::App;
+use vivivi_core::{CharEncoding, CursorPosition, NewlineType, TextBuffer};
+use vivivi_modes::{BoxAlignment, CsvMode, KeisenDirection, KeisenMode};
 use vivivi_vi::ViEngine;
 
-fn main() {
-    println!("=== vivivi: OpenViVi reconstructed in Rust ===");
+fn main() -> anyhow::Result<()> {
+    let args: Vec<String> = env::args().collect();
+
+    // --demo フラグが渡された場合はコンソールデモを実行
+    if args.iter().any(|a| a == "--demo" || a == "-d") {
+        run_console_demo();
+        return Ok(());
+    }
+
+    // 引数から開くファイルパスを取得
+    let file_arg = args.get(1).filter(|a| !a.starts_with('-'));
+    let (initial_text, file_path, encoding, newline) = if let Some(path_str) = file_arg {
+        let path = PathBuf::from(path_str);
+        if path.exists() {
+            let bytes = std::fs::read(&path)?;
+            let (content, enc, nl) = vivivi_core::decode_bytes(&bytes);
+            (content, Some(path), enc, nl)
+        } else {
+            (
+                String::new(),
+                Some(path),
+                CharEncoding::Utf8,
+                NewlineType::default(),
+            )
+        }
+    } else {
+        let welcome = "=== vivivi: OpenViVi reconstructed in Rust ===\n\n\
+            * Vi基本操作: h,j,k,l (移動), i (挿入), Esc (ノーマル), :w (保存), :q (終了)\n\
+            * 対応括弧ジャンプ: % (カーソル位置の括弧へ即座にジャンプ)\n\
+            * 罫線モード: Shift+F5 で切替 (Ctrl+矢印で描画、Shift+矢印で消去)\n\
+            * CSVモード: csv/tsvファイルを開くと自動整列ビューが有効化されます\n\
+            * 文字コード/改行: UTF-8, Shift_JIS, EUC-JP / CRLF, LF 自動判別\n\n\
+            編集を開始するには 'i' を押してください。";
+        (
+            welcome.to_string(),
+            None,
+            CharEncoding::Utf8,
+            NewlineType::Lf,
+        )
+    };
+
+    let app = App::new(&initial_text, file_path, encoding, newline);
+    tui::run(app)
+}
+
+/// 非対話型の動作確認コンソールデモ
+fn run_console_demo() {
+    println!("=== vivivi: OpenViVi reconstructed in Rust (Console Demo) ===");
     let mut buf = TextBuffer::from_text("Hello, vivivi!\nWelcome to OpenViVi reimplementation.");
     let mut vi = ViEngine::new();
     let csv = CsvMode::default();
@@ -37,36 +89,35 @@ fn main() {
     vi.feed_char('\x1b');
     println!("After Escape key, Mode: {}", vi.mode().name());
 
-    // --- Phase 2: Keisen (Box-drawing) & Alignment Demo ---
+    // --- Phase 2: Keisen Demo ---
     println!("\n=== Phase 2 Demo: Keisen Mode ===");
     let mut keisen_buf = TextBuffer::new();
     let mut keisen_cur = CursorPosition::new(0, 0);
-    // Draw 3 horizontal steps
     keisen.step(
         &mut keisen_buf,
         &mut keisen_cur,
-        vivivi_modes::KeisenDirection::Right,
+        KeisenDirection::Right,
         false,
     );
     keisen.step(
         &mut keisen_buf,
         &mut keisen_cur,
-        vivivi_modes::KeisenDirection::Right,
+        KeisenDirection::Right,
         false,
     );
     keisen.step(
         &mut keisen_buf,
         &mut keisen_cur,
-        vivivi_modes::KeisenDirection::Down,
+        KeisenDirection::Down,
         false,
     );
     println!("Drawn Keisen buffer:\n{}", keisen_buf);
 
     let mut box_buf = TextBuffer::from_text("│ hello     │");
-    KeisenMode::align_box_text(&mut box_buf, 0, vivivi_modes::BoxAlignment::Center);
+    KeisenMode::align_box_text(&mut box_buf, 0, BoxAlignment::Center);
     println!("Centered box text: {}", box_buf);
 
-    // --- Phase 2: CSV Mode Demo ---
+    // --- Phase 2: CSV Demo ---
     println!("\n=== Phase 2 Demo: Inline CSV Mode ===");
     let mut csv_mgr = CsvMode::default();
     let sample_csv = ["id,name,score", "1,\"Alice Smith\",95", "2,\"Bob\",80"];
