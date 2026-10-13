@@ -23,10 +23,10 @@ The editor core is decoupled from frontends (CLI, TUI, or future GUI) to enable 
 
 ```mermaid
 graph TD
-    App[vivivi-app (CLI / TUI Entrypoint)]
-    Core[vivivi-core (GapBuffer, UndoMgr, Cursor, Encodings)]
-    Vi[vivivi-vi (Vi State Machine, Command Parser, Registers, Ex)]
-    Modes[vivivi-modes (Inline CSV, Keisen Box Drawing)]
+    App["vivivi-app (CLI / TUI Entrypoint)"]
+    Core["vivivi-core (GapBuffer, UndoMgr, Cursor, Encodings)"]
+    Vi["vivivi-vi (Vi State Machine, Command Parser, Registers, Ex)"]
+    Modes["vivivi-modes (Inline CSV, Keisen Box Drawing)"]
 
     App --> Vi
     App --> Modes

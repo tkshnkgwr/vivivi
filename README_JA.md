@@ -47,10 +47,10 @@
 
 ```mermaid
 graph TD
-    App[vivivi-app (CLI / TUI エントリポイント)]
-    Core[vivivi-core (GapBuffer・UndoMgr・カーソル・エンコーディング)]
-    Vi[vivivi-vi (Vi状態機械・コマンドパーサー・レジスタ・ex)]
-    Modes[vivivi-modes (インラインCSV・罫線描画)]
+    App["vivivi-app (CLI / TUI エントリポイント)"]
+    Core["vivivi-core (GapBuffer・UndoMgr・カーソル・エンコーディング)"]
+    Vi["vivivi-vi (Vi状態機械・コマンドパーサー・レジスタ・ex)"]
+    Modes["vivivi-modes (インラインCSV・罫線描画)"]
 
     App --> Vi
     App --> Modes

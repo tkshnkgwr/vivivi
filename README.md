@@ -48,10 +48,10 @@ It faithfully ports the core Vi editing mechanics and data structures while inte
 
 ```mermaid
 graph TD
-    App[vivivi-app (CLI / TUI Entrypoint)]
-    Core[vivivi-core (GapBuffer, UndoMgr, Cursor, Encodings)]
-    Vi[vivivi-vi (Vi State Machine, Command Parser, Registers, Ex)]
-    Modes[vivivi-modes (Inline CSV, Keisen Box Drawing)]
+    App["vivivi-app (CLI / TUI Entrypoint)"]
+    Core["vivivi-core (GapBuffer, UndoMgr, Cursor, Encodings)"]
+    Vi["vivivi-vi (Vi State Machine, Command Parser, Registers, Ex)"]
+    Modes["vivivi-modes (Inline CSV, Keisen Box Drawing)"]
 
     App --> Vi
     App --> Modes
