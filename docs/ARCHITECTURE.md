@@ -38,12 +38,14 @@ graph TD
 ### (1) `vivivi-core`
 - **責務**: テキストバッファ、行管理、カーソル位置、Undo/Redo、文字コード変換、高速検索。
 - **主要モジュール**:
-  - `buffer`: `TextBuffer` (将来的にGapBuffer最適化)
+  - `gap_buffer`: `GapBuffer<T>`（OpenViVi準拠の局所的O(1)編集データ構造）
+  - `buffer`: `TextBuffer`（GapBufferとUndoMgrを統合した高水準バッファ）
   - `cursor`: カーソル位置、選択範囲（アンカー）
   - `line_mgr`: 行インデックス、折り返し、行メタデータ
-  - `undo`: トランザクション対応Undoブロック管理
+  - `undo`: トランザクション対応Undoブロック管理、連続タイピング自動マージ
   - `encoding`: UTF-8, Shift_JIS, EUC-JP, UTF-16LE/BE 対応
   - `search`: 高速文字列検索
+- **詳細設計書**: [BUFFER_AND_UNDO_SPEC.md](file:///c:/Users/632792/Documents/自作/vivivi/docs/BUFFER_AND_UNDO_SPEC.md) を参照。
 
 ### (2) `vivivi-vi`
 - **責務**: Viコマンドエンジン。
