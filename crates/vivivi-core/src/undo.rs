@@ -1,6 +1,10 @@
-//! Undo/Redo manager supporting transactional blocks and continuous typing merging,
-//! faithfully modeled after OpenViVi's `undoMgr.h` and `undoMgr.cpp`.
+//! トランザクション対応および連続入力マージを備えた Undo/Redo マネージャ。
+//!
+//! OpenViVi の `undoMgr.h` および `undoMgr.cpp` の設計思想を忠実にモデル化し、
+//! 複数打鍵のタイピング統合、Vi複合コマンドのアトミックUndoブロック、
+//! 保存点（Save Point）と Modified フラグの整合性追跡を提供します。
 
+/// 各編集操作（挿入・削除・置換）を表すアクション列挙体。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UndoAction {
     Insert {
@@ -28,12 +32,20 @@ impl UndoAction {
                 text: text.clone(),
                 is_backspace: false,
             },
-            Self::Delete { pos, text, is_backspace } => Self::Insert {
+            Self::Delete {
+                pos,
+                text,
+                is_backspace,
+            } => Self::Insert {
                 pos: *pos,
                 text: text.clone(),
                 prohibit_merge: !*is_backspace,
             },
-            Self::Replace { pos, old_text, new_text } => Self::Replace {
+            Self::Replace {
+                pos,
+                old_text,
+                new_text,
+            } => Self::Replace {
                 pos: *pos,
                 old_text: new_text.clone(),
                 new_text: old_text.clone(),
@@ -126,16 +138,23 @@ impl UndoMgr {
         let last_action = if let Some(ref mut block) = self.current_block {
             block.actions.last_mut()
         } else {
-            self.undo_stack.last_mut().and_then(|b| b.actions.last_mut())
+            self.undo_stack
+                .last_mut()
+                .and_then(|b| b.actions.last_mut())
         };
 
         if let Some(UndoAction::Insert {
             pos: last_pos,
             text: last_text,
             prohibit_merge,
-        }) = last_action {
+        }) = last_action
+        {
             let last_end = *last_pos + last_text.chars().count();
-            if !*prohibit_merge && last_end == pos && !text.contains('\n') && !last_text.contains('\n') {
+            if !*prohibit_merge
+                && last_end == pos
+                && !text.contains('\n')
+                && !last_text.contains('\n')
+            {
                 last_text.push_str(text);
                 self.redo_stack.clear();
                 return;
@@ -204,7 +223,8 @@ impl UndoMgr {
     pub fn pop_undo(&mut self) -> Option<Vec<UndoAction>> {
         self.close_all_blocks();
         let block = self.undo_stack.pop()?;
-        let reverse_actions: Vec<UndoAction> = block.actions.iter().rev().map(|a| a.inverse()).collect();
+        let reverse_actions: Vec<UndoAction> =
+            block.actions.iter().rev().map(|a| a.inverse()).collect();
         self.redo_stack.push(block);
         Some(reverse_actions)
     }

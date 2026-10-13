@@ -1,13 +1,19 @@
-//! Generic GapBuffer implementation faithful to OpenViVi's `gap_buffer.h`.
+//! OpenViVi の `gap_buffer.h` に準拠したジェネリックな GapBuffer（ギャップバッファ）実装。
 //!
-//! A GapBuffer maintains an empty gap at the current edit cursor location.
-//! When consecutive insertions or deletions occur locally (as in interactive text editing),
-//! the operations are O(1) amortized.
+//! ギャップバッファは、現在の編集カーソル位置に「空き領域（Gap）」を常駐させることで、
+//! キーボード入力やバックスペース等の連続した局所的編集を $O(1)$（償却）で高速処理する
+//! テキストエディタ専用の古典的かつ強力なデータ構造です。
 
+/// ギャップバッファ構造体。
+///
+/// 内部の物理配列の中間に `gap_start` から `gap_len` 長の空き領域（ギャップ）を保持します。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GapBuffer<T> {
+    /// 物理メモリ配列（データ前半部 + ギャップ + データ後半部）
     data: Vec<T>,
+    /// ギャップの開始位置（論理インデックスと一致）
     gap_start: usize,
+    /// ギャップの現在の空き容量
     gap_len: usize,
 }
 

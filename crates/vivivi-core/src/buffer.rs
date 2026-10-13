@@ -1,9 +1,16 @@
-//! TextBuffer integrating GapBuffer and UndoMgr, faithful to OpenViVi's `Buffer.cpp`.
+//! GapBuffer と UndoMgr を統合したテキストバッファモジュール。
+//!
+//! OpenViVi の `Buffer.cpp` に対応し、高水準の行・列座標変換（CursorPosition）、
+//! トランザクション対応編集、文字コード処理、アンドゥ・リドゥ機能を提供します。
 
 use crate::cursor::CursorPosition;
 use crate::gap_buffer::GapBuffer;
 use crate::undo::{UndoAction, UndoMgr};
 
+/// テキストバッファ本体。
+///
+/// 内部に `GapBuffer<char>` と `UndoMgr` をカプセル化し、
+/// 安全かつ高速なテキスト編集と履歴管理を行います。
 #[derive(Debug, Clone, Default)]
 pub struct TextBuffer {
     data: GapBuffer<char>,
@@ -90,6 +97,13 @@ impl TextBuffer {
         self.undo_mgr.push_insert(pos, text);
     }
 
+    /// Inserts a single character at character offset `pos`, recording to the Undo manager.
+    pub fn insert_char(&mut self, pos: usize, ch: char) {
+        let mut s = String::with_capacity(4);
+        s.push(ch);
+        self.insert_text(pos, &s);
+    }
+
     /// Deletes `len` characters starting at offset `pos`, recording to the Undo manager.
     pub fn delete_text(&mut self, pos: usize, len: usize, is_backspace: bool) -> String {
         if len == 0 || pos >= self.data.len() {
@@ -98,6 +112,14 @@ impl TextBuffer {
         let deleted = self.basic_delete_text(pos, len);
         self.undo_mgr.push_delete(pos, &deleted, is_backspace);
         deleted
+    }
+
+    /// Deletes characters in range `[start, end)`, recording to the Undo manager.
+    pub fn delete_range(&mut self, start: usize, end: usize) -> String {
+        if end <= start {
+            return String::new();
+        }
+        self.delete_text(start, end - start, false)
     }
 
     /// Opens an undo transaction block.
@@ -131,7 +153,11 @@ impl TextBuffer {
                     UndoAction::Delete { pos, text, .. } => {
                         self.basic_delete_text(pos, text.chars().count());
                     }
-                    UndoAction::Replace { pos, old_text, new_text } => {
+                    UndoAction::Replace {
+                        pos,
+                        old_text,
+                        new_text,
+                    } => {
                         self.basic_delete_text(pos, old_text.chars().count());
                         self.basic_insert_text(pos, &new_text);
                     }
@@ -154,7 +180,11 @@ impl TextBuffer {
                     UndoAction::Delete { pos, text, .. } => {
                         self.basic_delete_text(pos, text.chars().count());
                     }
-                    UndoAction::Replace { pos, old_text, new_text } => {
+                    UndoAction::Replace {
+                        pos,
+                        old_text,
+                        new_text,
+                    } => {
                         self.basic_delete_text(pos, old_text.chars().count());
                         self.basic_insert_text(pos, &new_text);
                     }
@@ -244,6 +274,11 @@ impl TextBuffer {
         }
         Some(text)
     }
+
+    /// Alias for `line_text(line)`.
+    pub fn get_line(&self, line: usize) -> Option<String> {
+        self.line_text(line)
+    }
 }
 
 impl std::fmt::Display for TextBuffer {
@@ -281,7 +316,7 @@ mod tests {
         let mut buf = TextBuffer::from_text("12345");
         buf.open_undo_block();
         buf.delete_text(0, 2, false); // deletes "12" -> "345"
-        buf.insert_text(0, "ABC");   // inserts "ABC" -> "ABC345"
+        buf.insert_text(0, "ABC"); // inserts "ABC" -> "ABC345"
         buf.close_undo_block();
 
         assert_eq!(buf.to_string(), "ABC345");

@@ -36,4 +36,43 @@ fn main() {
     println!("After 'i' key, Mode: {}", vi.mode().name());
     vi.feed_char('\x1b');
     println!("After Escape key, Mode: {}", vi.mode().name());
+
+    // --- Phase 2: Keisen (Box-drawing) & Alignment Demo ---
+    println!("\n=== Phase 2 Demo: Keisen Mode ===");
+    let mut keisen_buf = TextBuffer::new();
+    let mut keisen_cur = CursorPosition::new(0, 0);
+    // Draw 3 horizontal steps
+    keisen.step(
+        &mut keisen_buf,
+        &mut keisen_cur,
+        vivivi_modes::KeisenDirection::Right,
+        false,
+    );
+    keisen.step(
+        &mut keisen_buf,
+        &mut keisen_cur,
+        vivivi_modes::KeisenDirection::Right,
+        false,
+    );
+    keisen.step(
+        &mut keisen_buf,
+        &mut keisen_cur,
+        vivivi_modes::KeisenDirection::Down,
+        false,
+    );
+    println!("Drawn Keisen buffer:\n{}", keisen_buf);
+
+    let mut box_buf = TextBuffer::from_text("│ hello     │");
+    KeisenMode::align_box_text(&mut box_buf, 0, vivivi_modes::BoxAlignment::Center);
+    println!("Centered box text: {}", box_buf);
+
+    // --- Phase 2: CSV Mode Demo ---
+    println!("\n=== Phase 2 Demo: Inline CSV Mode ===");
+    let mut csv_mgr = CsvMode::default();
+    let sample_csv = ["id,name,score", "1,\"Alice Smith\",95", "2,\"Bob\",80"];
+    csv_mgr.calculate_widths(sample_csv.iter().copied());
+    println!("Column widths: {:?}", csv_mgr.column_widths);
+    for (i, line) in sample_csv.iter().enumerate() {
+        println!("Row {}: {}", i, csv_mgr.format_line(line, false));
+    }
 }
