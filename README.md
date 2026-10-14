@@ -33,6 +33,15 @@ It would be a privilege if former ViVi or OpenViVi users find a home here, thoug
 
 ---
 
+## 🙏 Special Thanks & Respect
+
+The `vivivi` project is developed with the utmost respect and heartfelt gratitude to **Nobuhide Tsuda**, the original author of the legendary Windows vi-compatible editor "**ViVi**" and its open-source reincarnation "**openViVi**".
+
+Unique and innovative features pioneered by ViVi—such as automatic Unicode box-drawing connectivity, inline columnar CSV/TSV editing, Migemo Japanese incremental search, and meticulous charset/newline preservation—remain unmatched and profoundly inspiring even today.  
+We express our deepest appreciation to Nobuhide Tsuda for creating such an exceptional editor and graciously entrusting its architecture to the open-source community under the MIT License.
+
+---
+
 ## 📌 Overview
 
 `vivivi` is a ground-up reimagining in **Rust** of the classic C++ / Qt text editor "**OpenViVi**", engineered for memory safety, concurrency, and uncompromising performance.
@@ -120,7 +129,7 @@ cargo build --release
 
 ### Run Tests
 ```powershell
-# Run unit tests across all crates (all 47 tests passing)
+# Run unit tests across all crates (all 103 tests passing)
 cargo test
 ```
 

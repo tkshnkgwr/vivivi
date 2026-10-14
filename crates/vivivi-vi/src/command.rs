@@ -40,6 +40,20 @@ pub enum Motion {
     DocumentEnd(Option<usize>),
     /// 対応する括弧へ移動 (`%`)
     MatchingParen,
+    /// 行内文字検索・前方ジャンプ (`f` / `t`)
+    FindCharForward {
+        target: char,
+        till: bool,
+        count: usize,
+    },
+    /// 行内文字検索・後方ジャンプ (`F` / `T`)
+    FindCharBackward {
+        target: char,
+        till: bool,
+        count: usize,
+    },
+    /// 直前の行内文字検索を繰り返す (`;` 同方向, `,` 逆方向)
+    RepeatFindChar { reverse: bool, count: usize },
 }
 
 /// オペレータ（操作種別）。
@@ -51,6 +65,19 @@ pub enum Operator {
     Yank,
     /// 変更（削除してInsertモードへ移行） (`c`)
     Change,
+}
+
+/// 単語検索の一致条件種別。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WordSearchKind {
+    /// 完全単語一致 (`*`, `#` / `\bword\b`)
+    ExactWord,
+    /// 部分一致 (`g*`, `g#`)
+    Partial,
+    /// 前方一致 (`g<` / `\bword`)
+    Prefix,
+    /// 後方一致 (`g=` / `word\b`)
+    Suffix,
 }
 
 /// パースされた Vi コマンド。
@@ -114,8 +141,28 @@ pub enum ViCommand {
     SearchNext,
     /// 前の一致へジャンプ (`N`)
     SearchPrev,
-    /// カーソル下の単語を検索 (`*` / `#`)
-    SearchWordUnderCursor { forward: bool },
+    /// カーソル下の単語または選択テキストを検索 (`*`, `#`, `g*`, `g#`, `g<`, `g=`)
+    SearchWordUnderCursor { forward: bool, kind: WordSearchKind },
+    /// 数値・英字のインクリメント/デクリメント (`#+`, `##`, `#-`)
+    Increment { delta: i64 },
+    /// カーソル下の真偽値トグル (`#!`)
+    ToggleBoolean,
+    /// 直前の編集位置・行へジャンプ (`@`, `'@`, `` `@ ``)
+    JumpToLastEdit { line_only: bool },
+    /// 直前行（上行）の文字または指定文字までを複製挿入 (`=<char>`)
+    CopyFromAboveLine { target: Option<char> },
+    /// マークの設定 (`m<a-zA-Z>`)
+    SetMark(char),
+    /// マーク位置へのジャンプ (`'<mark>`, `` `<mark> ``)
+    JumpMark { mark: char, line_only: bool },
+    /// マーク一覧の表示 (`:marks`)
+    ListMarks,
+    /// タグジャンプ (`Ctrl-]`, `:tag <name>`)
+    TagJump(Option<String>),
+    /// タグスタックからの復元ポップ (`Ctrl-t`, `Ctrl-[`)
+    TagPop,
+    /// タグ履歴一覧の表示 (`:tags`)
+    ListTags,
     /// ビジュアルモードでの操作 (削除、ヤンク、変更)
     VisualOperate {
         op: Operator,
@@ -127,4 +174,10 @@ pub enum ViCommand {
     VisualBlockInsert { at_end: bool },
     /// exコマンドの実行 (`:w`, `:q`, `:%s/...` 等)
     ExCommand(String),
+    /// キーボードマクロの記録開始 (`q<reg>`)
+    RecordMacro(char),
+    /// キーボードマクロの記録終了 (`q`)
+    StopRecordMacro,
+    /// キーボードマクロの再生 (`@<reg>` または `@@`)
+    ExecuteMacro(char),
 }

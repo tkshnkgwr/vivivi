@@ -5,7 +5,7 @@ This document provides guidelines and directives for human developers and AI ass
 ---
 
 ## 1. Top-Priority Guardrails
-All participants must adhere strictly to the repository root [**`RULES.md`**](file:///c:/Users/632792/Documents/自作/vivivi/RULES.md).
+All participants must adhere strictly to the repository root [**`RULES.md`**](../../RULES.md).
 
 1. **No Automatic Commits/Pushes**: Never run `git commit` or `git push` without explicit user instruction.
 2. **Markdown Table Alignment**: Keep tables vertically aligned for plain-text readability.

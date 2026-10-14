@@ -589,6 +589,7 @@ dependencies = [
  "anyhow",
  "crossterm",
  "ratatui",
+ "regex",
  "vivivi-core",
  "vivivi-modes",
  "vivivi-vi",
@@ -608,6 +609,7 @@ dependencies = [
 name = "vivivi-modes"
 version = "0.1.0"
 dependencies = [
+ "regex",
  "thiserror",
  "unicode-width 0.2.0",
  "vivivi-core",
@@ -617,8 +619,10 @@ dependencies = [
 name = "vivivi-vi"
 version = "0.1.0"
 dependencies = [
+ "regex",
  "thiserror",
  "vivivi-core",
+ "vivivi-modes",
 ]
 
 [[package]]

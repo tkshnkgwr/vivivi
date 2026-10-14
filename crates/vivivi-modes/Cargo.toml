@@ -9,5 +9,7 @@ license.workspace = true
 vivivi-core.workspace = true
 unicode-width.workspace = true
 thiserror.workspace = true
+regex.workspace = true
+
 
 [dev-dependencies]

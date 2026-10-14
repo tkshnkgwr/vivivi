@@ -3,7 +3,7 @@
 //! プレフィックスカウント（`3`）、レジスタ指定（`"a`）、オペレータ（`d`, `y`, `c`）、
 //! 2ストロークキー（`gg`）、およびコマンドライン入力（`:`, `/`, `?`）を順次解釈します。
 
-use crate::command::{Motion, Operator, ViCommand};
+use crate::command::{Motion, Operator, ViCommand, WordSearchKind};
 use crate::mode::ViMode;
 
 /// パーサーの内部状態。
@@ -19,8 +19,28 @@ enum ParserState {
         count: usize,
         register: Option<char>,
     },
-    /// `g` の2打鍵目待ち (`gg`)
-    WaitingForSecondG { count: usize },
+    /// 文字検索の文字入力待ち (`f`, `F`, `t`, `T`)
+    WaitingForFindChar {
+        op: Option<Operator>,
+        is_forward: bool,
+        is_till: bool,
+        count: usize,
+        register: Option<char>,
+    },
+    /// `g` の2打鍵目待ち (`gg`, `g*`, `g#`, `g<`, `g=`)
+    WaitingForG { count: usize },
+    /// `#` の2打鍵目待ち (`#+`, `##`, `#-`, `#!`, または単語後方検索 `#`)
+    WaitingForHash { count: usize },
+    /// 直前行文字複製待ち (`=<char>`)
+    WaitingForEqual,
+    /// マーク設定のマーク名待ち (`m` の後)
+    WaitingForMarkSet,
+    /// マークジャンプのマーク名待ち (`'` または `` ` `` の後)
+    WaitingForMarkJump { line_only: bool },
+    /// マクロ記録対象レジスタ待ち (`q` の後)
+    WaitingForMacroRecord,
+    /// マクロ再生対象レジスタ待ち (`@` の後)
+    WaitingForMacroExecute,
     /// コマンドラインまたは検索文字列入力中 (`:`, `/`, `?`)
     CommandLine { prefix: char, buffer: String },
 }
@@ -33,6 +53,8 @@ pub struct CommandParser {
     count_buffer: Option<usize>,
     /// 選択中のレジスタ名
     selected_register: Option<char>,
+    /// 現在キーボードマクロを記録中かどうか
+    pub is_recording: bool,
 }
 
 impl Default for CommandParser {
@@ -41,6 +63,7 @@ impl Default for CommandParser {
             state: ParserState::Idle,
             count_buffer: None,
             selected_register: None,
+            is_recording: false,
         }
     }
 }
@@ -180,10 +203,133 @@ impl CommandParser {
                 None
             }
 
-            ParserState::WaitingForSecondG { count: _ } => {
+            ParserState::WaitingForFindChar {
+                op,
+                is_forward,
+                is_till,
+                count,
+                register,
+            } => {
+                let op = *op;
+                let is_forward = *is_forward;
+                let is_till = *is_till;
+                let count = *count;
+                let register = *register;
+                self.reset();
+
+                let motion = if is_forward {
+                    Motion::FindCharForward {
+                        target: ch,
+                        till: is_till,
+                        count,
+                    }
+                } else {
+                    Motion::FindCharBackward {
+                        target: ch,
+                        till: is_till,
+                        count,
+                    }
+                };
+
+                if let Some(op) = op {
+                    Some(ViCommand::Operate {
+                        op,
+                        motion,
+                        register,
+                    })
+                } else {
+                    Some(ViCommand::Move(motion))
+                }
+            }
+
+            ParserState::WaitingForG { count: _ } => {
                 self.state = ParserState::Idle;
-                if ch == 'g' {
-                    Some(ViCommand::Move(Motion::DocumentStart))
+                match ch {
+                    'g' => Some(ViCommand::Move(Motion::DocumentStart)),
+                    '*' => Some(ViCommand::SearchWordUnderCursor {
+                        forward: true,
+                        kind: WordSearchKind::Partial,
+                    }),
+                    '#' => Some(ViCommand::SearchWordUnderCursor {
+                        forward: false,
+                        kind: WordSearchKind::Partial,
+                    }),
+                    '<' => Some(ViCommand::SearchWordUnderCursor {
+                        forward: true,
+                        kind: WordSearchKind::Prefix,
+                    }),
+                    '=' => Some(ViCommand::SearchWordUnderCursor {
+                        forward: true,
+                        kind: WordSearchKind::Suffix,
+                    }),
+                    _ => None,
+                }
+            }
+
+            ParserState::WaitingForHash { count } => {
+                let count = *count;
+                self.state = ParserState::Idle;
+                match ch {
+                    '+' | '#' => Some(ViCommand::Increment {
+                        delta: count as i64,
+                    }),
+                    '-' => Some(ViCommand::Increment {
+                        delta: -(count as i64),
+                    }),
+                    '!' => Some(ViCommand::ToggleBoolean),
+                    _ => Some(ViCommand::SearchWordUnderCursor {
+                        forward: false,
+                        kind: WordSearchKind::ExactWord,
+                    }),
+                }
+            }
+
+            ParserState::WaitingForEqual => {
+                self.state = ParserState::Idle;
+                match ch {
+                    '\n' | '\r' => Some(ViCommand::CopyFromAboveLine { target: None }),
+                    _ => Some(ViCommand::CopyFromAboveLine { target: Some(ch) }),
+                }
+            }
+
+            ParserState::WaitingForMarkSet => {
+                self.state = ParserState::Idle;
+                if ch.is_ascii_alphabetic() {
+                    Some(ViCommand::SetMark(ch))
+                } else {
+                    None
+                }
+            }
+
+            ParserState::WaitingForMarkJump { line_only } => {
+                let line_only = *line_only;
+                self.state = ParserState::Idle;
+                if ch == '@' || ch == '.' {
+                    Some(ViCommand::JumpToLastEdit { line_only })
+                } else if ch.is_ascii_alphabetic() {
+                    Some(ViCommand::JumpMark {
+                        mark: ch,
+                        line_only,
+                    })
+                } else {
+                    None
+                }
+            }
+
+            ParserState::WaitingForMacroRecord => {
+                self.state = ParserState::Idle;
+                if ch.is_ascii_alphanumeric() {
+                    self.is_recording = true;
+                    Some(ViCommand::RecordMacro(ch))
+                } else {
+                    None
+                }
+            }
+
+            ParserState::WaitingForMacroExecute => {
+                self.state = ParserState::Idle;
+                if ch.is_ascii_alphanumeric() || ch == '@' {
+                    Some(ViCommand::ExecuteMacro(ch))
                 } else {
                     None
                 }
@@ -211,6 +357,18 @@ impl CommandParser {
                         count,
                         register,
                     });
+                }
+
+                // f, F, t, T は文字入力待ちへ遷移
+                if matches!(ch, 'f' | 'F' | 't' | 'T') {
+                    self.state = ParserState::WaitingForFindChar {
+                        op: Some(op),
+                        is_forward: matches!(ch, 'f' | 't'),
+                        is_till: matches!(ch, 't' | 'T'),
+                        count,
+                        register,
+                    };
+                    return None;
                 }
 
                 // モーションのパース
@@ -244,6 +402,63 @@ impl CommandParser {
                 let count = self.count_buffer.take().unwrap_or(1);
                 let register = self.selected_register.take();
 
+                // マーク設定 (`m`)
+                if ch == 'm' {
+                    self.state = ParserState::WaitingForMarkSet;
+                    return None;
+                }
+
+                // マークジャンプ (`'` 行ジャンプ, `` ` `` 正確位置ジャンプ)
+                if ch == '\'' {
+                    self.state = ParserState::WaitingForMarkJump { line_only: true };
+                    return None;
+                }
+                if ch == '`' {
+                    self.state = ParserState::WaitingForMarkJump { line_only: false };
+                    return None;
+                }
+
+                // f/F/t/T 文字検索ジャンプ
+                if matches!(ch, 'f' | 'F' | 't' | 'T') {
+                    self.state = ParserState::WaitingForFindChar {
+                        op: None,
+                        is_forward: matches!(ch, 'f' | 't'),
+                        is_till: matches!(ch, 't' | 'T'),
+                        count,
+                        register: None,
+                    };
+                    return None;
+                }
+
+                // 直前行文字複製 (`=`)
+                if ch == '=' {
+                    self.state = ParserState::WaitingForEqual;
+                    return None;
+                }
+
+                // ViVi 独自 `#+`, `##`, `#-`, `#!` & 単語後方検索 `#`
+                if ch == '#' {
+                    self.state = ParserState::WaitingForHash { count };
+                    return None;
+                }
+
+                // マクロ記録開始・終了 (`q`)
+                if ch == 'q' {
+                    if self.is_recording {
+                        self.is_recording = false;
+                        return Some(ViCommand::StopRecordMacro);
+                    } else {
+                        self.state = ParserState::WaitingForMacroRecord;
+                        return None;
+                    }
+                }
+
+                // マクロ再生 (`@`)
+                if ch == '@' {
+                    self.state = ParserState::WaitingForMacroExecute;
+                    return None;
+                }
+
                 // コマンドライン・検索開始
                 if ch == ':' || ch == '/' || ch == '?' {
                     self.state = ParserState::CommandLine {
@@ -268,10 +483,18 @@ impl CommandParser {
                     return None;
                 }
 
-                // `g` プレフィックス (`gg`)
+                // `g` プレフィックス (`gg`, `g*`, `g#`, `g<`, `g=`)
                 if ch == 'g' {
-                    self.state = ParserState::WaitingForSecondG { count };
+                    self.state = ParserState::WaitingForG { count };
                     return None;
+                }
+
+                // タグジャンプ (`Ctrl-]` = \x1d), タグ復元 (`Ctrl-t` = \x14)
+                if ch == '\x1d' {
+                    return Some(ViCommand::TagJump(None));
+                }
+                if ch == '\x14' {
+                    return Some(ViCommand::TagPop);
                 }
 
                 // 行末までの操作 (`D`, `C`, `Y`)
@@ -293,8 +516,12 @@ impl CommandParser {
                     '\x12' => return Some(ViCommand::Redo), // Ctrl-R
                     'n' => return Some(ViCommand::SearchNext),
                     'N' => return Some(ViCommand::SearchPrev),
-                    '*' => return Some(ViCommand::SearchWordUnderCursor { forward: true }),
-                    '#' => return Some(ViCommand::SearchWordUnderCursor { forward: false }),
+                    '*' => {
+                        return Some(ViCommand::SearchWordUnderCursor {
+                            forward: true,
+                            kind: WordSearchKind::ExactWord,
+                        });
+                    }
                     _ => {}
                 }
 
@@ -323,8 +550,6 @@ impl CommandParser {
             ParserState::CommandLine { .. } => unreachable!(),
         }
     }
-
-    /// 単一文字キーからモーションをパースします。
     fn parse_motion(&self, ch: char, count: usize) -> Option<Motion> {
         match ch {
             'h' | '\x08' => Some(Motion::Left(count)),
@@ -340,6 +565,14 @@ impl CommandParser {
             'W' => Some(Motion::NextBigWord(count)),
             'B' => Some(Motion::PrevBigWord(count)),
             'E' => Some(Motion::EndBigWord(count)),
+            ';' => Some(Motion::RepeatFindChar {
+                reverse: false,
+                count,
+            }),
+            ',' => Some(Motion::RepeatFindChar {
+                reverse: true,
+                count,
+            }),
             'G' => {
                 let target_line = self
                     .count_buffer

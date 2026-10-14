@@ -426,6 +426,153 @@ impl KeisenMode {
         buffer.close_undo_block();
         true
     }
+
+    /// カーソル位置を囲む左右の縦罫線のカラム位置（左罫線, 右罫線）を探索します。
+    pub fn find_enclosing_box_cols(
+        buffer: &TextBuffer,
+        pos: CursorPosition,
+    ) -> Option<(usize, usize)> {
+        let line_text = buffer.get_line(pos.line)?;
+        let chars: Vec<char> = line_text.chars().collect();
+        if chars.is_empty() {
+            return None;
+        }
+
+        let mut left_col = None;
+        let mut right_col = None;
+
+        // カーソル以前の直近の縦罫線
+        for i in (0..pos.col.min(chars.len())).rev() {
+            if is_vertical_keisen(chars[i]) {
+                left_col = Some(i);
+                break;
+            }
+        }
+
+        // カーソル以降の直近の縦罫線
+        for (i, &ch) in chars.iter().enumerate().skip(pos.col) {
+            if is_vertical_keisen(ch) {
+                right_col = Some(i);
+                break;
+            }
+        }
+
+        match (left_col, right_col) {
+            (Some(l), Some(r)) if l < r => Some((l, r)),
+            _ => None,
+        }
+    }
+
+    /// 罫線枠保護モードでの文字挿入。
+    ///
+    /// 枠線内にカーソルがある場合、カーソルから右枠線までの間にある末尾の空白文字を削ることで、
+    /// 外側の枠線位置を保ったまま文字を挿入します。空白の余白がない場合は挿入を拒否（false）します。
+    pub fn insert_char_protected(
+        buffer: &mut TextBuffer,
+        cursor: &mut CursorPosition,
+        ch: char,
+    ) -> bool {
+        if let Some((left_col, right_col)) = Self::find_enclosing_box_cols(buffer, *cursor)
+            && cursor.col > left_col
+            && cursor.col < right_col
+        {
+            let line_text = match buffer.get_line(cursor.line) {
+                Some(t) => t,
+                None => return false,
+            };
+            let chars: Vec<char> = line_text.chars().collect();
+
+            // カーソル位置から右罫線直前までの範囲で、末尾側の空白を探索
+            let mut space_idx = None;
+            for i in (cursor.col..right_col).rev() {
+                if chars[i] == ' ' || chars[i] == '　' {
+                    space_idx = Some(i);
+                    break;
+                }
+            }
+
+            if let Some(space_col) = space_idx {
+                buffer.open_undo_block();
+                let line_start = buffer.line_start_position(cursor.line);
+
+                // 1. 空白を削除
+                buffer.delete_range(line_start + space_col, line_start + space_col + 1);
+
+                // 2. カーソル位置に文字を挿入
+                let insert_pos = line_start + cursor.col;
+                buffer.insert_char(insert_pos, ch);
+
+                cursor.col += 1;
+                buffer.close_undo_block();
+                return true;
+            } else {
+                // 枠内に空白の余白がないため、枠線を壊さないよう挿入拒否
+                return false;
+            }
+        }
+
+        // 枠外の場合は通常の文字挿入
+        let abs_pos = buffer.cursor_to_position(*cursor);
+        buffer.insert_char(abs_pos, ch);
+        cursor.col += 1;
+        true
+    }
+
+    /// 罫線枠保護モードでの文字削除（BackSpaceまたはDelete）。
+    ///
+    /// 枠線内にカーソルがある場合、文字を削除した分だけ右枠線の直前に半角スペースを補填し、
+    /// 外側の枠線位置をキープします。
+    pub fn delete_char_protected(
+        buffer: &mut TextBuffer,
+        cursor: &mut CursorPosition,
+        is_backspace: bool,
+    ) -> bool {
+        if let Some((left_col, right_col)) = Self::find_enclosing_box_cols(buffer, *cursor) {
+            let delete_col = if is_backspace {
+                if cursor.col <= left_col + 1 {
+                    return false; // 左枠線は削除させない
+                }
+                cursor.col - 1
+            } else {
+                if cursor.col >= right_col {
+                    return false; // 右枠線は削除させない
+                }
+                cursor.col
+            };
+
+            if delete_col > left_col && delete_col < right_col {
+                buffer.open_undo_block();
+                let line_start = buffer.line_start_position(cursor.line);
+
+                // 1. 指定位置の文字を削除
+                buffer.delete_range(line_start + delete_col, line_start + delete_col + 1);
+
+                // 2. 右枠線の手前（right_col - 1 の位置）に空白を補填
+                let pad_pos = line_start + right_col - 1;
+                buffer.insert_char(pad_pos, ' ');
+
+                if is_backspace {
+                    cursor.col -= 1;
+                }
+                buffer.close_undo_block();
+                return true;
+            }
+        }
+
+        // 枠外の場合は通常の削除
+        let abs_pos = buffer.cursor_to_position(*cursor);
+        if is_backspace {
+            if abs_pos > 0 {
+                buffer.delete_range(abs_pos - 1, abs_pos);
+                cursor.col = cursor.col.saturating_sub(1);
+                return true;
+            }
+        } else if abs_pos < buffer.len() {
+            buffer.delete_range(abs_pos, abs_pos + 1);
+            return true;
+        }
+        false
+    }
 }
 
 #[cfg(test)]
@@ -548,5 +695,41 @@ mod tests {
             BoxAlignment::Left
         ));
         assert_eq!(buffer.get_line(0), Some("│hello      │".to_string()));
+    }
+
+    #[test]
+    fn test_keisen_protected_edit() {
+        // "│ hello     │" (全長13文字: │, 空白, h, e, l, l, o, 空白x5, │)
+        let mut buffer = TextBuffer::from_text("│ hello     │");
+        let mut cursor = CursorPosition::new(0, 7); // 'o'の直後
+
+        // '!' を挿入 -> 末尾の空白が1つ削られ、右枠線 '│' の位置は維持される
+        assert!(KeisenMode::insert_char_protected(
+            &mut buffer,
+            &mut cursor,
+            '!'
+        ));
+        assert_eq!(buffer.get_line(0), Some("│ hello!    │".to_string()));
+        assert_eq!(cursor, CursorPosition::new(0, 8));
+
+        // BackSpace で '!' を削除 -> 末尾に空白が補填され、右枠線の位置は維持される
+        assert!(KeisenMode::delete_char_protected(
+            &mut buffer,
+            &mut cursor,
+            true
+        ));
+        assert_eq!(buffer.get_line(0), Some("│ hello     │".to_string()));
+        assert_eq!(cursor, CursorPosition::new(0, 7));
+
+        // 空白に余裕がないボックスでの保護テスト
+        let mut full_box_buffer = TextBuffer::from_text("│12345│");
+        let mut full_cursor = CursorPosition::new(0, 3);
+        // 空白がないため、枠線を壊さないよう挿入拒否される
+        assert!(!KeisenMode::insert_char_protected(
+            &mut full_box_buffer,
+            &mut full_cursor,
+            'x'
+        ));
+        assert_eq!(full_box_buffer.get_line(0), Some("│12345│".to_string()));
     }
 }

@@ -1,11 +1,14 @@
 use super::window::{EditorWindow, SplitAxis};
+use crossterm::event::KeyEvent;
 use std::path::PathBuf;
 use vivivi_core::{CharEncoding, CursorPosition, NewlineType, TextBuffer, TextCursor};
 use vivivi_modes::{
-    BoxAlignment, ConversionType, CsvMode, KeisenDirection, KeisenMode, OutlineItem, SyntaxLang,
-    convert_text, parse_outline,
+    AbbrevManager, BoxAlignment, ConversionType, CsvMode, DabbrevSession, DynamicMacroEngine,
+    KeisenDirection, KeisenMode, LexEditEngine, MigemoEngine, OutlineItem, SyntaxLang, align_lines,
+    calculate_box_selection, convert_text, expand_zen_coding, insert_beg_end_lines, parse_outline,
+    renumber_lines,
 };
-use vivivi_vi::{ViEngine, ViMode};
+use vivivi_vi::{RegisterContent, ViEngine, ViMode};
 
 /// TUI アプリケーションの状態管理構造体。
 pub struct App {
@@ -55,6 +58,40 @@ pub struct App {
     pub outline_items: Vec<OutlineItem>,
     /// 選択中のアウトライン項目のインデックス
     pub selected_outline_idx: usize,
+
+    // --- 動的補完 (dabbrev / Ctrl-L, Ctrl-M) ---
+    pub dabbrev: DabbrevSession,
+
+    // --- 静的略語展開 (abbrev / Ctrl-;) ---
+    pub abbrev: AbbrevManager,
+
+    // --- ダイナミックマクロ (Dynamic Macro / Alt-M) ---
+    pub dynamic_macro: DynamicMacroEngine,
+
+    // --- 字句編集予測 (LexEdit / Ctrl-J) ---
+    pub lex_edit: LexEditEngine,
+
+    // --- キーボードマクロ (Ctrl-Alt-R / Ctrl-Alt-P) ---
+    pub is_recording_macro: bool,
+    pub recorded_macro_events: Vec<KeyEvent>,
+    pub last_macro_events: Option<Vec<KeyEvent>>,
+
+    // --- クリップボード履歴 (cbHist) ---
+    pub show_clipboard_hist: bool,
+    pub selected_cb_idx: usize,
+
+    // --- ローマ字日本語検索 (Migemo / g/) ---
+    pub migemo: MigemoEngine,
+    pub g_pending: bool,
+    pub is_migemo_search: bool,
+    pub migemo_query: String,
+    pub migemo_last_regex: Option<regex::Regex>,
+
+    // --- ヘルプビューア ---
+    pub show_help: bool,
+    pub help_title: String,
+    pub help_lines: Vec<String>,
+    pub help_scroll: usize,
 }
 
 impl App {
@@ -84,10 +121,15 @@ impl App {
         let initial_cursor = TextCursor::new(0, 0);
         let initial_window = EditorWindow::new(0, 0);
 
+        let mut vi = ViEngine::new();
+        if let Some(ref path) = file_path {
+            vi.current_file_path = path.to_string_lossy().to_string();
+        }
+
         Self {
             buffer,
             cursor: initial_cursor,
-            vi: ViEngine::new(),
+            vi,
             csv_mode,
             keisen_mode: KeisenMode::new(),
             is_csv_active: is_csv,
@@ -108,6 +150,26 @@ impl App {
             outline_focus: false,
             outline_items: Vec::new(),
             selected_outline_idx: 0,
+
+            dabbrev: DabbrevSession::new(),
+            abbrev: AbbrevManager::new(),
+            dynamic_macro: DynamicMacroEngine::new(),
+            lex_edit: LexEditEngine::new(),
+            is_recording_macro: false,
+            recorded_macro_events: Vec::new(),
+            last_macro_events: None,
+            show_clipboard_hist: false,
+            selected_cb_idx: 0,
+            migemo: MigemoEngine::new(),
+            g_pending: false,
+            is_migemo_search: false,
+            migemo_query: String::new(),
+            migemo_last_regex: None,
+
+            show_help: false,
+            help_title: String::new(),
+            help_lines: Vec::new(),
+            help_scroll: 0,
         }
     }
 
@@ -335,6 +397,579 @@ impl App {
         self.buffer.close_undo_block();
         self.status_message = Some(format!("文字変換完了 ({count} 行変更)"));
     }
+
+    // --- BOX選択数値集計 (:calc / :sum) ---
+
+    /// 現在のBOX選択（VisualBlock）範囲から数値を抽出し、合計・平均・標準偏差を集計します。
+    pub fn calculate_current_box_selection(&mut self) {
+        let anchor = self.cursor.anchor.unwrap_or(self.cursor.pos);
+        let pos = self.cursor.pos;
+
+        let min_line = anchor.line.min(pos.line);
+        let max_line = anchor.line.max(pos.line);
+        let min_col = anchor.col.min(pos.col);
+        let max_col = anchor.col.max(pos.col);
+
+        if let Some(result) =
+            calculate_box_selection(&self.buffer, min_line, max_line, min_col, max_col)
+        {
+            let summary = result.formatted_summary();
+            // 合計値を無名レジスタにコピー
+            let sum_str = format!("{}", result.sum);
+            self.vi
+                .registers_mut()
+                .set(None, RegisterContent::CharacterWise(sum_str));
+            self.status_message = Some(format!("{summary} [合計値をレジスタにコピーしました]"));
+        } else {
+            self.status_message =
+                Some("BOX選択範囲から有効な数値を検出できませんでした".to_string());
+        }
+    }
+
+    // --- 動的補完 (dabbrev / Ctrl-L, Ctrl-M) ---
+
+    /// 動的補完を実行します。
+    pub fn trigger_dabbrev(&mut self, is_forward: bool) {
+        let cur = self.cursor.pos;
+        if !self.dabbrev.is_active() {
+            // 初回開始 (前方に検索)
+            let opt_candidate = self
+                .dabbrev
+                .start(&self.buffer, cur.line, cur.col)
+                .map(|s| s.to_string());
+            if let Some(candidate) = opt_candidate {
+                // プレフィックスの後に続く残りの文字列を挿入
+                let prefix_len = self.dabbrev.prefix.chars().count();
+                let candidate_chars: Vec<char> = candidate.chars().collect();
+                let remaining: String = candidate_chars[prefix_len..].iter().collect();
+
+                let insert_pos = self.buffer.cursor_to_position(cur);
+                self.buffer.insert_text(insert_pos, &remaining);
+                self.cursor.pos.col += remaining.chars().count();
+
+                let total = self.dabbrev.candidates.len();
+                self.status_message = Some(format!("[動的補完 1/{total}] {candidate}"));
+            } else {
+                self.status_message = Some("動的補完の候補が見つかりません".to_string());
+            }
+        } else {
+            // 2回目以降: 既存の補完部分を差し替え
+            let old_inserted_len = self.dabbrev.last_inserted_len;
+            let next_cand = if is_forward {
+                self.dabbrev.next_candidate().map(|s| s.to_string())
+            } else {
+                self.dabbrev.prev_candidate().map(|s| s.to_string())
+            };
+
+            if let Some(candidate) = next_cand {
+                let prefix_len = self.dabbrev.prefix.chars().count();
+                let candidate_chars: Vec<char> = candidate.chars().collect();
+                let new_remaining: String = candidate_chars[prefix_len..].iter().collect();
+
+                // 直前に挿入した文字を削除して新しい残りを挿入
+                let cur_pos = self.buffer.cursor_to_position(self.cursor.pos);
+                let del_start = cur_pos.saturating_sub(old_inserted_len);
+                self.buffer.delete_text(del_start, old_inserted_len, false);
+                self.buffer.insert_text(del_start, &new_remaining);
+
+                self.cursor.pos.col = self.cursor.pos.col.saturating_sub(old_inserted_len)
+                    + new_remaining.chars().count();
+
+                let curr_idx = self.dabbrev.current_index.unwrap_or(0) + 1;
+                let total = self.dabbrev.candidates.len();
+                self.status_message = Some(format!("[動的補完 {curr_idx}/{total}] {candidate}"));
+            }
+        }
+    }
+
+    // --- クリップボード履歴 (cbHist) 操作 ---
+
+    /// クリップボード履歴から指定アイテムをカーソル位置にペーストします。
+    pub fn paste_clipboard_item(&mut self, index: usize) {
+        if let Some(item) = self.vi.registers().history().get(index).cloned() {
+            let pos = self.buffer.cursor_to_position(self.cursor.pos);
+            match item.content {
+                RegisterContent::CharacterWise(s) => {
+                    let char_count = s.chars().count();
+                    self.buffer.insert_text(pos, &s);
+                    self.cursor.pos.col += char_count;
+                }
+                RegisterContent::LineWise(s) => {
+                    let next_line_start = self.buffer.line_start_position(self.cursor.pos.line + 1);
+                    self.buffer.insert_text(next_line_start, &s);
+                    self.cursor.pos.line += 1;
+                    self.cursor.pos.col = 0;
+                }
+                RegisterContent::BlockWise(lines) => {
+                    for (i, line) in lines.iter().enumerate() {
+                        let l = self.cursor.pos.line + i;
+                        if l >= self.buffer.line_count() {
+                            self.buffer.insert_char(self.buffer.len(), '\n');
+                        }
+                        let insert_pos = self.buffer.line_start_position(l) + self.cursor.pos.col;
+                        self.buffer.insert_text(insert_pos, line);
+                    }
+                }
+            }
+            self.show_clipboard_hist = false;
+            self.status_message = Some(format!("履歴から貼り付けました: {}", item.preview));
+        }
+    }
+
+    // --- ローマ字日本語検索 (Migemo / g/) ---
+
+    /// ローマ字クエリによる日本語インクリメンタル検索を実行します。
+    pub fn execute_migemo_search(&mut self, romaji: &str) {
+        match self.migemo.compile_query(romaji) {
+            Ok(regex) => {
+                self.migemo_last_regex = Some(regex.clone());
+                let full_text = self.buffer.to_string();
+                let cur_pos = self.buffer.cursor_to_position(self.cursor.pos);
+
+                // カーソル以降を検索
+                if let Some(m) = regex
+                    .find_at(&full_text, cur_pos + 1)
+                    .or_else(|| regex.find(&full_text))
+                {
+                    let target_pos = m.start();
+                    self.cursor.pos = self.buffer.position_to_cursor(target_pos);
+                    self.status_message = Some(format!("g/{romaji} [Migemo一致: {}]", m.as_str()));
+                } else {
+                    self.status_message = Some(format!("g/{romaji} [Migemo: 一致なし]"));
+                }
+            }
+            Err(e) => {
+                self.status_message = Some(format!("Migemo正規表現エラー: {e}"));
+            }
+        }
+    }
+
+    /// Migemo検索結果の次／前の一致位置へジャンプします (n / N)。
+    pub fn jump_next_migemo(&mut self, is_forward: bool) {
+        let regex = match &self.migemo_last_regex {
+            Some(r) => r.clone(),
+            None => return,
+        };
+
+        let full_text = self.buffer.to_string();
+        let cur_pos = self.buffer.cursor_to_position(self.cursor.pos);
+
+        if is_forward {
+            if let Some(m) = regex
+                .find_at(&full_text, cur_pos + 1)
+                .or_else(|| regex.find(&full_text))
+            {
+                self.cursor.pos = self.buffer.position_to_cursor(m.start());
+                self.status_message = Some(format!("[Migemo] 一致: {}", m.as_str()));
+            }
+        } else {
+            // 逆方向検索: cur_pos より手前の最後の一致を探索
+            let matches: Vec<_> = regex.find_iter(&full_text).collect();
+            if let Some(m) = matches
+                .iter()
+                .rev()
+                .find(|m| m.start() < cur_pos)
+                .or_else(|| matches.last())
+            {
+                self.cursor.pos = self.buffer.position_to_cursor(m.start());
+                self.status_message = Some(format!("[Migemo] 一致: {}", m.as_str()));
+            }
+        }
+    }
+
+    // --- ヘルプビューア (:help / F1) ---
+
+    /// ヘルプドキュメントを開きます。
+    pub fn open_help(&mut self, topic: Option<&str>) {
+        let topic_name = topic.unwrap_or("index").trim();
+        let file_name = if topic_name.ends_with(".md") {
+            topic_name.to_string()
+        } else {
+            format!("{topic_name}.md")
+        };
+
+        // 探索候補パス（doc/help, docs/help, help）
+        let candidates = [
+            PathBuf::from("doc").join("help").join(&file_name),
+            PathBuf::from("docs").join("help").join(&file_name),
+            PathBuf::from("help").join(&file_name),
+        ];
+
+        let mut content = None;
+        let mut loaded_path = None;
+        for path in &candidates {
+            if let Ok(text) = std::fs::read_to_string(path) {
+                content = Some(text);
+                loaded_path = Some(path.display().to_string());
+                break;
+            }
+        }
+
+        let text = content.unwrap_or_else(|| {
+            // 外部ファイルが見つからない場合のフォールバック（埋め込みインデックス）
+            include_str!("../../../../doc/help/index.md").to_string()
+        });
+
+        self.help_title = loaded_path.unwrap_or_else(|| format!("ヘルプ: {topic_name}"));
+        self.help_lines = text.lines().map(|s| s.to_string()).collect();
+        self.help_scroll = 0;
+        self.show_help = true;
+        self.status_message = Some(format!(
+            "ヘルプを開きました (j/k:スクロール, q/Esc:閉じる): {topic_name}"
+        ));
+    }
+
+    // --- 編集支援: 対象行範囲取得 ---
+
+    /// ビジュアル選択範囲またはバッファ全体の行インデックス範囲 (start_line, end_line) を取得します。
+    pub fn get_target_line_range(&self) -> (usize, usize) {
+        if self.vi.mode().is_visual()
+            && let Some(anchor) = self.cursor.anchor
+        {
+            let start = anchor.line.min(self.cursor.pos.line);
+            let end = anchor.line.max(self.cursor.pos.line);
+            return (start, end);
+        }
+        let total = self.buffer.line_count();
+        if total == 0 { (0, 0) } else { (0, total - 1) }
+    }
+
+    // --- テキストアライン (:align <target>) ---
+
+    /// 指定した区切り文字列の位置で対象行範囲のテキストを垂直整列します。
+    pub fn align_selection_or_buffer(&mut self, target: &str) {
+        if target.is_empty() || self.buffer.line_count() == 0 {
+            return;
+        }
+        let (start_line, end_line) = self.get_target_line_range();
+        let mut lines = Vec::new();
+        for l in start_line..=end_line {
+            lines.push(self.buffer.line_text(l).unwrap_or_default());
+        }
+        let line_refs: Vec<&str> = lines.iter().map(|s| s.as_str()).collect();
+        let aligned = align_lines(&line_refs, target);
+
+        self.buffer.open_undo_block();
+        for (i, new_line) in aligned.into_iter().enumerate() {
+            let cur_line = start_line + i;
+            let old_line_len = self
+                .buffer
+                .line_text(cur_line)
+                .map(|s| s.chars().count())
+                .unwrap_or(0);
+            let start_pos = self
+                .buffer
+                .cursor_to_position(CursorPosition::new(cur_line, 0));
+            let end_pos = start_pos + old_line_len;
+            self.buffer.delete_range(start_pos, end_pos);
+            self.buffer.insert_text(start_pos, &new_line);
+        }
+        self.buffer.close_undo_block();
+
+        self.vi.set_mode(ViMode::Normal);
+        self.cursor.anchor = None;
+        self.status_message = Some(format!(
+            "テキストアライン実行: '{}' ({}〜{} 行)",
+            target,
+            start_line + 1,
+            end_line + 1
+        ));
+    }
+
+    // --- リナンバ (:renumber [start] [step]) ---
+
+    /// 対象行範囲の箇条書き・リスト連番を再付番します。
+    pub fn renumber_selection_or_buffer(&mut self, start: usize, step: usize) {
+        if self.buffer.line_count() == 0 {
+            return;
+        }
+        let (start_line, end_line) = self.get_target_line_range();
+        let mut lines = Vec::new();
+        for l in start_line..=end_line {
+            lines.push(self.buffer.line_text(l).unwrap_or_default());
+        }
+        let line_refs: Vec<&str> = lines.iter().map(|s| s.as_str()).collect();
+        let renumbered = renumber_lines(&line_refs, start, step);
+
+        self.buffer.open_undo_block();
+        for (i, new_line) in renumbered.into_iter().enumerate() {
+            let cur_line = start_line + i;
+            let old_line_len = self
+                .buffer
+                .line_text(cur_line)
+                .map(|s| s.chars().count())
+                .unwrap_or(0);
+            let start_pos = self
+                .buffer
+                .cursor_to_position(CursorPosition::new(cur_line, 0));
+            let end_pos = start_pos + old_line_len;
+            self.buffer.delete_range(start_pos, end_pos);
+            self.buffer.insert_text(start_pos, &new_line);
+        }
+        self.buffer.close_undo_block();
+
+        self.vi.set_mode(ViMode::Normal);
+        self.cursor.anchor = None;
+        self.status_message = Some(format!(
+            "リナンバ実行: 開始={}, 増分={} ({}〜{} 行)",
+            start,
+            step,
+            start_line + 1,
+            end_line + 1
+        ));
+    }
+
+    // --- 行頭行末一括挿入 (:insbegend, :insbeg, :insend) ---
+
+    /// 対象行範囲の行頭および行末に文字列を一括挿入します。
+    pub fn insert_beg_end_in_range(
+        &mut self,
+        beg: &str,
+        end: &str,
+        keep_indent: bool,
+        skip_empty: bool,
+    ) {
+        if self.buffer.line_count() == 0 {
+            return;
+        }
+        let (start_line, end_line) = self.get_target_line_range();
+        let mut lines = Vec::new();
+        for l in start_line..=end_line {
+            lines.push(self.buffer.line_text(l).unwrap_or_default());
+        }
+        let line_refs: Vec<&str> = lines.iter().map(|s| s.as_str()).collect();
+        let edited = insert_beg_end_lines(&line_refs, beg, end, keep_indent, skip_empty);
+
+        self.buffer.open_undo_block();
+        for (i, new_line) in edited.into_iter().enumerate() {
+            let cur_line = start_line + i;
+            let old_line_len = self
+                .buffer
+                .line_text(cur_line)
+                .map(|s| s.chars().count())
+                .unwrap_or(0);
+            let start_pos = self
+                .buffer
+                .cursor_to_position(CursorPosition::new(cur_line, 0));
+            let end_pos = start_pos + old_line_len;
+            self.buffer.delete_range(start_pos, end_pos);
+            self.buffer.insert_text(start_pos, &new_line);
+        }
+        self.buffer.close_undo_block();
+
+        self.vi.set_mode(ViMode::Normal);
+        self.cursor.anchor = None;
+        self.status_message = Some(format!(
+            "行頭行末挿入実行: beg='{}', end='{}' ({}〜{} 行)",
+            beg,
+            end,
+            start_line + 1,
+            end_line + 1
+        ));
+    }
+
+    // --- 静的略語展開 (abbrev / Ctrl-;) ---
+
+    /// カーソル直前の単語を検出し、略語辞書から定型コード・スニペットを展開します。
+    pub fn trigger_abbrev_expansion(&mut self) {
+        let cur_line_idx = self.cursor.pos.line;
+        let line_text = match self.buffer.line_text(cur_line_idx) {
+            Some(t) => t,
+            None => return,
+        };
+        let chars: Vec<char> = line_text.chars().collect();
+        let col = self.cursor.pos.col.min(chars.len());
+
+        let mut word_start = col;
+        while word_start > 0 {
+            let c = chars[word_start - 1];
+            if c.is_alphanumeric() || c == '_' {
+                word_start -= 1;
+            } else {
+                break;
+            }
+        }
+
+        let word: String = chars[word_start..col].iter().collect();
+        if word.is_empty() {
+            self.status_message = Some("略語展開: カーソル直前に単語がありません".to_string());
+            return;
+        }
+
+        if let Some(snippet) = self.abbrev.expand(&word) {
+            let snippet = snippet.to_string();
+            let word_len = word.chars().count();
+            self.buffer.open_undo_block();
+
+            let start_pos = self
+                .buffer
+                .cursor_to_position(CursorPosition::new(cur_line_idx, word_start));
+            let end_pos = start_pos + word_len;
+            self.buffer.delete_range(start_pos, end_pos);
+            self.buffer.insert_text(start_pos, &snippet);
+            self.buffer.close_undo_block();
+
+            let lines: Vec<&str> = snippet.lines().collect();
+            if lines.len() <= 1 {
+                self.cursor.pos.col = word_start + snippet.chars().count();
+            } else {
+                self.cursor.pos.line = cur_line_idx + lines.len() - 1;
+                let last_line = lines.last().unwrap_or(&"");
+                self.cursor.pos.col = last_line.chars().count();
+            }
+
+            self.status_message = Some(format!("略語展開成功: '{}'", word));
+        } else {
+            self.status_message = Some(format!("略語が見つかりません: '{}'", word));
+        }
+    }
+
+    // --- Zen-Coding (Emmet) 展開 (Ctrl-,) ---
+
+    /// カーソル直前の短縮記法（ul>li*3 等）を検出し、HTMLタグ構造へ展開します。
+    pub fn trigger_zen_coding(&mut self) {
+        let cur_line_idx = self.cursor.pos.line;
+        let line_text = match self.buffer.line_text(cur_line_idx) {
+            Some(t) => t,
+            None => return,
+        };
+        let chars: Vec<char> = line_text.chars().collect();
+        let col = self.cursor.pos.col.min(chars.len());
+
+        let mut zen_start = col;
+        while zen_start > 0 {
+            let c = chars[zen_start - 1];
+            if c.is_whitespace() {
+                break;
+            }
+            zen_start -= 1;
+        }
+
+        let zen_str: String = chars[zen_start..col].iter().collect();
+        if zen_str.is_empty() {
+            self.status_message = Some("Zen-Coding: 展開対象の記述がありません".to_string());
+            return;
+        }
+
+        if let Some(expanded) = expand_zen_coding(&zen_str) {
+            let query_len = zen_str.chars().count();
+            self.buffer.open_undo_block();
+
+            let start_pos = self
+                .buffer
+                .cursor_to_position(CursorPosition::new(cur_line_idx, zen_start));
+            let end_pos = start_pos + query_len;
+            self.buffer.delete_range(start_pos, end_pos);
+            self.buffer.insert_text(start_pos, &expanded);
+            self.buffer.close_undo_block();
+
+            let lines: Vec<&str> = expanded.lines().collect();
+            if lines.len() <= 1 {
+                self.cursor.pos.col = zen_start + expanded.chars().count();
+            } else {
+                self.cursor.pos.line = cur_line_idx + lines.len() - 1;
+                let last_line = lines.last().unwrap_or(&"");
+                self.cursor.pos.col = last_line.chars().count();
+            }
+
+            self.status_message = Some(format!("Zen-Coding展開: '{}'", zen_str));
+        } else {
+            self.status_message = Some(format!("Zen-Coding構文エラー: '{}'", zen_str));
+        }
+    }
+
+    // --- ダイナミックマクロ (Dynamic Macro / Alt-M) ---
+
+    /// 直前の編集履歴から反復規則を検出し、マクロを自動実行します。
+    pub fn trigger_dynamic_macro(&mut self) {
+        if let Some(chars) = self.dynamic_macro.detect_repeat() {
+            let seq_str: String = chars.iter().collect();
+            self.buffer.open_undo_block();
+            for &ch in &chars {
+                let pos = self.buffer.cursor_to_position(self.cursor.pos);
+                self.buffer.insert_char(pos, ch);
+                if ch == '\n' {
+                    self.cursor.pos.line += 1;
+                    self.cursor.pos.col = 0;
+                } else {
+                    self.cursor.pos.col += 1;
+                }
+            }
+            self.buffer.close_undo_block();
+            self.status_message = Some(format!("ダイナミックマクロ実行: '{}'", seq_str));
+        } else {
+            self.status_message =
+                Some("ダイナミックマクロ: 反復規則を検出できませんでした".to_string());
+        }
+    }
+
+    // --- 字句編集予測 (LexEdit / Ctrl-J) ---
+
+    /// カーソル位置の単語に対して過去の置換履歴から次の編集を予測し適用します。
+    pub fn trigger_lex_edit(&mut self) {
+        let cur_line_idx = self.cursor.pos.line;
+        let line_text = match self.buffer.line_text(cur_line_idx) {
+            Some(t) => t,
+            None => return,
+        };
+        let chars: Vec<char> = line_text.chars().collect();
+        let col = self.cursor.pos.col.min(chars.len());
+
+        let mut word_start = col;
+        while word_start > 0
+            && (chars[word_start - 1].is_alphanumeric() || chars[word_start - 1] == '_')
+        {
+            word_start -= 1;
+        }
+        let mut word_end = col;
+        while word_end < chars.len()
+            && (chars[word_end].is_alphanumeric() || chars[word_end] == '_')
+        {
+            word_end += 1;
+        }
+
+        let word: String = chars[word_start..word_end].iter().collect();
+        if word.is_empty() {
+            self.status_message = Some("字句編集予測: 対象単語がありません".to_string());
+            return;
+        }
+
+        let candidates = self.lex_edit.predict(&word);
+        if let Some(target) = candidates.first() {
+            let word_len = word.chars().count();
+            self.buffer.open_undo_block();
+
+            let start_pos = self
+                .buffer
+                .cursor_to_position(CursorPosition::new(cur_line_idx, word_start));
+            let end_pos = start_pos + word_len;
+            self.buffer.delete_range(start_pos, end_pos);
+            self.buffer.insert_text(start_pos, target);
+            self.buffer.close_undo_block();
+
+            self.cursor.pos.col = word_start + target.chars().count();
+            self.status_message = Some(format!("字句編集予測適用: '{}' -> '{}'", word, target));
+        } else {
+            self.status_message = Some(format!("字句編集予測候補なし: '{}'", word));
+        }
+    }
+
+    // --- キーボードマクロ (Ctrl-Alt-R / Ctrl-Alt-P) ---
+
+    /// キーボードマクロの記録開始／停止をトグルします。
+    pub fn toggle_macro_recording(&mut self) {
+        if self.is_recording_macro {
+            self.is_recording_macro = false;
+            self.last_macro_events = Some(self.recorded_macro_events.clone());
+            let count = self.recorded_macro_events.len();
+            self.status_message = Some(format!("マクロ記録終了 ({count} 件のキーイベントを保存)"));
+        } else {
+            self.is_recording_macro = true;
+            self.recorded_macro_events.clear();
+            self.status_message =
+                Some("● マクロ記録中... (Ctrl+Alt+R または F9 で終了)".to_string());
+        }
+    }
 }
 
 #[cfg(test)]
@@ -409,5 +1044,185 @@ mod tests {
 
         app.convert_buffer_text(ConversionType::ToHankakuAlphanumeric);
         assert_eq!(app.buffer.to_string(), "Hello 123");
+    }
+
+    #[test]
+    fn test_open_help() {
+        let mut app = App::new("test", None, CharEncoding::Utf8, NewlineType::Lf);
+        assert!(!app.show_help);
+
+        // インデックスヘルプ
+        app.open_help(None);
+        assert!(app.show_help);
+        assert!(!app.help_lines.is_empty());
+        assert_eq!(app.help_scroll, 0);
+
+        // トピック指定ヘルプ (keisen)
+        app.open_help(Some("keisen"));
+        assert!(app.show_help);
+        assert!(!app.help_lines.is_empty());
+
+        // 存在しないトピック（フォールバック動作）
+        app.open_help(Some("non_existent_topic_12345"));
+        assert!(app.show_help);
+        assert!(!app.help_lines.is_empty());
+    }
+
+    #[test]
+    fn test_align_text() {
+        let text = "let a = 1;\nlet count = 2;\nlet total_value = 300;";
+        let mut app = App::new(text, None, CharEncoding::Utf8, NewlineType::Lf);
+        app.align_selection_or_buffer("=");
+        assert_eq!(
+            app.buffer.to_string(),
+            "let a           = 1;\nlet count       = 2;\nlet total_value = 300;"
+        );
+    }
+
+    #[test]
+    fn test_renumber() {
+        let text = "1. りんご\n1. みかん\n9. バナナ";
+        let mut app = App::new(text, None, CharEncoding::Utf8, NewlineType::Lf);
+        app.renumber_selection_or_buffer(1, 1);
+        assert_eq!(app.buffer.to_string(), "1. りんご\n2. みかん\n3. バナナ");
+
+        // ステップ10
+        app.renumber_selection_or_buffer(10, 10);
+        assert_eq!(app.buffer.to_string(), "10. りんご\n20. みかん\n30. バナナ");
+    }
+
+    #[test]
+    fn test_insert_beg_end() {
+        let text = "println!(\"hello\");\nprintln!(\"world\");";
+        let mut app = App::new(text, None, CharEncoding::Utf8, NewlineType::Lf);
+        app.insert_beg_end_in_range("// ", " // comment", true, true);
+        assert_eq!(
+            app.buffer.to_string(),
+            "// println!(\"hello\"); // comment\n// println!(\"world\"); // comment"
+        );
+    }
+
+    #[test]
+    fn test_abbrev_expansion() {
+        let text = "hw";
+        let mut app = App::new(text, None, CharEncoding::Utf8, NewlineType::Lf);
+        app.abbrev.register("hw", "Hello World!");
+        app.cursor.pos.col = 2; // "hw"の直後
+        app.trigger_abbrev_expansion();
+        assert_eq!(app.buffer.to_string(), "Hello World!");
+    }
+
+    #[test]
+    fn test_zen_coding_expansion() {
+        let text = "ul>li*2";
+        let mut app = App::new(text, None, CharEncoding::Utf8, NewlineType::Lf);
+        app.cursor.pos.col = 7;
+        app.trigger_zen_coding();
+        assert_eq!(
+            app.buffer.to_string(),
+            "<ul>\n  <li></li>\n  <li></li>\n</ul>"
+        );
+    }
+
+    #[test]
+    fn test_dynamic_macro() {
+        let text = "";
+        let mut app = App::new(text, None, CharEncoding::Utf8, NewlineType::Lf);
+        // "abcabc" を記録
+        for ch in "abcabc".chars() {
+            app.dynamic_macro.record_char(ch);
+        }
+        app.trigger_dynamic_macro();
+        assert_eq!(app.buffer.to_string(), "abc");
+
+        // もう一度実行すると同じパターンが再実行される
+        app.trigger_dynamic_macro();
+        assert_eq!(app.buffer.to_string(), "abcabc");
+    }
+
+    #[test]
+    fn test_lex_edit() {
+        let text = "user_name = 10;";
+        let mut app = App::new(text, None, CharEncoding::Utf8, NewlineType::Lf);
+        app.lex_edit.record_edit("user", "member");
+        app.cursor.pos.col = 2; // "user_name" の途中
+        app.trigger_lex_edit();
+        assert_eq!(app.buffer.to_string(), "member_name = 10;");
+    }
+
+    #[test]
+    fn test_macro_recording_toggle() {
+        let mut app = App::new("test", None, CharEncoding::Utf8, NewlineType::Lf);
+        assert!(!app.is_recording_macro);
+
+        app.toggle_macro_recording();
+        assert!(app.is_recording_macro);
+
+        app.toggle_macro_recording();
+        assert!(!app.is_recording_macro);
+        assert!(app.last_macro_events.is_some());
+    }
+
+    #[test]
+    fn test_expression_substitute_in_app() {
+        let text = "price: 100\nprice: 250";
+        let mut app = App::new(text, None, CharEncoding::Utf8, NewlineType::Lf);
+        let res = app.vi.execute(
+            &vivivi_vi::ViCommand::ExCommand("%s/([0-9]+)/$1 * 2/ge".to_string()),
+            &mut app.buffer,
+            &mut app.cursor,
+        );
+        assert_eq!(res.message, Some("2 箇所の式置換を行いました".to_string()));
+        assert_eq!(app.buffer.to_string(), "price: 200\nprice: 500");
+    }
+
+    #[test]
+    fn test_phase4_4_features_in_app() {
+        let text = "count = 41;\nflag = false;\nfunc();";
+        let mut app = App::new(
+            text,
+            Some(PathBuf::from("test.rs")),
+            CharEncoding::Utf8,
+            NewlineType::Lf,
+        );
+        app.cursor.pos = CursorPosition::new(0, 8); // '4'
+
+        // 1. #+ (41 -> 42)
+        let cmd = app.vi.feed_char('#');
+        assert_eq!(cmd, None);
+        let cmd = app.vi.feed_char('+');
+        assert!(cmd.is_some());
+        app.vi
+            .execute(&cmd.unwrap(), &mut app.buffer, &mut app.cursor);
+        assert!(app.buffer.to_string().contains("count = 42;"));
+
+        // 2. #! (false -> true)
+        app.cursor.pos = CursorPosition::new(1, 7); // "false"
+        let cmd = app.vi.feed_char('#');
+        assert_eq!(cmd, None);
+        let cmd = vi_cmd_bang(&mut app.vi);
+        assert!(cmd.is_some());
+        app.vi
+            .execute(&cmd.unwrap(), &mut app.buffer, &mut app.cursor);
+        assert!(app.buffer.to_string().contains("flag = true;"));
+
+        // 3. マーク設定と一覧
+        app.cursor.pos = CursorPosition::new(1, 0);
+        let cmd = app.vi.feed_char('m');
+        assert_eq!(cmd, None);
+        let cmd = app.vi.feed_char('Z');
+        assert!(cmd.is_some());
+        app.vi
+            .execute(&cmd.unwrap(), &mut app.buffer, &mut app.cursor);
+        let res = app.vi.execute(
+            &vivivi_vi::ViCommand::ListMarks,
+            &mut app.buffer,
+            &mut app.cursor,
+        );
+        assert!(res.message.unwrap().contains("'Z': 2行"));
+    }
+
+    fn vi_cmd_bang(vi: &mut ViEngine) -> Option<vivivi_vi::ViCommand> {
+        vi.feed_char('!')
     }
 }

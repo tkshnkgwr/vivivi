@@ -2,7 +2,9 @@
 //!
 //! 各領域（エディタ、アウトライン、ステータスバー）のレイアウト計算と描画ディスパッチを担当します。
 
+pub mod clipboard_hist;
 pub mod editor;
+pub mod help;
 pub mod outline;
 pub mod status;
 
@@ -80,7 +82,17 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     // 3. 最下行（ステータスバーまたはコマンドライン）の描画
     status::render_status_bar(frame, app, status_area);
 
-    // 4. カーソルの画面配置
+    // 4. クリップボード履歴ポップアップの描画（表示中のみ最前面に重ねて描画）
+    if app.show_clipboard_hist {
+        clipboard_hist::render_clipboard_history(frame, app, size);
+    }
+
+    // 5. ヘルプビューアの描画（表示中のみ最前面に重ねて描画）
+    if app.show_help {
+        help::render_help_view(frame, app, size);
+    }
+
+    // 6. カーソルの画面配置
     set_terminal_cursor(
         frame,
         app,
@@ -98,6 +110,14 @@ fn set_terminal_cursor(
     status_area: Rect,
     line_number_width: usize,
 ) {
+    if app.is_migemo_search {
+        // Migemo 検索入力プロンプト (g/<query>)
+        let prompt_len = 2 + app.migemo_query.chars().count(); // "g/" + query
+        let cursor_x = (status_area.x as usize + prompt_len).min(status_area.width as usize - 1);
+        frame.set_cursor_position(Position::new(cursor_x as u16, status_area.y));
+        return;
+    }
+
     if app.mode() == ViMode::CommandLine {
         // コマンドラインのカーソル位置
         let cmd_len = app

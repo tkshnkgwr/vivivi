@@ -13,6 +13,22 @@ use vivivi_vi::ViMode;
 
 /// 最下行（ステータスバーまたはコマンドライン）の描画
 pub fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
+    if app.is_migemo_search {
+        // Migemo ローマ字検索入力中の表示 (`g/nihon` 等)
+        let cmd_line = Line::from(vec![
+            Span::styled(
+                "g/",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(&app.migemo_query, Style::default().fg(Color::White)),
+        ]);
+        let paragraph = Paragraph::new(cmd_line);
+        frame.render_widget(paragraph, area);
+        return;
+    }
+
     if app.mode() == ViMode::CommandLine {
         // コマンドライン入力中の表示 (`:w` 等)
         let cmd_str = app

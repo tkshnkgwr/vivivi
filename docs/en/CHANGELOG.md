@@ -28,7 +28,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - Implemented forward/backward search (`/`, `?`, `n`, `N`, `*`, `#`) with wraparound.
   - Implemented ex command executor (`:w`, `:q`, `:s`, `:%s/before/after/g` regex substitution, `:line` jump).
   - Stateful `CommandParser` (accumulating counts, register prefixes, 2-key commands in real time).
+  - **ViVi Vi Command Extensions & Navigation**:
+    - `fFtT` full-width auto-matching (`f`, `F`, `t`, `T`, `;`, `,`) and operator integration (`df)`, `ct]`).
+    - Word search under cursor (`*`, `#` exact match, `g*`, `g#` partial match, `g<` prefix match, `g=` suffix match).
+    - Numeric and alphabet increment/decrement (`#+`, `##`, `#-`) and boolean toggle (`#!`).
+    - Last edit location jump (`@`, `'@`, `` `@ ``) and above-line text replication (`=<char>`).
+    - Local and global marks (`ma`-`mz`, `mA`-`mZ`, jump `'a`, list `:marks`).
+    - Tag navigation (`Ctrl-]`, `Ctrl-t`, `Ctrl-[`, `:tag`, `:tags` with AST syntax analysis fallback).
 - **`vivivi-modes`**:
+  - **Expression Substitution Engine (`expr_subst.rs`)**:
+    - Dynamic arithmetic/script evaluation for `:s/pattern/expression/e` (`+`, `-`, `*`, `/`, `%`, `$0`-`$9` capture groups, `$i`/`$n` counter, `$line`, string concatenation).
+  - **Full-width Character Matching Mapping (`fftt.rs`)**:
+    - Transparent mapping and forward/backward search matching ASCII characters to full-width variants.
   - Defined Inline CSV/TSV mode specifications based on ViVi 4.
   - Ported Unicode box-drawing lookup table from OpenViVi's `keisen.cpp`.
   - Implemented keisen drawing/erasing/joining step logic (`step`) with automatic line expansion and perpendicular checking.
@@ -54,6 +65,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     - Side pane navigation with `Ctrl-o` focus, `j`/`k` item navigation, and `Enter` instant jump to target line.
   - **Character Conversion Ex Commands**:
     - Batch whole-buffer conversion via `:%zenkaku`, `:%hankaku`, `:%hiragana`, `:%katakana`, `:%hankata`, `:%zenkata`, `:%toupper`, `:%tolower`.
+  - **Text Alignment, Renumbering & Line Editing Assists**:
+    - Multi-line columnar alignment via `:align <target>` (`=`, `:`, `,`, `//`).
+    - Ordered list renumbering via `:renumber [start] [step]` / `:renum`.
+    - Batch head/tail insertion via `:insbeg`, `:insend`, and `:begend`.
+  - **High-Speed Input & Macro Assistance**:
+    - In-buffer cyclic dynamic word completion (dabbrev / `Ctrl-l`, `Ctrl-m`).
+    - Static abbreviation expansion (abbrev / `Ctrl-;`, `Alt-;`, `F4`, `:abbrev`).
+    - Dynamic macro (Masui Repeat / `Alt-m`, `Ctrl-Alt-m`, `:dmacro`) recurring pattern detection and replay.
+    - Lexical edit prediction (LexEdit / `Ctrl-j`, `:lexedit`) based on edit history.
+    - Zen-Coding (Emmet) expansion (`Ctrl-,`, `Alt-,`, `:zen`) for HTML shorthand.
+    - Full keyboard macro recording and replay (`Ctrl-Alt-r` / `Ctrl-Alt-p`, `F9` / `F10`, `:macro`).
+  - **Advanced Navigation, Search & Math**:
+    - Romaji Japanese incremental search (Migemo / `g/`) with SKK dictionary support.
+    - Box selection numeric calculation (`:calc`, `:sum`, `:total`) for count, sum, avg, stddev.
+    - Interactive clipboard history modal (`F6`, `:cbhist`).
+    - Built-in documentation viewer (`F1`, `:help [topic]`) and newly added topics (`expr_subst.md`, `vivi_cmd.md`).
+    - Expression substitution (`:s/.../.../e`, `:%s/.../.../e`) integrated into command-line UI.
+    - Full-width character matching, word searching, incrementing, marks, and tag navigation integrated into TUI.
+  - **AI Integration Architecture**:
+    - Interactive command dispatch slots for `:ai <instruction>` and `:ai commit`.
+    - Published zero-latency AI architecture specification (`docs/ja/AI_INTEGRATION_DESIGN.md`).
   - Real-time Visual / VisualLine / VisualBlock selection background highlighting.
   - Real-time status bar displaying Vi mode, keisen/CSV badges, filename, modified flag, encoding/newline/language badges, line/col, and percentage.
   - Preserved original charset and newline sequence upon file save.
@@ -61,7 +93,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - Native hardware blinking cursor integration.
   - Supported `--demo` console demo mode flag.
 - **Repository, Licensing & Infrastructure**:
-  - Placed [LICENSE](file:///c:/Users/ABC/OneDrive/ドキュメント/自作/vivivi/LICENSE) (MIT License) in repository root.
+  - Placed LICENSE (MIT License) in repository root.
   - Setup `.agents/` rules and skills, `GEMINI.md`, and `RULES.md`.
   - Established bilingual documentation system (`docs/ja/`, `docs/en/`).
 

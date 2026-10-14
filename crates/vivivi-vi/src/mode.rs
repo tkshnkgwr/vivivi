@@ -24,4 +24,9 @@ impl ViMode {
             Self::CommandLine => "COMMAND",
         }
     }
+
+    /// ビジュアルモード（文字/行/矩形選択）かどうかを判定します。
+    pub fn is_visual(&self) -> bool {
+        matches!(self, Self::Visual | Self::VisualLine | Self::VisualBlock)
+    }
 }

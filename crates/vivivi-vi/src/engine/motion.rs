@@ -135,6 +135,57 @@ impl ViEngine {
                     cursor.pos = buffer.position_to_cursor(match_pos);
                 }
             }
+            Motion::FindCharForward {
+                target,
+                till,
+                count,
+            } => {
+                self.last_find_char = Some((*target, true, *till));
+                if let Some(new_col) = buffer.line_text(cursor.pos.line).and_then(|line| {
+                    vivivi_modes::find_char_forward(&line, cursor.pos.col, *target, *till, *count)
+                }) {
+                    cursor.pos.col = new_col;
+                }
+            }
+            Motion::FindCharBackward {
+                target,
+                till,
+                count,
+            } => {
+                self.last_find_char = Some((*target, false, *till));
+                if let Some(new_col) = buffer.line_text(cursor.pos.line).and_then(|line| {
+                    vivivi_modes::find_char_backward(&line, cursor.pos.col, *target, *till, *count)
+                }) {
+                    cursor.pos.col = new_col;
+                }
+            }
+            Motion::RepeatFindChar { reverse, count } => {
+                if let Some((target, is_forward, till)) = self.last_find_char {
+                    let actual_forward = if *reverse { !is_forward } else { is_forward };
+                    if let Some(line) = buffer.line_text(cursor.pos.line) {
+                        let new_col = if actual_forward {
+                            vivivi_modes::find_char_forward(
+                                &line,
+                                cursor.pos.col,
+                                target,
+                                till,
+                                *count,
+                            )
+                        } else {
+                            vivivi_modes::find_char_backward(
+                                &line,
+                                cursor.pos.col,
+                                target,
+                                till,
+                                *count,
+                            )
+                        };
+                        if let Some(c) = new_col {
+                            cursor.pos.col = c;
+                        }
+                    }
+                }
+            }
         }
     }
 

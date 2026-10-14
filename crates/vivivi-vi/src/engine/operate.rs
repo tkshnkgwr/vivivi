@@ -21,11 +21,24 @@ impl ViEngine {
         self.execute_motion(motion, buffer, &mut target_cursor);
         let end_pos = buffer.cursor_to_position(target_cursor.pos);
 
-        let (from, to) = if start_pos <= end_pos {
+        let is_inclusive = matches!(
+            motion,
+            Motion::FindCharForward { till: false, .. }
+                | Motion::EndOfLine
+                | Motion::EndWord(_)
+                | Motion::EndBigWord(_)
+                | Motion::MatchingParen
+        );
+
+        let (from, mut to) = if start_pos <= end_pos {
             (start_pos, end_pos)
         } else {
             (end_pos, start_pos)
         };
+
+        if is_inclusive && to < buffer.len() {
+            to += 1;
+        }
 
         let len = to - from;
         if len == 0 {

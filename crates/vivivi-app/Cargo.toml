@@ -16,5 +16,7 @@ vivivi-modes.workspace = true
 anyhow.workspace = true
 ratatui.workspace = true
 crossterm.workspace = true
+regex.workspace = true
+
 
 [dev-dependencies]

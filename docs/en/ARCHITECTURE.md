@@ -35,9 +35,9 @@ graph TD
     Modes --> Core
 ```
 
-| Crate Name     | Responsibilities & Roles                                     | Dependencies  |
-| :------------- | :----------------------------------------------------------- | :------------ |
-| `vivivi-core`  | GapBuffer, line manager, cursor, Undo/Redo, encodings        | None          |
-| `vivivi-vi`    | Vi state machine, command parsing, registers, ex commands    | `vivivi-core` |
-| `vivivi-modes` | Inline CSV/TSV mode, Unicode box-drawing (keisen) mode       | `vivivi-core` |
-| `vivivi-app`   | Application binary and execution entrypoint                  | All crates    |
+| Crate Name     | Responsibilities & Roles                                                                                                     | Dependencies  |
+| :------------- | :--------------------------------------------------------------------------------------------------------------------------- | :------------ |
+| `vivivi-core`  | GapBuffer, line manager, cursor, transactional Undo/Redo (`UndoMgr`), encoding & newline conversion, bracket search         | None          |
+| `vivivi-vi`    | Vi state machine, command parser, register history, motions, visual block, ex commands, custom vi extensions (fFtT, tags)  | `vivivi-core` |
+| `vivivi-modes` | Signature editing assists: keisen protection, inline CSV, expr subst, fFtT, align, renumber, conv, calc, macros, migemo    | `vivivi-core` |
+| `vivivi-app`   | Ratatui TUI frontend, multi-window splits, keyboard macro engine, clipboard history modal, AI command slots, entrypoint    | All crates    |

@@ -6,8 +6,8 @@ pub mod mode;
 pub mod parser;
 pub mod register;
 
-pub use command::{Motion, Operator, ViCommand};
+pub use command::{Motion, Operator, ViCommand, WordSearchKind};
 pub use engine::ViEngine;
 pub use mode::ViMode;
 pub use parser::CommandParser;
-pub use register::{RegisterContent, RegisterMgr};
+pub use register::{ClipboardHistory, ClipboardItem, RegisterContent, RegisterMgr};

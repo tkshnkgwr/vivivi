@@ -219,3 +219,299 @@ fn test_visual_block_insert() {
     assert_eq!(lines[1], "> item2");
     assert_eq!(lines[2], "> item3");
 }
+
+#[test]
+fn test_macro_record_and_playback() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("line1\nline2\nline3\n");
+    let mut cur = TextCursor::new(0, 0);
+
+    // 1. qa でレジスタ a にマクロ記録開始
+    let cmd = vi.feed_char('q');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char('a');
+    assert_eq!(cmd, Some(ViCommand::RecordMacro('a')));
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(vi.recording_register, Some('a'));
+
+    // 2. 行末に "!" を追加して次行へ移動する操作（A!Esc j）
+    let cmd = vi.feed_char('A');
+    assert_eq!(cmd, Some(ViCommand::InsertLineEnd));
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(vi.mode(), ViMode::Insert);
+
+    vi.record_inserted_char('!');
+    let pos = buf.cursor_to_position(cur.pos);
+    buf.insert_char(pos, '!');
+    cur.pos.col += 1;
+
+    let cmd = vi.feed_char('\x1b');
+    assert_eq!(cmd, Some(ViCommand::EnterMode(ViMode::Normal)));
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(vi.mode(), ViMode::Normal);
+
+    let cmd = vi.feed_char('j');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+
+    // 3. q でマクロ記録終了
+    let cmd = vi.feed_char('q');
+    assert_eq!(cmd, Some(ViCommand::StopRecordMacro));
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert!(vi.recording_register.is_none());
+    assert!(vi.macro_storage.contains_key(&'a'));
+
+    // 4. @a でマクロ再生（2行目 line2 に適用される）
+    let cmd = vi.feed_char('@');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char('a');
+    assert_eq!(cmd, Some(ViCommand::ExecuteMacro('a')));
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+
+    // 5. @@ で直前マクロ再実行（3行目 line3 に適用される）
+    let cmd = vi.feed_char('@');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char('@');
+    assert_eq!(cmd, Some(ViCommand::ExecuteMacro('@')));
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+
+    let lines: Vec<String> = (0..buf.line_count())
+        .filter_map(|i| buf.line_text(i))
+        .collect();
+    assert_eq!(lines[0], "line1!");
+    assert_eq!(lines[1], "line2!");
+    assert_eq!(lines[2], "line3!");
+}
+
+#[test]
+fn test_expression_substitute_integration() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("val: 10\nval: 20\nval: 30");
+    let mut cur = TextCursor::new(0, 0);
+
+    // %s/([0-9]+)/$1 * 2/ge
+    let res = vi.execute(
+        &ViCommand::ExCommand("%s/([0-9]+)/$1 * 2/ge".to_string()),
+        &mut buf,
+        &mut cur,
+    );
+    assert_eq!(res.message, Some("3 箇所の式置換を行いました".to_string()));
+    let lines: Vec<String> = (0..buf.line_count())
+        .filter_map(|i| buf.line_text(i))
+        .collect();
+    assert_eq!(lines[0], "val: 20");
+    assert_eq!(lines[1], "val: 40");
+    assert_eq!(lines[2], "val: 60");
+
+    // 単一行での式連動リナンバ :s/val: [0-9]+/\"item_\" + $i/e
+    cur.pos.line = 0;
+    let res = vi.execute(
+        &ViCommand::ExCommand(r#"s/val: [0-9]+/"item_" + $i/e"#.to_string()),
+        &mut buf,
+        &mut cur,
+    );
+    assert_eq!(res.message, Some("1 箇所の式置換を行いました".to_string()));
+    assert_eq!(buf.line_text(0).unwrap(), "item_1");
+}
+
+#[test]
+fn test_fftt_fullwidth_matching_and_operator() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("Hello (世界) １２３ 「テスト」");
+    let mut cur = TextCursor::new(0, 0);
+
+    // 1. 'f' '(' で半角 '(' に移動 (col 6)
+    let cmd = vi.feed_char('f');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char('(');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(cur.pos.col, 6);
+
+    // 2. ';' で次の '(' (全角 '「' col 15) へジャンプ
+    let cmd = vi.feed_char(';');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(cur.pos.col, 15);
+
+    // 3. ',' で逆方向（半角 '(' col 6）へ復帰
+    let cmd = vi.feed_char(',');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(cur.pos.col, 6);
+
+    // 4. 'df)' で全角 '）' まで削除 -> "Hello  １２３ 「テスト」"
+    let cmd = vi.feed_char('d');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char('f');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char(')');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.to_string(), "Hello  １２３ 「テスト」");
+}
+
+#[test]
+fn test_word_search_variants() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("cat concat catalog concatenate");
+    let mut cur = TextCursor::new(0, 0); // "cat"
+
+    // * (完全単語一致)
+    let cmd = vi.feed_char('*');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    // 次の単語境界 cat は存在しないので自身へラップアラウンド
+    assert_eq!(vi.last_search_pattern, Some(r"\bcat\b".to_string()));
+
+    // g* (部分一致)
+    let cmd = vi.feed_char('g');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char('*');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(vi.last_search_pattern, Some("cat".to_string()));
+    // 次の部分一致 "concat" 内の "cat" (col 7) へジャンプ
+    assert_eq!(cur.pos.col, 7);
+
+    // g< (前方一致)
+    cur.pos.col = 0;
+    let cmd = vi.feed_char('g');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char('<');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(vi.last_search_pattern, Some(r"\bcat".to_string()));
+    // "catalog" の先頭 (col 11) へジャンプ
+    assert_eq!(cur.pos.col, 11);
+}
+
+#[test]
+fn test_increment_decrement_and_boolean_toggle() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("count = 10; flag = true; letter = a;");
+    let mut cur = TextCursor::new(0, 0);
+
+    // 1. #+ で 10 -> 11
+    let cmd = vi.feed_char('#');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char('+');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert!(buf.to_string().starts_with("count = 11;"));
+
+    // 2. 5#- で 11 -> 6
+    let cmd = vi.feed_char('5');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char('#');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char('-');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert!(buf.to_string().starts_with("count = 6;"));
+
+    // 3. #! で true -> false
+    cur.pos.col = 19; // "true"
+    let cmd = vi.feed_char('#');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char('!');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert!(buf.to_string().contains("flag = false;"));
+
+    // 4. アルファベットのインクリメント a -> b
+    cur.pos.col = buf.to_string().rfind('a').unwrap();
+    let cmd = vi.feed_char('#');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char('#'); // ## もインクリメント
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert!(buf.to_string().ends_with("letter = b;"));
+}
+
+#[test]
+fn test_marks_and_last_edit_jump() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("first line\nsecond line\nthird line");
+    let mut cur = TextCursor::new(0, 0);
+
+    // 1. mA でマーク A を設定 (0行0列)
+    let cmd = vi.feed_char('m');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char('A');
+    assert_eq!(cmd, Some(ViCommand::SetMark('A')));
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert!(vi.marks.contains_key(&'A'));
+
+    // 2. 移動して編集操作（x で文字削除）
+    cur.pos.line = 2;
+    cur.pos.col = 4;
+    let cmd = vi.feed_char('x');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(vi.last_edit_pos, Some(CursorPosition::new(2, 4)));
+
+    // 3. 'A でマーク A (0行目) へジャンプ
+    let cmd = vi.feed_char('\'');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char('A');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(cur.pos.line, 0);
+
+    // 4. '@ で直前編集位置 (2行目) へジャンプ
+    let cmd = vi.feed_char('\'');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char('@');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(cur.pos.line, 2);
+
+    // 5. :marks コマンドで一覧メッセージ取得
+    let res = vi.execute(
+        &ViCommand::ExCommand("marks".to_string()),
+        &mut buf,
+        &mut cur,
+    );
+    assert!(res.message.unwrap().contains("'A': 1行"));
+}
+
+#[test]
+fn test_copy_from_above_line() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("    function calculateTotal() {\n    ");
+    let mut cur = TextCursor::new(1, 4);
+
+    // = で直前行の 'f' 以降から ')' までの文字列を複製
+    let cmd = vi.feed_char('=');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char(')');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(1).unwrap(), "    function calculateTotal()");
+}
+
+#[test]
+fn test_tag_jump_and_pop() {
+    let mut vi = ViEngine::new();
+    let code = "fn main() {\n    foo();\n}\n\nfn foo() {\n    println!(\"hi\");\n}\n";
+    let mut buf = TextBuffer::from_text(code);
+    vi.current_file_path = "main.rs".to_string();
+
+    // 2行目の "foo" 上にカーソルを置く
+    let mut cur = TextCursor::new(1, 4);
+
+    // Ctrl-] (\x1d) でタグジャンプ
+    let cmd = vi.feed_char('\x1d');
+    assert!(cmd.is_some());
+    let res = vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(cur.pos.line, 4); // "fn foo()" 行へジャンプ
+    assert!(res.message.unwrap().contains("foo"));
+
+    // Ctrl-t (\x14) で元の行へ復帰
+    let cmd = vi.feed_char('\x14');
+    assert!(cmd.is_some());
+    let res = vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(cur.pos.line, 1); // 2行目へ復帰
+    assert!(res.message.unwrap().contains("復帰"));
+}
