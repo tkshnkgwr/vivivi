@@ -57,6 +57,9 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect) {
 
     let mut lines_spans = Vec::new();
 
+    // アクティブな検索正規表現 (hlsearch)
+    let active_search_re = app.active_search_regex();
+
     // 変更行マーカーの算出
     let all_lines: Vec<String> = (0..total_lines)
         .filter_map(|i| app.buffer.get_line(i))
@@ -169,6 +172,24 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect) {
         if is_current_line {
             for s in &mut styles {
                 *s = s.bg(Color::Rgb(30, 35, 45));
+            }
+        }
+
+        // 検索キーワードの一致箇所ハイライト (hlsearch)
+        if let Some(ref search_re) = active_search_re {
+            let hl_style = Style::default()
+                .bg(Color::Rgb(220, 150, 30))
+                .fg(Color::Black)
+                .add_modifier(Modifier::BOLD);
+
+            for m in search_re.find_iter(&display_line) {
+                let start_col = display_line[..m.start()].chars().count();
+                let end_col = display_line[..m.end()].chars().count();
+                for col_idx in start_col..end_col {
+                    if col_idx < styles.len() {
+                        styles[col_idx] = hl_style;
+                    }
+                }
             }
         }
 

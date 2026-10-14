@@ -247,62 +247,149 @@ impl KeisenMode {
     ) {
         buffer.open_undo_block();
 
-        // 1. 現在位置の文字の罫線状態を更新
-        Self::update_keisen_at(buffer, *cursor, dir, is_erase, self.keisen_type);
+        // 0. 現在位置の行・列を確実に確保
+        while buffer.line_count() <= cursor.line {
+            let end_pos = buffer.len();
+            buffer.insert_char(end_pos, '\n');
+        }
+        Self::pad_line_to_col(buffer, cursor.line, cursor.col);
 
-        // 2. 移動先の位置を確保・計算
+        // 1. 移動先の位置を確保・計算
         let next_pos = Self::ensure_target_position(buffer, *cursor, dir);
 
-        // 3. 移動先の罫線状態を逆方向で結合/更新
-        Self::update_keisen_at(buffer, next_pos, dir.opposite(), is_erase, self.keisen_type);
+        if is_erase {
+            // 消去の場合: 現在セルから進行方向、移動先セルから逆方向の接続を除去
+            Self::update_keisen_cell(buffer, *cursor, None, Some(dir), self.keisen_type);
+            Self::update_keisen_cell(
+                buffer,
+                next_pos,
+                None,
+                Some(dir.opposite()),
+                self.keisen_type,
+            );
+        } else {
+            // 描画の場合: 現在セルに進行方向、移動先セルに逆方向の接続を追加
+            Self::update_keisen_cell(buffer, *cursor, Some(dir), None, self.keisen_type);
+            Self::update_keisen_cell(
+                buffer,
+                next_pos,
+                Some(dir.opposite()),
+                None,
+                self.keisen_type,
+            );
+        }
 
-        // 4. カーソルを移動先に更新
+        // 2. カーソルを移動先に更新
         *cursor = next_pos;
 
         buffer.close_undo_block();
     }
 
-    /// 指定位置の文字の罫線接続状態を計算し、適切な文字（または空白）に置換します。
-    fn update_keisen_at(
+    /// セル `pos` の罫線状態を、隣接セルとの接続関係に基づいて精密に更新します。
+    fn update_keisen_cell(
         buffer: &mut TextBuffer,
         pos: CursorPosition,
-        dir: KeisenDirection,
-        is_erase: bool,
+        add_dir: Option<KeisenDirection>,
+        remove_dir: Option<KeisenDirection>,
         keisen_type: KeisenType,
     ) {
         let abs_pos = buffer.cursor_to_position(pos);
         let curr_ch = buffer.char_at(abs_pos).unwrap_or(' ');
-        let curr_state = char_to_keisen_state(curr_ch).unwrap_or(0);
-        let has_perp = (curr_state & dir.perp_mask()) != 0;
 
-        let new_state = if is_erase {
-            if !has_perp {
-                curr_state & !dir.axis_mask()
-            } else {
-                curr_state & !dir.mask()
-            }
-        } else if !has_perp {
-            // 直角方向の接続がない場合、直線（水平または垂直）として両方向を設定
-            (curr_state & !dir.axis_mask()) | dir.axis_flags(keisen_type)
+        // 隣接セルからの本物の接続を取得
+        let neighbors = Self::neighbor_connections(buffer, pos, keisen_type);
+
+        // 新しい状態の計算
+        let new_state = if let Some(dir) = add_dir {
+            // 現在の隣接接続 ＋ 新たに追加する接続
+            neighbors | dir.flag(keisen_type)
+        } else if let Some(dir) = remove_dir {
+            // 指定方向を消去
+            neighbors & !dir.mask()
         } else {
-            // 直角方向がある場合は該当方向を結合
-            (curr_state & !dir.mask()) | dir.flag(keisen_type)
+            neighbors
         };
 
         let replace_ch = if new_state == 0 {
-            if is_erase && char_to_keisen_state(curr_ch).is_some() {
+            if char_to_keisen_state(curr_ch).is_some() {
                 ' '
             } else {
                 curr_ch
             }
+        } else if let Some(ch) = state_to_keisen_char(new_state) {
+            ch
         } else {
-            state_to_keisen_char(new_state).unwrap_or(curr_ch)
+            // 接続が1方向のみ（端点）の場合、直線の罫線文字を表示
+            let is_horizontal = (new_state & (KT_LEFT_MASK | KT_RIGHT_MASK)) != 0;
+            let is_vertical = (new_state & (KT_UP_MASK | KT_DOWN_MASK)) != 0;
+            if is_horizontal && !is_vertical {
+                state_to_keisen_char(KeisenDirection::Right.axis_flags(keisen_type)).unwrap_or('─')
+            } else if is_vertical && !is_horizontal {
+                state_to_keisen_char(KeisenDirection::Down.axis_flags(keisen_type)).unwrap_or('│')
+            } else {
+                curr_ch
+            }
         };
 
         if replace_ch != curr_ch {
             buffer.delete_range(abs_pos, abs_pos + 1);
             buffer.insert_char(abs_pos, replace_ch);
         }
+    }
+
+    /// 指定位置の隣接4セルから、こちら側に向かって接続している方向ビットマスクを取得します。
+    pub fn neighbor_connections(
+        buffer: &TextBuffer,
+        pos: CursorPosition,
+        keisen_type: KeisenType,
+    ) -> u8 {
+        let mut mask = 0u8;
+
+        // 上のセルが下への接続を持っているか
+        if pos.line > 0 {
+            let up_state = Self::get_cell_keisen_state(buffer, pos.line - 1, pos.col);
+            if (up_state & (KT_DOWN_THIN | KT_DOWN_THICK)) != 0 {
+                mask |= KeisenDirection::Up.flag(keisen_type);
+            }
+        }
+
+        // 下のセルが上への接続を持っているか
+        let down_state = Self::get_cell_keisen_state(buffer, pos.line + 1, pos.col);
+        if (down_state & (KT_UP_THIN | KT_UP_THICK)) != 0 {
+            mask |= KeisenDirection::Down.flag(keisen_type);
+        }
+
+        // 左のセルが右への接続を持っているか
+        if pos.col > 0 {
+            let left_state = Self::get_cell_keisen_state(buffer, pos.line, pos.col - 1);
+            if (left_state & (KT_RIGHT_THIN | KT_RIGHT_THICK)) != 0 {
+                mask |= KeisenDirection::Left.flag(keisen_type);
+            }
+        }
+
+        // 右のセルが左への接続を持っているか
+        let right_state = Self::get_cell_keisen_state(buffer, pos.line, pos.col + 1);
+        if (right_state & (KT_LEFT_THIN | KT_LEFT_THICK)) != 0 {
+            mask |= KeisenDirection::Right.flag(keisen_type);
+        }
+
+        mask
+    }
+
+    /// 指定セルの罫線状態ビットマスクを取得します（範囲外や空白なら 0）。
+    pub fn get_cell_keisen_state(buffer: &TextBuffer, line: usize, col: usize) -> u8 {
+        if line >= buffer.line_count() {
+            return 0;
+        }
+        let line_text = match buffer.get_line(line) {
+            Some(t) => t,
+            None => return 0,
+        };
+        let chars: Vec<char> = line_text.chars().collect();
+        if col >= chars.len() {
+            return 0;
+        }
+        char_to_keisen_state(chars[col]).unwrap_or(0)
     }
 
     /// 移動先の座標を確保します（行末外や存在しない行への移動時に空白・改行を補完）。
@@ -656,16 +743,87 @@ mod tests {
         assert_eq!(buffer.char_at(0), Some('─'));
         assert_eq!(buffer.char_at(1), Some('─'));
 
-        // 下へ1回描画: 水平線 ─ の途中で下に引いたため T字路 ┬ に自動結合
+        // 下へ1回描画: 水平線の端点 (0, 2) から下へ曲がったため右上角「┐」に結合
         km.step(&mut buffer, &mut cursor, KeisenDirection::Down, false);
         assert_eq!(cursor, CursorPosition::new(1, 2));
-        assert_eq!(buffer.char_at(2), Some('┬'));
+        assert_eq!(buffer.char_at(2), Some('┐'));
 
         // 消去テスト: 上へ戻りながら消去
         km.step(&mut buffer, &mut cursor, KeisenDirection::Up, true);
         assert_eq!(cursor, CursorPosition::new(0, 2));
         // 下成分が消えて水平線 ─ に綺麗に戻る
         assert_eq!(buffer.char_at(2), Some('─'));
+    }
+
+    #[test]
+    fn test_keisen_draw_box_clean_corners() {
+        let mut buffer = TextBuffer::new();
+        let mut cursor = CursorPosition::new(0, 0);
+        let km = KeisenMode::new();
+
+        // 1. (0, 0) から右へ 2回描画: ─ ─
+        km.step(&mut buffer, &mut cursor, KeisenDirection::Right, false);
+        km.step(&mut buffer, &mut cursor, KeisenDirection::Right, false);
+        assert_eq!(cursor, CursorPosition::new(0, 2));
+
+        // 2. (0, 2) から下へ 2回描画:
+        // (0, 2) は右上角「┐」となり、右へ突き出た「┬」にはならない！
+        km.step(&mut buffer, &mut cursor, KeisenDirection::Down, false);
+        assert_eq!(buffer.char_at(2), Some('┐'));
+
+        km.step(&mut buffer, &mut cursor, KeisenDirection::Down, false);
+        assert_eq!(cursor, CursorPosition::new(2, 2));
+
+        // 3. (2, 2) から左へ 2回描画:
+        // (2, 2) は右下角「┘」となり、下へ突き出た「┤」にはならない！
+        km.step(&mut buffer, &mut cursor, KeisenDirection::Left, false);
+        assert_eq!(cursor, CursorPosition::new(2, 1));
+        let pos_2_2 = buffer.cursor_to_position(CursorPosition::new(2, 2));
+        assert_eq!(buffer.char_at(pos_2_2), Some('┘'));
+
+        km.step(&mut buffer, &mut cursor, KeisenDirection::Left, false);
+        assert_eq!(cursor, CursorPosition::new(2, 0));
+
+        // 4. (2, 0) から上へ 2回描画して四角を閉じる:
+        // (2, 0) は左下角「└」となり、左へ突き出た「┴」にはならない！
+        km.step(&mut buffer, &mut cursor, KeisenDirection::Up, false);
+        let pos_2_0 = buffer.cursor_to_position(CursorPosition::new(2, 0));
+        assert_eq!(buffer.char_at(pos_2_0), Some('└'));
+
+        km.step(&mut buffer, &mut cursor, KeisenDirection::Up, false);
+        assert_eq!(cursor, CursorPosition::new(0, 0));
+        // (0, 0) は左上角「┌」となり、上へ突き出た「├」にはならない！
+        assert_eq!(buffer.char_at(0), Some('┌'));
+
+        // 四角形全体の完成形状を確認（糸のほつれが一切ないこと）
+        assert_eq!(buffer.get_line(0), Some("┌─┐".to_string()));
+        assert_eq!(buffer.get_line(1), Some("│ │".to_string()));
+        assert_eq!(buffer.get_line(2), Some("└─┘".to_string()));
+    }
+
+    #[test]
+    fn test_keisen_draw_down_extends_lines() {
+        // 最終行（初期は1行）から下へ罫線を引いた場合に行が自動増加することを確認
+        let mut buffer = TextBuffer::new();
+        let mut cursor = CursorPosition::new(0, 0);
+        let km = KeisenMode::new();
+
+        assert_eq!(buffer.line_count(), 1);
+        km.step(&mut buffer, &mut cursor, KeisenDirection::Down, false);
+        assert_eq!(cursor, CursorPosition::new(1, 0));
+        assert_eq!(buffer.line_count(), 2);
+        assert_eq!(buffer.get_line(0), Some("│".to_string()));
+        assert_eq!(buffer.get_line(1), Some("│".to_string()));
+
+        km.step(&mut buffer, &mut cursor, KeisenDirection::Down, false);
+        assert_eq!(cursor, CursorPosition::new(2, 0));
+        assert_eq!(buffer.line_count(), 3);
+        assert_eq!(buffer.get_line(2), Some("│".to_string()));
+
+        // さらに右へ引いた場合は下へ突き抜けず綺麗な左下角「└─」として結合
+        km.step(&mut buffer, &mut cursor, KeisenDirection::Right, false);
+        assert_eq!(cursor, CursorPosition::new(2, 1));
+        assert_eq!(buffer.get_line(2), Some("└─".to_string()));
     }
 
     #[test]

@@ -86,6 +86,7 @@ pub struct App {
     pub is_migemo_search: bool,
     pub migemo_query: String,
     pub migemo_last_regex: Option<regex::Regex>,
+    pub is_search_highlight_visible: bool,
 
     // --- ヘルプビューア ---
     pub show_help: bool,
@@ -208,6 +209,7 @@ impl App {
             is_migemo_search: false,
             migemo_query: String::new(),
             migemo_last_regex: None,
+            is_search_highlight_visible: true,
 
             show_help: false,
             help_title: String::new(),
@@ -239,6 +241,18 @@ impl App {
     /// 単一文字をViEngineに入力し、確定したコマンドを実行します。
     pub fn feed_vi_char(&mut self, ch: char) {
         if let Some(cmd) = self.vi.feed_char(ch) {
+            match &cmd {
+                vivivi_vi::ViCommand::SearchForward(_)
+                | vivivi_vi::ViCommand::SearchBackward(_)
+                | vivivi_vi::ViCommand::SearchWordUnderCursor { .. } => {
+                    self.migemo_last_regex = None;
+                    self.is_search_highlight_visible = true;
+                }
+                vivivi_vi::ViCommand::SearchNext | vivivi_vi::ViCommand::SearchPrev => {
+                    self.is_search_highlight_visible = true;
+                }
+                _ => {}
+            }
             let res = self.vi.execute(&cmd, &mut self.buffer, &mut self.cursor);
             if let Some(msg) = res.message {
                 self.status_message = Some(msg);
@@ -396,6 +410,45 @@ impl App {
             win.cursor = self.cursor.clone();
             win.scroll = self.scroll;
         }
+    }
+
+    /// 半画面スクロール移動 (Ctrl-D / Ctrl-U)
+    pub fn scroll_half_page(&mut self, down: bool) {
+        let step = 10usize;
+        let total_lines = self.buffer.line_count();
+        if down {
+            self.cursor.pos.line = (self.cursor.pos.line + step).min(total_lines.saturating_sub(1));
+        } else {
+            self.cursor.pos.line = self.cursor.pos.line.saturating_sub(step);
+        }
+        self.clamp_cursor();
+    }
+
+    /// 1画面スクロール移動 (PageDown / PageUp, Ctrl-F / Ctrl-B)
+    pub fn scroll_full_page(&mut self, down: bool) {
+        let step = 20usize;
+        let total_lines = self.buffer.line_count();
+        if down {
+            self.cursor.pos.line = (self.cursor.pos.line + step).min(total_lines.saturating_sub(1));
+        } else {
+            self.cursor.pos.line = self.cursor.pos.line.saturating_sub(step);
+        }
+        self.clamp_cursor();
+    }
+
+    /// カーソルをカレント行の有効範囲内にクランプ
+    pub fn clamp_cursor(&mut self) {
+        let line_len = self
+            .buffer
+            .line_text(self.cursor.pos.line)
+            .map(|s| s.chars().count())
+            .unwrap_or(0);
+        let max_col = if self.mode() == ViMode::Insert {
+            line_len
+        } else {
+            line_len.saturating_sub(1)
+        };
+        self.cursor.pos.col = self.cursor.pos.col.min(max_col);
     }
 
     // --- 画面分割 (Split / Vsplit) 操作 ---
@@ -667,16 +720,23 @@ impl App {
         match self.migemo.compile_query(romaji) {
             Ok(regex) => {
                 self.migemo_last_regex = Some(regex.clone());
+                self.is_search_highlight_visible = true;
                 let full_text = self.buffer.to_string();
                 let cur_pos = self.buffer.cursor_to_position(self.cursor.pos);
+                let next_byte_offset = full_text
+                    .char_indices()
+                    .nth(cur_pos + 1)
+                    .map(|(i, _)| i)
+                    .unwrap_or(0);
 
-                // カーソル以降を検索
-                if let Some(m) = regex
-                    .find_at(&full_text, cur_pos + 1)
-                    .or_else(|| regex.find(&full_text))
-                {
-                    let target_pos = m.start();
-                    self.cursor.pos = self.buffer.position_to_cursor(target_pos);
+                // カーソル以降を検索、なければ先頭から検索（ラップアラウンド）
+                let found_match = regex
+                    .find_at(&full_text, next_byte_offset)
+                    .or_else(|| regex.find(&full_text));
+
+                if let Some(m) = found_match {
+                    let char_idx = full_text[..m.start()].chars().count();
+                    self.cursor.pos = self.buffer.position_to_cursor(char_idx);
                     self.status_message = Some(format!("g/{romaji} [Migemo一致: {}]", m.as_str()));
                 } else {
                     self.status_message = Some(format!("g/{romaji} [Migemo: 一致なし]"));
@@ -695,30 +755,68 @@ impl App {
             None => return,
         };
 
+        self.is_search_highlight_visible = true;
         let full_text = self.buffer.to_string();
         let cur_pos = self.buffer.cursor_to_position(self.cursor.pos);
 
         if is_forward {
+            let next_byte_offset = full_text
+                .char_indices()
+                .nth(cur_pos + 1)
+                .map(|(i, _)| i)
+                .unwrap_or(0);
+
             if let Some(m) = regex
-                .find_at(&full_text, cur_pos + 1)
+                .find_at(&full_text, next_byte_offset)
                 .or_else(|| regex.find(&full_text))
             {
-                self.cursor.pos = self.buffer.position_to_cursor(m.start());
+                let char_idx = full_text[..m.start()].chars().count();
+                self.cursor.pos = self.buffer.position_to_cursor(char_idx);
                 self.status_message = Some(format!("[Migemo] 一致: {}", m.as_str()));
             }
         } else {
-            // 逆方向検索: cur_pos より手前の最後の一致を探索
+            // 逆方向検索: cur_byte_offset より手前の最後の一致を探索
+            let cur_byte_offset = full_text
+                .char_indices()
+                .nth(cur_pos)
+                .map(|(i, _)| i)
+                .unwrap_or(full_text.len());
+
             let matches: Vec<_> = regex.find_iter(&full_text).collect();
             if let Some(m) = matches
                 .iter()
                 .rev()
-                .find(|m| m.start() < cur_pos)
+                .find(|m| m.start() < cur_byte_offset)
                 .or_else(|| matches.last())
             {
-                self.cursor.pos = self.buffer.position_to_cursor(m.start());
+                let char_idx = full_text[..m.start()].chars().count();
+                self.cursor.pos = self.buffer.position_to_cursor(char_idx);
                 self.status_message = Some(format!("[Migemo] 一致: {}", m.as_str()));
             }
         }
+    }
+
+    /// 現在アクティブな検索正規表現を取得します（Migemo検索または通常検索パターン）。
+    pub fn active_search_regex(&self) -> Option<regex::Regex> {
+        if !self.is_search_highlight_visible {
+            return None;
+        }
+        if let Some(ref r) = self.migemo_last_regex {
+            return Some(r.clone());
+        }
+        if let Some(pat) = self.vi.last_search_pattern()
+            && !pat.is_empty()
+        {
+            return regex::Regex::new(pat)
+                .ok()
+                .or_else(|| regex::Regex::new(&regex::escape(pat)).ok());
+        }
+        None
+    }
+
+    /// 検索ハイライトを一時的に非表示にします (:noh / :nohlsearch)。
+    pub fn clear_search_highlight(&mut self) {
+        self.is_search_highlight_visible = false;
     }
 
     // --- ヘルプビューア (:help / F1) ---
@@ -1487,17 +1585,270 @@ mod tests {
         assert_eq!(markers[0], vivivi_modes::LineChangeState::Modified);
 
         // お気に入りの登録トグル
-        app.file_path = Some(PathBuf::from("test_file.rs"));
+        app.recent_manager = RecentManager::new();
+        let unique_fav = PathBuf::from("unique_test_fav_file_12345.rs");
+        app.file_path = Some(unique_fav.clone());
         app.toggle_favorite_current_file();
-        assert!(
-            app.recent_manager
-                .is_favorite(&PathBuf::from("test_file.rs"))
-        );
+        assert!(app.recent_manager.is_favorite(&unique_fav));
 
         // 不可視文字設定の初期値
         assert!(!app.list_chars_config.enabled);
         app.list_chars_config.enabled = true;
         assert!(app.list_chars_config.enabled);
+    }
+
+    #[test]
+    fn test_key_release_ignored() {
+        let mut app = App::new("hello", None, CharEncoding::Utf8, NewlineType::Lf);
+
+        // Releaseイベントを作成
+        let release_event = crossterm::event::KeyEvent {
+            code: crossterm::event::KeyCode::Char('x'),
+            modifiers: crossterm::event::KeyModifiers::empty(),
+            kind: crossterm::event::KeyEventKind::Release,
+            state: crossterm::event::KeyEventState::empty(),
+        };
+
+        // handle_key_event に渡しても Release イベントは完全に無視されること
+        crate::tui::event::handle_key_event(&mut app, release_event);
+        assert_eq!(app.buffer.to_string(), "hello");
+        assert_eq!(app.cursor.pos.col, 0);
+    }
+
+    #[test]
+    fn test_ctrl_shortcuts_and_basic_keys() {
+        let mut app = App::new(
+            "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13",
+            None,
+            CharEncoding::Utf8,
+            NewlineType::Lf,
+        );
+
+        // 1. Home / End キーテスト
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::End,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.cursor.pos.col, 5); // "line 1" is 6 chars, end is 5 in normal mode
+
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Home,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.cursor.pos.col, 0);
+
+        // 2. Ctrl-D / Ctrl-U (半画面スクロール) テスト
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char('d'),
+                crossterm::event::KeyModifiers::CONTROL,
+            ),
+        );
+        assert_eq!(app.cursor.pos.line, 10); // 10行進む
+
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char('u'),
+                crossterm::event::KeyModifiers::CONTROL,
+            ),
+        );
+        assert_eq!(app.cursor.pos.line, 0); // 10行戻る
+
+        // 3. Ctrl-V (VisualBlock) テスト
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char('v'),
+                crossterm::event::KeyModifiers::CONTROL,
+            ),
+        );
+        assert_eq!(app.mode(), ViMode::VisualBlock);
+
+        // もう一度 Ctrl-V で Normal モード復帰
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char('v'),
+                crossterm::event::KeyModifiers::CONTROL,
+            ),
+        );
+        assert_eq!(app.mode(), ViMode::Normal);
+
+        // 4. Ctrl-R (Redo) テスト
+        // 'x' で1文字削除
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char('x'),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.buffer.line_text(0).unwrap(), "ine 1");
+
+        // 'u' で Undo
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char('u'),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.buffer.line_text(0).unwrap(), "line 1");
+
+        // Ctrl-R で Redo
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char('r'),
+                crossterm::event::KeyModifiers::CONTROL,
+            ),
+        );
+        assert_eq!(app.buffer.line_text(0).unwrap(), "ine 1");
+    }
+
+    #[test]
+    fn test_search_jump_to_head_and_highlight() {
+        let text = "こんにちは世界\nHello Antigravity\nさようなら世界";
+        let mut app = App::new(text, None, CharEncoding::Utf8, NewlineType::Lf);
+
+        // 1. 通常検索 "/Antigravity"
+        app.feed_vi_char('/');
+        for c in "Antigravity\n".chars() {
+            app.feed_vi_char(c);
+        }
+        // "Hello Antigravity" の行1、"Hello " の直後（col 6）に着地
+        assert_eq!(app.cursor.pos.line, 1);
+        assert_eq!(app.cursor.pos.col, 6);
+
+        // active_search_regex でハイライト用Regexが取得できること
+        let re = app.active_search_regex();
+        assert!(re.is_some());
+        let re = re.unwrap();
+        assert!(re.is_match("Hello Antigravity"));
+
+        // 2. 日本語文字列検索 "/世界"
+        app.cursor.pos = vivivi_core::CursorPosition::new(0, 0);
+        app.feed_vi_char('/');
+        for c in "世界\n".chars() {
+            app.feed_vi_char(c);
+        }
+        // "こんにちは世界" の先頭文字 "世" は 5文字目（col 5）
+        assert_eq!(app.cursor.pos.line, 0);
+        assert_eq!(app.cursor.pos.col, 5);
+
+        // 'n' で次の "世界" へジャンプ
+        app.feed_vi_char('n');
+        // "さようなら世界" の先頭文字 "世" は 5文字目（col 5）
+        assert_eq!(app.cursor.pos.line, 2);
+        assert_eq!(app.cursor.pos.col, 5);
+        assert!(app.active_search_regex().is_some());
+
+        // 3. :noh で検索ハイライトを消去
+        app.clear_search_highlight();
+        assert!(app.active_search_regex().is_none());
+
+        // 4. 'n' を押すとハイライトが再表示される
+        app.feed_vi_char('n');
+        assert!(app.active_search_regex().is_some());
+
+        // 5. ノーマルモードで Esc を押すとハイライトが消去される
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Esc,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert!(app.active_search_regex().is_none());
+    }
+
+    #[test]
+    fn test_keisen_key_modifier_requirement() {
+        let text = "hello\nworld";
+        let mut app = App::new(text, None, CharEncoding::Utf8, NewlineType::Lf);
+
+        // 罫線モードを有効化
+        app.keisen_mode.is_active = true;
+
+        // 1. 修飾キーなしの通常の矢印キー（Right）を押す
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Right,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        // 罫線は引かれず、カーソルだけが右（col 1）に移動
+        assert_eq!(app.cursor.pos.col, 1);
+        assert_eq!(app.buffer.line_text(0).unwrap(), "hello");
+
+        // 2. 修飾キーなしの通常の矢印キー（Down）を押す
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Down,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        // 罫線は引かれず、カーソルだけが下（line 1）に移動
+        assert_eq!(app.cursor.pos.line, 1);
+        assert_eq!(app.buffer.line_text(1).unwrap(), "world");
+
+        // 3. Ctrl+Right を押す -> 罫線が描画される！
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Right,
+                crossterm::event::KeyModifiers::CONTROL,
+            ),
+        );
+        // line 1 の文字が罫線（─）に更新されていること
+        assert_eq!(
+            app.buffer.char_at(app.buffer.line_start_position(1) + 1),
+            Some('─')
+        );
+    }
+
+    #[test]
+    fn test_replace_mode_workflow() {
+        let text = "hello world";
+        let mut app = App::new(text, None, CharEncoding::Utf8, NewlineType::Lf);
+
+        // 1. 'R' を押して置換モードへ入る
+        app.feed_vi_char('R');
+        assert_eq!(app.mode(), ViMode::Replace);
+
+        // 2. "HELLO" とタイプして上書き
+        for c in "HELLO".chars() {
+            crate::tui::event::handle_key_event(
+                &mut app,
+                crossterm::event::KeyEvent::new(
+                    crossterm::event::KeyCode::Char(c),
+                    crossterm::event::KeyModifiers::empty(),
+                ),
+            );
+        }
+        assert_eq!(app.buffer.line_text(0).unwrap(), "HELLO world");
+        assert_eq!(app.cursor.pos.col, 5);
+
+        // 3. Esc でノーマルモードへ復帰
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Esc,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.mode(), ViMode::Normal);
+        assert_eq!(app.cursor.pos.col, 4);
     }
 
     fn vi_cmd_bang(vi: &mut ViEngine) -> Option<vivivi_vi::ViCommand> {

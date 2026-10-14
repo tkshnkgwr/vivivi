@@ -24,7 +24,11 @@ pub fn run(mut app: App) -> anyhow::Result<()> {
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
         let _ = disable_raw_mode();
-        let _ = execute!(stdout(), LeaveAlternateScreen);
+        let _ = execute!(
+            stdout(),
+            LeaveAlternateScreen,
+            crossterm::cursor::SetCursorStyle::DefaultUserShape
+        );
         original_hook(panic_info);
     }));
 
@@ -37,7 +41,22 @@ pub fn run(mut app: App) -> anyhow::Result<()> {
 
     // 3. メインイベントループ
     let tick_rate = Duration::from_millis(50);
+    let mut last_cursor_mode = None;
+
     while !app.should_quit {
+        // モード連動のカーソル形状変更 (Normal/Visual: Block, Insert: Bar, Replace: Underline)
+        let current_mode = app.mode();
+        if last_cursor_mode != Some(current_mode) {
+            let cursor_style = match current_mode {
+                vivivi_vi::ViMode::Insert => crossterm::cursor::SetCursorStyle::SteadyBar,
+                vivivi_vi::ViMode::Replace => crossterm::cursor::SetCursorStyle::SteadyUnderScore,
+                vivivi_vi::ViMode::CommandLine => crossterm::cursor::SetCursorStyle::SteadyBar,
+                _ => crossterm::cursor::SetCursorStyle::SteadyBlock,
+            };
+            execute!(terminal.backend_mut(), cursor_style)?;
+            last_cursor_mode = Some(current_mode);
+        }
+
         // 画面描画
         terminal.draw(|frame| {
             ui::render(frame, &mut app);
@@ -46,14 +65,19 @@ pub fn run(mut app: App) -> anyhow::Result<()> {
         // イベント待機 (50ms タイムアウトでポーリング)
         if ct_event::poll(tick_rate)?
             && let CtEvent::Key(key) = ct_event::read()?
+            && key.kind != ct_event::KeyEventKind::Release
         {
             event::handle_key_event(&mut app, key);
         }
     }
 
-    // 4. ターミナルの復元
+    // 4. ターミナルの復元（カーソル形状も標準に戻す）
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        crossterm::cursor::SetCursorStyle::DefaultUserShape
+    )?;
     terminal.show_cursor()?;
 
     Ok(())

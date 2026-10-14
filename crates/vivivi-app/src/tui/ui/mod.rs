@@ -13,6 +13,7 @@ pub mod status;
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Position, Rect},
+    widgets::{Block, Borders},
 };
 
 use super::app::App;
@@ -63,11 +64,18 @@ pub fn render(frame: &mut Frame, app: &mut App) {
 
     let active_idx = app.active_window.min(window_areas.len().saturating_sub(1));
     let active_editor_area = window_areas[active_idx];
+    let inner_active_editor_area = if window_count > 1 {
+        let block = Block::default().borders(Borders::ALL);
+        block.inner(active_editor_area)
+    } else {
+        active_editor_area
+    };
 
     // アクティブウィンドウに合わせてスクロール調整
     let line_number_width = 6; // " 123 ▌ " の幅
-    let text_view_width = (active_editor_area.width as usize).saturating_sub(line_number_width);
-    let text_view_height = active_editor_area.height as usize;
+    let text_view_width =
+        (inner_active_editor_area.width as usize).saturating_sub(line_number_width);
+    let text_view_height = inner_active_editor_area.height as usize;
     app.adjust_scroll(text_view_height, text_view_width);
 
     // 1. 各エディタウィンドウの描画
@@ -109,7 +117,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     set_terminal_cursor(
         frame,
         app,
-        active_editor_area,
+        inner_active_editor_area,
         status_area,
         line_number_width,
     );
@@ -132,25 +140,45 @@ fn set_terminal_cursor(
     }
 
     if app.mode() == ViMode::CommandLine {
-        // コマンドラインのカーソル位置
-        let cmd_len = app
+        // コマンドラインのカーソル位置（全角文字幅考慮）
+        let cmd_buf = app
             .vi
             .parser()
             .command_line_buffer()
-            .map(|(_, s)| s.chars().count())
-            .unwrap_or(0)
-            + 1; // +1 for ':'
-        let cursor_x = (status_area.x as usize + cmd_len).min(status_area.width as usize - 1);
+            .map(|(_, s)| s)
+            .unwrap_or("");
+        let mut cmd_width = 1; // ':' の1マス
+        for ch in cmd_buf.chars() {
+            cmd_width += unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
+        }
+        let cursor_x = (status_area.x as usize + cmd_width).min(status_area.width as usize - 1);
         frame.set_cursor_position(Position::new(cursor_x as u16, status_area.y));
         return;
     }
 
     let cur = app.cursor_pos();
     let screen_row = cur.line.saturating_sub(app.scroll.0);
-    let screen_col = cur.col.saturating_sub(app.scroll.1);
+
+    // カレント行の0〜cur.col文字までの画面表示桁幅（全角2, 半角1, タブ幅）を計算
+    let cur_line = app.buffer.get_line(cur.line).unwrap_or_default();
+    let scroll_x = app.scroll.1;
+    let mut visual_col = 0;
+
+    for (i, ch) in cur_line.chars().enumerate() {
+        if i >= cur.col {
+            break;
+        }
+        if i >= scroll_x {
+            if ch == '\t' {
+                visual_col += 4 - (visual_col % 4);
+            } else {
+                visual_col += unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
+            }
+        }
+    }
 
     if screen_row < editor_area.height as usize {
-        let cursor_x = editor_area.x as usize + line_number_width + 1 + screen_col;
+        let cursor_x = editor_area.x as usize + line_number_width + 1 + visual_col;
         let cursor_y = editor_area.y as usize + screen_row;
 
         if cursor_x < (editor_area.x + editor_area.width) as usize {

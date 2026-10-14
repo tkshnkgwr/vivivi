@@ -6,12 +6,16 @@ This document provides a comprehensive operational guide for `vivivi`, covering 
 
 ## 1. Basic Operations & Modes
 
-| Mode Name      | Switch Key           | Responsibilities & Actions                                   |
-| :------------- | :------------------- | :----------------------------------------------------------- |
-| **Normal**     | `Escape`             | Navigation, deletion, yanking, and command entry             |
-| **Insert**     | `i`, `a`, `o`, `O`   | Regular typing (continuous typing merged into single undo)   |
-| **Visual**     | `v` / `V` / `Ctrl-v` | Character-wise / Line-wise / Rectangular block selection     |
-| **Command**    | `:`                  | Save (`:w`), quit (`:q`), substitute (`:s`), ex commands     |
+| Mode Name      | Switch Key           |  Cursor Shape  | Responsibilities & Actions                                   |
+| :------------- | :------------------- | :------------: | :----------------------------------------------------------- |
+| **Normal**     | `Escape`             |   Block (█)    | Navigation, deletion, yanking, and command entry             |
+| **Insert**     | `i`, `a`, `o`, `O`   |    Bar (|)     | Regular typing (continuous typing merged into single undo)   |
+| **Replace**    | `R`                  | Underline (_)  | In-place character overwrite (returns to Normal on `Esc`)    |
+| **Visual**     | `v` / `V` / `Ctrl-v` |   Block (█)    | Character-wise / Line-wise / Rectangular block selection     |
+| **Command**    | `:`                  |   Block (█)    | Save (`:w`), quit (`:q`), substitute (`:s`), ex commands     |
+
+> [!NOTE]
+> **Dynamic Terminal Cursor Synchronization**: Following Vim/Gvim tradition, the native terminal cursor shape automatically changes (Block, Bar, or Underline) based on the active editing mode. It reliably resets to your terminal's default shape upon exit or abnormal termination.
 
 ---
 
@@ -22,9 +26,12 @@ This document provides a comprehensive operational guide for `vivivi`, covering 
 - Enclosing quotes (`"`, `'`) are transparently hidden during viewing, revealing raw text only on the active cursor line for editing.
 
 ### (2) Box-Drawing (Keisen) & Protected Edit
-- **Toggle Mode**: `F5` or `Shift-F5`
-- **Draw Borders**: `Ctrl + Arrow keys` (automatic orthogonal junction joining).
-- **Erase Borders**: `Shift + Arrow keys`.
+- **Toggle Mode**: `F5` or `:keisen`
+- **Draw Borders**: `Ctrl + Arrow keys` or `Alt + Arrow keys`
+  - Overhauled corner-joining algorithm eliminates dangling stubs, automatically forming clean, geometric corners (`┌`, `┐`, `└`, `┘`).
+  - Drawing downwards past the buffer end automatically expands lines with newlines and padding.
+- **Erase Borders**: `Shift + Arrow keys` (re-evaluates and repairs adjacent junctions).
+- **Normal Cursor Navigation**: When Keisen mode is active, bare arrow keys and `h`/`j`/`k`/`l` move the cursor normally without drawing.
 - **Protected Edit**: Typing inside boxes automatically contracts trailing spaces to preserve the right border. Backspacing expands spaces to maintain box dimensions.
 - **Box Text Alignment**: `:align left`, `:align center`, `:align right`.
 
@@ -40,8 +47,12 @@ This document provides a comprehensive operational guide for `vivivi`, covering 
 - Extracts Markdown headers (`#`), Rust symbols (`fn`, `struct`, `impl`), C/C++, and Python functions.
 - Navigate with `j`/`k` and press `Enter` to jump directly to the declaration line.
 
-### (5) Romaji Japanese Search (Migemo / `g/`)
-- In Normal mode, type `g/` followed by Romanized text (e.g. `g/kensaku`) to search directly for Japanese Kanji/Kana matches without toggling your IME.
+### (5) Search, Highlighting (`hlsearch`) & Romaji Search (Migemo / `g/`)
+- **Romaji Search (Migemo)**: In Normal mode, type `g/` followed by Romanized text (e.g. `g/kensaku`) to search directly for Japanese Kanji/Kana matches without toggling your IME.
+- **Standard Search**: `/pattern` (forward), `?pattern` (backward), `*`/`#` (exact word match under cursor).
+- **Accurate Head Landing**: Cursor always positions precisely on the very first character of the matched token.
+- **Real-Time Highlighting (`hlsearch`)**: All in-viewport match occurrences are highlighted in bold black on yellow-orange.
+- **Clearing Highlights**: Run `:noh`, `:nohl`, `:nohlsearch`, or press `Esc` in Normal mode to dismiss highlights.
 - Navigate matches with `n` and `N`.
 
 ### (6) Clipboard History Dialog (`F6`, `:cbhist`)

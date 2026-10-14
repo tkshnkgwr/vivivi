@@ -105,17 +105,21 @@ pub fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let left_info = format!("{mode_str}{keisen_badge}{csv_badge} {file_name}{modified_badge}");
     let right_info = format!("{enc_info} {}:{} | {percent}% ", cur.line + 1, cur.col + 1);
 
-    // 一時通知メッセージがある場合は上書き表示
-    let display_left = if let Some(msg) = &app.status_message {
-        msg.clone()
+    // 一時通知メッセージがある場合は上書き表示（エラー時は赤背景で警告強調）
+    let (display_left, is_error) = if let Some(msg) = &app.status_message {
+        let is_err = msg.contains("未保存")
+            || msg.contains("エラー")
+            || msg.contains("見つかりません")
+            || msg.starts_with('E');
+        (msg.clone(), is_err)
     } else {
-        left_info
+        (left_info, false)
     };
 
     let width = area.width as usize;
-    let spaces_needed = width
-        .saturating_sub(display_left.chars().count())
-        .saturating_sub(right_info.chars().count());
+    let left_w = unicode_width::UnicodeWidthStr::width(display_left.as_str());
+    let right_w = unicode_width::UnicodeWidthStr::width(right_info.as_str());
+    let spaces_needed = width.saturating_sub(left_w).saturating_sub(right_w);
     let status_line_content = format!(
         "{}{}{}",
         display_left,
@@ -123,10 +127,17 @@ pub fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         right_info
     );
 
-    let status_style = Style::default()
-        .bg(Color::Rgb(40, 44, 52))
-        .fg(Color::Rgb(220, 223, 228))
-        .add_modifier(Modifier::BOLD);
+    let status_style = if is_error {
+        Style::default()
+            .bg(Color::Rgb(180, 40, 40))
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default()
+            .bg(Color::Rgb(40, 44, 52))
+            .fg(Color::Rgb(220, 223, 228))
+            .add_modifier(Modifier::BOLD)
+    };
 
     let paragraph = Paragraph::new(Line::from(Span::styled(status_line_content, status_style)));
     frame.render_widget(paragraph, area);

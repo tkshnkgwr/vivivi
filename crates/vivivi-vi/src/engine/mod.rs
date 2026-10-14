@@ -132,6 +132,11 @@ impl ViEngine {
         &self.parser
     }
 
+    /// 直前に検索された検索パターン文字列を取得します。
+    pub fn last_search_pattern(&self) -> Option<&str> {
+        self.last_search_pattern.as_deref()
+    }
+
     /// 単一文字のキー入力を状態機械に供給し、確定した ViCommand があれば返します。
     pub fn feed_char(&mut self, ch: char) -> Option<ViCommand> {
         let cmd = self.parser.feed_char(ch, self.mode);
@@ -149,6 +154,7 @@ impl ViEngine {
                 | ViCommand::InsertLineEnd
                 | ViCommand::OpenLineBelow
                 | ViCommand::OpenLineAbove
+                | ViCommand::SubstituteChar(_)
                 | ViCommand::VisualBlockInsert { .. } => {
                     self.mode = ViMode::Insert;
                 }
@@ -167,7 +173,11 @@ impl ViEngine {
                 } => {
                     self.mode = ViMode::Insert;
                 }
-                ViCommand::VisualOperate { .. } | ViCommand::VisualSwapCase => {
+                ViCommand::VisualOperate { .. }
+                | ViCommand::VisualSwapCase
+                | ViCommand::ExCommand(_)
+                | ViCommand::SearchForward(_)
+                | ViCommand::SearchBackward(_) => {
                     self.mode = ViMode::Normal;
                 }
                 _ => {}
@@ -262,13 +272,12 @@ impl ViEngine {
             ViCommand::OpenLineBelow => {
                 self.mode = ViMode::Insert;
                 buffer.open_undo_block();
-                let line_end_pos = buffer.line_start_position(cursor.pos.line + 1);
-                // 最終行の場合は末尾に改行を追加
                 if cursor.pos.line + 1 >= buffer.line_count() {
                     let end_pos = buffer.len();
                     buffer.insert_text(end_pos, "\n");
                 } else {
-                    buffer.insert_text(line_end_pos.saturating_sub(1), "\n");
+                    let next_line_start = buffer.line_start_position(cursor.pos.line + 1);
+                    buffer.insert_text(next_line_start, "\n");
                 }
                 buffer.close_undo_block();
                 cursor.pos.line += 1;
@@ -283,6 +292,98 @@ impl ViEngine {
                 buffer.insert_text(line_start_pos, "\n");
                 buffer.close_undo_block();
                 cursor.pos.col = 0;
+                result.need_redraw = true;
+            }
+
+            ViCommand::ReplaceChar { ch, count } => {
+                buffer.open_undo_block();
+                let line_len = buffer
+                    .line_text(cursor.pos.line)
+                    .map(|s| s.chars().count())
+                    .unwrap_or(0);
+                if line_len > 0 && cursor.pos.col < line_len {
+                    let start_col = cursor.pos.col;
+                    let replace_count = (*count).min(line_len - start_col);
+                    let pos = buffer.cursor_to_position(cursor.pos);
+                    buffer.delete_text(pos, replace_count, false);
+                    let replace_str: String = std::iter::repeat_n(*ch, replace_count).collect();
+                    buffer.insert_text(pos, &replace_str);
+                    // カーソルは置換した最後の文字へ
+                    cursor.pos.col = start_col + replace_count.saturating_sub(1);
+                }
+                buffer.close_undo_block();
+                result.need_redraw = true;
+            }
+
+            ViCommand::SubstituteChar(count) => {
+                self.mode = ViMode::Insert;
+                buffer.open_undo_block();
+                let line_len = buffer
+                    .line_text(cursor.pos.line)
+                    .map(|s| s.chars().count())
+                    .unwrap_or(0);
+                if line_len > 0 && cursor.pos.col < line_len {
+                    let del_count = (*count).min(line_len - cursor.pos.col);
+                    let pos = buffer.cursor_to_position(cursor.pos);
+                    buffer.delete_text(pos, del_count, false);
+                }
+                buffer.close_undo_block();
+                result.need_redraw = true;
+            }
+
+            ViCommand::JoinLines { count } => {
+                let times = (*count).max(1);
+                buffer.open_undo_block();
+                for _ in 0..times {
+                    if cursor.pos.line + 1 < buffer.line_count() {
+                        let cur_line_len = buffer
+                            .line_text(cursor.pos.line)
+                            .map(|s| s.chars().count())
+                            .unwrap_or(0);
+                        let next_line_start = buffer.line_start_position(cursor.pos.line + 1);
+                        let next_line_text =
+                            buffer.line_text(cursor.pos.line + 1).unwrap_or_default();
+                        let indent_len = next_line_text
+                            .chars()
+                            .take_while(|c| c.is_whitespace())
+                            .count();
+
+                        // カレント行末の改行（1文字）＋次行のインデント文字を削除し、半角スペース1文字に置換
+                        let del_start = next_line_start.saturating_sub(1);
+                        let del_len = 1 + indent_len;
+                        buffer.delete_text(del_start, del_len, false);
+                        buffer.insert_text(del_start, " ");
+
+                        cursor.pos.col = cur_line_len;
+                    }
+                }
+                buffer.close_undo_block();
+                result.need_redraw = true;
+            }
+
+            ViCommand::SwapCase => {
+                let pos = buffer.cursor_to_position(cursor.pos);
+                if let Some(ch) = buffer.char_at(pos)
+                    && ch != '\n'
+                {
+                    let swapped = if ch.is_uppercase() {
+                        ch.to_lowercase().next().unwrap_or(ch)
+                    } else {
+                        ch.to_uppercase().next().unwrap_or(ch)
+                    };
+                    buffer.open_undo_block();
+                    buffer.delete_text(pos, 1, false);
+                    buffer.insert_char(pos, swapped);
+                    buffer.close_undo_block();
+
+                    let line_len = buffer
+                        .line_text(cursor.pos.line)
+                        .map(|s| s.chars().count())
+                        .unwrap_or(0);
+                    if cursor.pos.col + 1 < line_len {
+                        cursor.pos.col += 1;
+                    }
+                }
                 result.need_redraw = true;
             }
 

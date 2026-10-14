@@ -18,6 +18,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     - Standalone text-based serialization and deserialization, and disk file persistence (`undofile_path()`, `save_undofile()`, `load_undofile()`).
 - **`vivivi-vi`**:
   - Defined Vi modes (Normal, Insert, Replace, Visual, VisualLine, VisualBlock, CommandLine).
+  - **Added Replace Mode (`Replace` / `R`)**:
+    - Enter replace mode from normal mode via capital `R` (`ViMode::Replace`).
+    - Fixed Vi mode state machine to reliably return to `ViMode::Normal` upon finishing searches (`/`, `?`) or ex commands (`:...`).
   - Defined basic commands, motions, operators, and registers.
   - Implemented cursor motions (`h`, `j`, `k`, `l`, `w`, `b`, `e`, `W`, `B`, `E`, `0`, `^`, `$`, `gg`, `G`, and `%` matching paren jump).
   - Implemented operator execution engine (`d`, `y`, `c` + motion / `dd`, `yy`, `cc`, `D`, `C`, `Y`, `x`, `X`).
@@ -56,6 +59,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     - Transparent mapping and forward/backward search matching ASCII characters to full-width variants.
   - Defined Inline CSV/TSV mode specifications based on ViVi 4.
   - Ported Unicode box-drawing lookup table from OpenViVi's `keisen.cpp`.
+  - **Overhauled Keisen Geometric Corner-Joining Algorithm (Clean Box Corners)**:
+    - Introduced `update_keisen_cell` and `neighbor_connections` to inspect actual physical connections with neighboring cells in 4 directions, eliminating unwanted dangling stubs (T-junctions `┬`, `┤`, `┴`, `├`) and cleanly joining corners (`┌`, `┐`, `└`, `┘`).
+    - Added automatic buffer row expansion and trailing space padding when drawing vertical lines beyond the bottom line.
   - Implemented keisen drawing/erasing/joining step logic (`step`) with automatic line expansion and perpendicular checking.
   - Implemented box-internal text alignment algorithms (Left, Center, Right).
   - Implemented inline CSV formatting (`format_line`) with quote hiding and active-line raw display.
@@ -136,7 +142,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **Built-in Documentation Expansion**:
     - Created `doc/help/visual.md` covering visual and editing enhancements.
     - Updated `doc/help/index.md` and ensured strict table column vertical alignment.
-  - Expanded unit and integration test suite (all 129 tests passing, 0 clippy warnings, fmt check passed).
+  - **Mode-Dependent Terminal Cursor Style Synchronization**:
+    - Leveraged Crossterm's `SetCursorStyle` to dynamically synchronize native terminal cursor shape: Normal/Visual mode: Block (`SteadyBlock`), Insert mode: Bar (`SteadyBar`), Replace mode: Underline (`SteadyUnderScore`). Automatically resets to terminal default (`DefaultUserShape`) on exit and panic.
+  - **Interactive Replace Mode (`R`) Handling in TUI**:
+    - Character-by-character in-place replacement, line extension on end-of-line writes, transactional Undo integration, and `Esc` return to Normal mode.
+  - **Accurate Search Landing, Real-Time Highlighting (`hlsearch`) & Clearance (`:noh`)**:
+    - Fixed byte offset vs. character index mismatch during Romaji (Migemo) and regex searches, landing the cursor precisely on the first character of matched tokens.
+    - Added real-time orange background / bold black highlighting for all in-viewport search occurrences (`active_search_regex`).
+    - Added search highlight clearance via `:noh`, `:nohl`, `:nohlsearch`, `:set nohls`, `:set hls`, and Normal mode `Esc` key (`clear_search_highlight`).
+  - **Keisen Mode Key Modifier Guard (Fixing Bare Arrow Drawing Bug)**:
+    - Guaranteed that box drawing and erasing only occur when `Ctrl`/`Alt` or `Shift` modifier keys are pressed, allowing plain arrow keys and `h`/`j`/`k`/`l` to move the cursor normally even when Keisen mode is active.
+  - Expanded unit and integration test suite (all 139 tests passing, 0 clippy warnings, fmt check passed).
 
 ### Changed / Refactored
 - **Code Modularization & Source Decomposition Refactoring**:

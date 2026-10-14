@@ -197,6 +197,12 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 - [x] **[Gvim / Custom] Invisible / Whitespace Character Visualization (`:set list` / `listchars`)**
   - Toggle visual markers for fullwidth spaces (`□`), tabs (`▸---`), and end-of-line symbols (`$`).
 
+#### 4.7 Immediate Feedback Issues
+- [ ] **Fix keisen protected edit when inserting Japanese / full-width characters**
+  - In keisen protected edit mode, inserting a 2-column wide Japanese/full-width character should consume 2 trailing spaces (or 1 full-width space) to prevent pushing the right box border.
+- [ ] **Clear search highlights on double Esc keypress instead of single Esc**
+  - Change search highlight clearance (`hlsearch` off) from single `Esc` to double `Esc` (rapid double-press within ~400ms), reserving single `Esc` for regular command cancellation.
+
 ---
 
 ### Phase 5: Future Enhancements & Desktop GUI (egui) / High-Res Graphics (Future)

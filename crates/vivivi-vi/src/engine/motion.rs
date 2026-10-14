@@ -128,9 +128,8 @@ impl ViEngine {
                 }
             }
             Motion::MatchingParen => {
-                let current_pos = buffer.cursor_to_position(cursor.pos);
-                if let Some((_, match_pos)) =
-                    vivivi_core::get_cursor_matching_paren(buffer, current_pos)
+                if let Some(match_pos) =
+                    vivivi_core::find_matching_paren_in_line(buffer, cursor.pos)
                 {
                     cursor.pos = buffer.position_to_cursor(match_pos);
                 }

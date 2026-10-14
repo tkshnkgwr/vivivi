@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use vivivi_modes::KeisenDirection;
 use vivivi_vi::ViMode;
 
@@ -6,6 +6,11 @@ use super::app::App;
 
 /// キーイベントを処理し、App の状態やバッファを更新します。
 pub fn handle_key_event(app: &mut App, key: KeyEvent) {
+    // Windows Terminal / Crossterm におけるキー解放 (Release) イベントを無視し、二重入力を防止
+    if key.kind == KeyEventKind::Release {
+        return;
+    }
+
     // 状態メッセージを一旦クリア
     app.status_message = None;
 
@@ -351,18 +356,27 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
         }
     }
 
-    // 2. 罫線モード有効時の矢印キー操作 (Ctrl+矢印で描画、Shift+矢印で消去)
+    // 2. 罫線モード有効時の操作
+    // Ctrl+矢印 / Alt+矢印 で描画、Shift+矢印 で消去
+    // Ctrl+hjkl で描画、Shift+hjkl で消去
+    // ※修飾キーなしの通常の矢印キー（十字キー）や素のhjklは通常のカーソル移動を行う
     if app.keisen_mode.is_active {
-        let is_ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let is_shift = key.modifiers.contains(KeyModifiers::SHIFT);
+        let is_ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        let is_alt = key.modifiers.contains(KeyModifiers::ALT);
 
-        if is_ctrl || is_shift {
+        if is_ctrl || is_shift || is_alt {
             let is_erase = is_shift;
+
             let dir = match key.code {
                 KeyCode::Left => Some(KeisenDirection::Left),
                 KeyCode::Right => Some(KeisenDirection::Right),
                 KeyCode::Up => Some(KeisenDirection::Up),
                 KeyCode::Down => Some(KeisenDirection::Down),
+                KeyCode::Char('h') | KeyCode::Char('H') => Some(KeisenDirection::Left),
+                KeyCode::Char('l') | KeyCode::Char('L') => Some(KeisenDirection::Right),
+                KeyCode::Char('k') | KeyCode::Char('K') => Some(KeisenDirection::Up),
+                KeyCode::Char('j') | KeyCode::Char('J') => Some(KeisenDirection::Down),
                 _ => None,
             };
 
@@ -376,6 +390,7 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
     // 3. Viモード別のキーハンドリング
     match app.mode() {
         ViMode::Insert => handle_insert_mode(app, key),
+        ViMode::Replace => handle_replace_mode(app, key),
         ViMode::CommandLine => handle_command_line_mode(app, key),
         _ => handle_normal_mode(app, key),
     }
@@ -427,6 +442,7 @@ fn handle_insert_mode(app: &mut App, key: KeyEvent) {
             if app.cursor.pos.col > 0 {
                 app.cursor.pos.col -= 1;
             }
+            app.clamp_cursor();
         }
         KeyCode::Char(c) => {
             app.vi.record_inserted_char(c);
@@ -513,10 +529,117 @@ fn handle_insert_mode(app: &mut App, key: KeyEvent) {
         }
         KeyCode::Up => {
             app.cursor.pos.line = app.cursor.pos.line.saturating_sub(1);
+            app.clamp_cursor();
         }
         KeyCode::Down => {
             let total_lines = app.buffer.line_count();
             app.cursor.pos.line = (app.cursor.pos.line + 1).min(total_lines.saturating_sub(1));
+            app.clamp_cursor();
+        }
+        KeyCode::Home => {
+            app.cursor.pos.col = 0;
+        }
+        KeyCode::End => {
+            let cur_line = app.cursor.pos.line;
+            let line_len = app
+                .buffer
+                .get_line(cur_line)
+                .map(|l| l.chars().count())
+                .unwrap_or(0);
+            app.cursor.pos.col = line_len;
+        }
+        KeyCode::PageUp => {
+            app.scroll_full_page(false);
+        }
+        KeyCode::PageDown => {
+            app.scroll_full_page(true);
+        }
+        _ => {}
+    }
+}
+
+/// 置換（リプレース）モードのキーハンドリング (R)
+fn handle_replace_mode(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Esc => {
+            app.feed_vi_char('\x1b');
+            // ノーマルモード復帰時はカーソルが文字境界を超えないよう左へ1文字補正
+            if app.cursor.pos.col > 0 {
+                app.cursor.pos.col -= 1;
+            }
+            app.clamp_cursor();
+        }
+        KeyCode::Char(c) => {
+            app.vi.record_inserted_char(c);
+            app.dynamic_macro.record_char(c);
+
+            let cur = app.cursor_pos();
+            let line_len = app
+                .buffer
+                .get_line(cur.line)
+                .map(|l| l.chars().count())
+                .unwrap_or(0);
+
+            let pos = app.buffer.cursor_to_position(cur);
+            app.buffer.open_undo_block();
+            if cur.col < line_len {
+                // 既存の文字を上書き
+                app.buffer.delete_text(pos, 1, false);
+                app.buffer.insert_char(pos, c);
+            } else {
+                // 行末以降なら追加挿入
+                app.buffer.insert_char(pos, c);
+            }
+            app.buffer.close_undo_block();
+            app.cursor.pos.col += 1;
+        }
+        KeyCode::Enter => {
+            app.dynamic_macro.record_char('\n');
+            let cur = app.cursor_pos();
+            let pos = app.buffer.cursor_to_position(cur);
+            app.buffer.insert_char(pos, '\n');
+            app.cursor.pos.line += 1;
+            app.cursor.pos.col = 0;
+        }
+        KeyCode::Backspace => {
+            // 置換モード中の Backspace は直前の置換を Undo してカーソルを左に戻す
+            if app.cursor.pos.col > 0 {
+                app.buffer.undo();
+                app.cursor.pos.col -= 1;
+            }
+        }
+        KeyCode::Left => {
+            app.cursor.pos.col = app.cursor.pos.col.saturating_sub(1);
+        }
+        KeyCode::Right => {
+            let cur_line = app.cursor.pos.line;
+            let line_len = app
+                .buffer
+                .get_line(cur_line)
+                .map(|l| l.chars().count())
+                .unwrap_or(0);
+            app.cursor.pos.col = (app.cursor.pos.col + 1).min(line_len);
+        }
+        KeyCode::Up => {
+            app.cursor.pos.line = app.cursor.pos.line.saturating_sub(1);
+            app.clamp_cursor();
+        }
+        KeyCode::Down => {
+            let total_lines = app.buffer.line_count();
+            app.cursor.pos.line = (app.cursor.pos.line + 1).min(total_lines.saturating_sub(1));
+            app.clamp_cursor();
+        }
+        KeyCode::Home => {
+            app.cursor.pos.col = 0;
+        }
+        KeyCode::End => {
+            let cur_line = app.cursor.pos.line;
+            let line_len = app
+                .buffer
+                .get_line(cur_line)
+                .map(|l| l.chars().count())
+                .unwrap_or(0);
+            app.cursor.pos.col = line_len;
         }
         _ => {}
     }
@@ -535,11 +658,25 @@ fn handle_command_line_mode(app: &mut App, key: KeyEvent) {
                 .command_line_buffer()
                 .map(|(_, s)| s.to_string())
                 .unwrap_or_default();
+            let prefix = app
+                .vi
+                .parser()
+                .command_line_buffer()
+                .map(|(p, _)| *p)
+                .unwrap_or(':');
+
+            // 通常の / や ? 検索実行時は Migemo 検索状態をクリアして通常検索を優先
+            if prefix == '/' || prefix == '?' {
+                app.migemo_last_regex = None;
+            }
+
             // コマンド実行前にViEngineをノーマルモードに戻す
             app.feed_vi_char('\n');
 
-            // exコマンドの解釈
-            execute_ex_command(app, &cmd_text);
+            // exコマンドの解釈 (':' の場合のみ実行)
+            if prefix == ':' {
+                execute_ex_command(app, &cmd_text);
+            }
         }
         KeyCode::Backspace => {
             app.feed_vi_char('\x08');
@@ -564,15 +701,16 @@ fn execute_ex_command(app: &mut App, cmd: &str) {
                 app.status_message = Some(format!("保存エラー: {e}"));
             }
         }
-        "q" => {
+        "q" | "qa" | "qall" => {
             if app.buffer.is_modified() {
-                app.status_message =
-                    Some("未保存の変更があります (! を追加して :q! で終了)".to_string());
+                app.status_message = Some(
+                    "E37: 前回の変更が保存されていません (! を追加して :q! で強制終了)".to_string(),
+                );
             } else {
                 app.should_quit = true;
             }
         }
-        "q!" => {
+        "q!" | "qa!" | "qall!" => {
             app.should_quit = true;
         }
         "wq" | "x" => {
@@ -591,6 +729,20 @@ fn execute_ex_command(app: &mut App, cmd: &str) {
         }
         _ if trimmed.starts_with("%s/") || trimmed.starts_with("s/") => {
             app.status_message = Some(format!("置換実行: {trimmed}"));
+        }
+
+        // --- 検索ハイライト消去 (:noh, :nohl, :nohlsearch, :set nohls, :set hls) ---
+        "noh" | "nohl" | "nohlsearch" => {
+            app.clear_search_highlight();
+            app.status_message = Some("検索ハイライトを消去しました (:nohlsearch)".to_string());
+        }
+        "set nohls" | "set nohlsearch" => {
+            app.clear_search_highlight();
+            app.status_message = Some("検索ハイライト: OFF (:set nohlsearch)".to_string());
+        }
+        "set hls" | "set hlsearch" => {
+            app.is_search_highlight_visible = true;
+            app.status_message = Some("検索ハイライト: ON (:set hlsearch)".to_string());
         }
         // --- テキストアライン (:align <target>, :align left/center/right) ---
         "align left" | "left" => {
@@ -963,15 +1115,71 @@ fn execute_ex_command(app: &mut App, cmd: &str) {
 
 /// ノーマルモードのキーハンドリング
 fn handle_normal_mode(app: &mut App, key: KeyEvent) {
-    // Ctrl-J: 字句編集予測
-    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('j') {
-        app.trigger_lex_edit();
-        return;
+    // Ctrl キー組み合わせの処理
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        match key.code {
+            KeyCode::Char('r') => {
+                app.g_pending = false;
+                app.feed_vi_char('\x12'); // Redo
+                return;
+            }
+            KeyCode::Char('v') => {
+                app.g_pending = false;
+                app.feed_vi_char('\x16'); // VisualBlock
+                return;
+            }
+            KeyCode::Char('d') => {
+                app.g_pending = false;
+                app.scroll_half_page(true); // 半画面スクロールダウン
+                return;
+            }
+            KeyCode::Char('u') => {
+                app.g_pending = false;
+                app.scroll_half_page(false); // 半画面スクロールアップ
+                return;
+            }
+            KeyCode::Char('f') => {
+                app.g_pending = false;
+                app.scroll_full_page(true); // 1画面スクロールダウン (PageDown)
+                return;
+            }
+            KeyCode::Char('b') => {
+                app.g_pending = false;
+                app.scroll_full_page(false); // 1画面スクロールアップ (PageUp)
+                return;
+            }
+            KeyCode::Char('a') => {
+                app.g_pending = false;
+                app.feed_vi_char('\x01'); // インクリメント
+                return;
+            }
+            KeyCode::Char('x') => {
+                app.g_pending = false;
+                app.feed_vi_char('\x18'); // デクリメント
+                return;
+            }
+            KeyCode::Char(']') => {
+                app.g_pending = false;
+                app.feed_vi_char('\x1d'); // タグジャンプ
+                return;
+            }
+            KeyCode::Char('t') => {
+                app.g_pending = false;
+                app.feed_vi_char('\x14'); // タグ復帰
+                return;
+            }
+            KeyCode::Char('j') => {
+                app.trigger_lex_edit();
+                return;
+            }
+            _ => {}
+        }
     }
 
     match key.code {
         KeyCode::Esc => {
             app.g_pending = false;
+            app.clear_search_highlight();
             app.feed_vi_char('\x1b');
         }
         KeyCode::Char('/') if app.g_pending => {
@@ -1004,6 +1212,14 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent) {
             app.g_pending = false;
             // コマンド文字をViEngineに入力
             app.feed_vi_char(c);
+
+            // 'q' を押してマクロ記録対象レジスタ待ちになった場合、案内を表示（終了コマンド :q との混同を防ぐ）
+            if c == 'q' && app.vi.parser().is_waiting_for_macro_record() {
+                app.status_message = Some(
+                    "マクロ記録: レジスタ (a-z) を指定してください (エディタ終了は :q です)"
+                        .to_string(),
+                );
+            }
         }
         KeyCode::Left => {
             app.g_pending = false;
@@ -1020,6 +1236,22 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent) {
         KeyCode::Down => {
             app.g_pending = false;
             app.feed_vi_char('j');
+        }
+        KeyCode::Home => {
+            app.g_pending = false;
+            app.feed_vi_char('0');
+        }
+        KeyCode::End => {
+            app.g_pending = false;
+            app.feed_vi_char('$');
+        }
+        KeyCode::PageDown => {
+            app.g_pending = false;
+            app.scroll_full_page(true);
+        }
+        KeyCode::PageUp => {
+            app.g_pending = false;
+            app.scroll_full_page(false);
         }
         _ => {
             app.g_pending = false;

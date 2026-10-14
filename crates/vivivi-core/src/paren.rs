@@ -17,6 +17,7 @@ pub enum ParenKind {
 /// 指定文字が開き括弧か閉じ括弧かを判定し、その相方と探索方向を返します。
 pub fn paren_pair(ch: char) -> Option<(char, bool)> {
     match ch {
+        // 半角括弧
         '(' => Some((')', true)),
         '{' => Some(('}', true)),
         '[' => Some((']', true)),
@@ -25,6 +26,29 @@ pub fn paren_pair(ch: char) -> Option<(char, bool)> {
         '}' => Some(('{', false)),
         ']' => Some(('[', false)),
         '>' => Some(('<', false)),
+
+        // 全角括弧（OpenViVi / ViVi準拠の日本語編集支援）
+        '（' => Some(('）', true)),
+        '｛' => Some(('｝', true)),
+        '［' => Some(('］', true)),
+        '＜' => Some(('＞', true)),
+        '「' => Some(('」', true)),
+        '『' => Some(('』', true)),
+        '【' => Some(('】', true)),
+        '〈' => Some(('〉', true)),
+        '《' => Some(('》', true)),
+        '〔' => Some(('〕', true)),
+        '）' => Some(('（', false)),
+        '｝' => Some(('｛', false)),
+        '］' => Some(('［', false)),
+        '＞' => Some(('＜', false)),
+        '」' => Some(('「', false)),
+        '』' => Some(('『', false)),
+        '】' => Some(('【', false)),
+        '〉' => Some(('〈', false)),
+        '》' => Some(('《', false)),
+        '〕' => Some(('〔', false)),
+
         _ => None,
     }
 }
@@ -147,7 +171,7 @@ pub fn find_matching_paren(buffer: &TextBuffer, pos: usize) -> Option<usize> {
                 if idx == pos {
                     return stack.pop();
                 } else {
-                    stack.pop();
+                    let _ = stack.pop();
                 }
             }
 
@@ -177,6 +201,29 @@ pub fn get_cursor_matching_paren(buffer: &TextBuffer, cursor_pos: usize) -> Opti
     })
 }
 
+/// カレント行のカーソル位置から行末に向かって最初の括弧を探し、
+/// その対応括弧の文字オフセットを返します（Vim の `%` コマンド標準挙動）。
+pub fn find_matching_paren_in_line(
+    buffer: &TextBuffer,
+    cursor: crate::cursor::CursorPosition,
+) -> Option<usize> {
+    let line_text = buffer.line_text(cursor.line)?;
+    let chars: Vec<char> = line_text.chars().collect();
+    let col = cursor.col.min(chars.len());
+
+    // cursor.col 以降の文字から最初に見つかる括弧を探索
+    for (offset, &ch) in chars[col..].iter().enumerate() {
+        if paren_pair(ch).is_some() {
+            let target_col = col + offset;
+            let target_pos = buffer
+                .cursor_to_position(crate::cursor::CursorPosition::new(cursor.line, target_col));
+            return find_matching_paren(buffer, target_pos);
+        }
+    }
+
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -204,5 +251,37 @@ mod tests {
         // '(' at 8 -> ')' at 50
         assert_eq!(find_matching_paren(&buffer, 8), Some(50));
         assert_eq!(find_matching_paren(&buffer, 50), Some(8));
+    }
+
+    #[test]
+    fn test_matching_paren_zenkaku() {
+        let buffer = TextBuffer::from_text("こんにちは「世界」と【Rust】");
+        // 「 at 5 -> 」 at 8
+        assert_eq!(find_matching_paren(&buffer, 5), Some(8));
+        assert_eq!(find_matching_paren(&buffer, 8), Some(5));
+
+        // 【 at 10 -> 】 at 15
+        assert_eq!(find_matching_paren(&buffer, 10), Some(15));
+        assert_eq!(find_matching_paren(&buffer, 15), Some(10));
+    }
+
+    #[test]
+    fn test_find_matching_paren_in_line() {
+        let buffer = TextBuffer::from_text("fn main() {\n    let msg = 「こんにちは」;\n}");
+
+        // 1行目: カーソルが 'f'(col 0) にあるとき、行内の最初の括弧 '(' (col 7) の対応 ')' (col 8) へ
+        let match1 = find_matching_paren_in_line(&buffer, crate::cursor::CursorPosition::new(0, 0));
+        assert_eq!(match1, Some(8));
+
+        // 2行目: カーソルがインデント空白(col 0) にあるとき、全角括弧 '「' (col 14) の対応 '」' (col 20) へ
+        let match2 = find_matching_paren_in_line(&buffer, crate::cursor::CursorPosition::new(1, 0));
+        // position of '」': line 0 has "fn main() {\n" (12 chars). line 1 has "    let msg = 「こんにちは」;\n".
+        // 「 is at 12 + 14 = 26. こんにちは is 5 chars. 」 is at 26 + 1 + 5 = 32.
+        assert_eq!(match2, Some(32));
+
+        // カーソルが '」' の上にあるとき、対応する '「' (pos 26) へ
+        let match3 =
+            find_matching_paren_in_line(&buffer, crate::cursor::CursorPosition::new(1, 20));
+        assert_eq!(match3, Some(26));
     }
 }

@@ -8,7 +8,7 @@ use crate::mode::ViMode;
 
 /// パーサーの内部状態。
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum ParserState {
+pub enum ParserState {
     /// 通常のキー待ち受け
     Idle,
     /// レジスタ名待ち（`"` を入力した直後）
@@ -43,6 +43,8 @@ enum ParserState {
     WaitingForMacroExecute,
     /// コード折り畳み待ち (`z` の後)
     WaitingForZ,
+    /// 単一文字置換の置換文字待ち (`r` の後)
+    WaitingForReplaceChar { count: usize },
     /// コマンドラインまたは検索文字列入力中 (`:`, `/`, `?`)
     CommandLine { prefix: char, buffer: String },
 }
@@ -80,6 +82,16 @@ impl CommandParser {
         self.state = ParserState::Idle;
         self.count_buffer = None;
         self.selected_register = None;
+    }
+
+    /// パーサーの現在の内部状態を取得します。
+    pub fn state(&self) -> &ParserState {
+        &self.state
+    }
+
+    /// マクロ記録用のレジスタ入力待ち (`q` 押下直後) かどうかを取得します。
+    pub fn is_waiting_for_macro_record(&self) -> bool {
+        matches!(self.state, ParserState::WaitingForMacroRecord)
     }
 
     /// 現在コマンドライン入力中かどうかを取得します。
@@ -185,6 +197,30 @@ impl CommandParser {
                 '~' => {
                     self.reset();
                     return Some(ViCommand::VisualSwapCase);
+                }
+                'v' => {
+                    self.reset();
+                    if mode == ViMode::Visual {
+                        return Some(ViCommand::EnterMode(ViMode::Normal));
+                    } else {
+                        return Some(ViCommand::EnterMode(ViMode::Visual));
+                    }
+                }
+                'V' => {
+                    self.reset();
+                    if mode == ViMode::VisualLine {
+                        return Some(ViCommand::EnterMode(ViMode::Normal));
+                    } else {
+                        return Some(ViCommand::EnterMode(ViMode::VisualLine));
+                    }
+                }
+                '\x16' => {
+                    self.reset();
+                    if mode == ViMode::VisualBlock {
+                        return Some(ViCommand::EnterMode(ViMode::Normal));
+                    } else {
+                        return Some(ViCommand::EnterMode(ViMode::VisualBlock));
+                    }
                 }
                 'I' if mode == ViMode::VisualBlock => {
                     self.reset();
@@ -350,6 +386,16 @@ impl CommandParser {
                         Some(ViCommand::Fold(crate::command::FoldAction::CloseLevel(lvl)))
                     }
                     _ => None,
+                }
+            }
+
+            ParserState::WaitingForReplaceChar { count } => {
+                let count = *count;
+                self.reset();
+                if ch == '\x1b' {
+                    None
+                } else {
+                    Some(ViCommand::ReplaceChar { ch, count })
                 }
             }
 
@@ -538,6 +584,26 @@ impl CommandParser {
                     'P' => return Some(ViCommand::PasteBefore { count, register }),
                     'u' => return Some(ViCommand::Undo),
                     '\x12' => return Some(ViCommand::Redo), // Ctrl-R
+                    '\x01' => {
+                        return Some(ViCommand::Increment {
+                            delta: count as i64,
+                        });
+                    } // Ctrl-A
+                    '\x18' => {
+                        return Some(ViCommand::Increment {
+                            delta: -(count as i64),
+                        });
+                    } // Ctrl-X
+                    's' => return Some(ViCommand::SubstituteChar(count)),
+                    'S' => {
+                        return Some(ViCommand::OperateLine {
+                            op: Operator::Change,
+                            count,
+                            register,
+                        });
+                    }
+                    'J' => return Some(ViCommand::JoinLines { count }),
+                    '~' => return Some(ViCommand::SwapCase),
                     'n' => return Some(ViCommand::SearchNext),
                     'N' => return Some(ViCommand::SearchPrev),
                     '*' => {
@@ -549,6 +615,12 @@ impl CommandParser {
                     _ => {}
                 }
 
+                // 1文字置換 (`r<char>`)
+                if ch == 'r' {
+                    self.state = ParserState::WaitingForReplaceChar { count };
+                    return None;
+                }
+
                 // 挿入系コマンド
                 match ch {
                     'i' => return Some(ViCommand::InsertBefore),
@@ -557,6 +629,7 @@ impl CommandParser {
                     'A' => return Some(ViCommand::InsertLineEnd),
                     'o' => return Some(ViCommand::OpenLineBelow),
                     'O' => return Some(ViCommand::OpenLineAbove),
+                    'R' => return Some(ViCommand::EnterMode(ViMode::Replace)),
                     'v' => return Some(ViCommand::EnterMode(ViMode::Visual)),
                     'V' => return Some(ViCommand::EnterMode(ViMode::VisualLine)),
                     '\x16' => return Some(ViCommand::EnterMode(ViMode::VisualBlock)), // Ctrl-V

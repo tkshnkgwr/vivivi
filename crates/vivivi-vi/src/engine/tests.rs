@@ -131,6 +131,30 @@ fn test_matching_paren_jump() {
     // 再度 % で元の '{' (10) へ戻る
     vi.execute(&ViCommand::Move(Motion::MatchingParen), &mut buf, &mut cur);
     assert_eq!(cur.pos.col, 10);
+
+    // 行頭 (col 0) から % を押した場合、行内の最初の括弧 '(' (col 7) の対応 ')' (col 8) へジャンプ
+    cur.pos.col = 0;
+    vi.execute(&ViCommand::Move(Motion::MatchingParen), &mut buf, &mut cur);
+    assert_eq!(cur.pos.col, 8);
+
+    // 全角括弧「」のジャンプテスト
+    let mut zen_buf = TextBuffer::from_text("吾輩は「猫」である");
+    let mut zen_cur = TextCursor::new(0, 0); // 先頭「吾」
+    // 行頭から % を押すと、行内の「 (col 3) の対応 」 (col 5) へジャンプ
+    vi.execute(
+        &ViCommand::Move(Motion::MatchingParen),
+        &mut zen_buf,
+        &mut zen_cur,
+    );
+    assert_eq!(zen_cur.pos.col, 5);
+
+    // 再度 % で対応する「 (col 3) へジャンプ
+    vi.execute(
+        &ViCommand::Move(Motion::MatchingParen),
+        &mut zen_buf,
+        &mut zen_cur,
+    );
+    assert_eq!(zen_cur.pos.col, 3);
 }
 
 #[test]
@@ -514,4 +538,55 @@ fn test_tag_jump_and_pop() {
     let res = vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
     assert_eq!(cur.pos.line, 1); // 2行目へ復帰
     assert!(res.message.unwrap().contains("復帰"));
+}
+
+#[test]
+fn test_basic_editing_commands() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("hello world\nsecond line\nthird line");
+    let mut cur = TextCursor::new(0, 0);
+
+    // 1. 'r' による文字置換: 'h' -> 'H'
+    let cmd = vi.feed_char('r');
+    assert_eq!(cmd, None);
+    let cmd = vi.feed_char('H');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(0).unwrap(), "Hello world");
+
+    // 2. '~' によるケース反転: 'H' -> 'h', カーソルが1文字進む
+    let cmd = vi.feed_char('~');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(0).unwrap(), "hello world");
+    assert_eq!(cur.pos.col, 1);
+
+    // 3. 'J' による行結合: 0行目と1行目を連結
+    let cmd = vi.feed_char('J');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(0).unwrap(), "hello world second line");
+    assert_eq!(buf.line_count(), 2);
+
+    // 4. 's' による文字置換挿入: カーソル位置 'e' を削除して Insert モードへ
+    cur.pos.col = 1; // 'e' の位置へ
+    let cmd = vi.feed_char('s');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(vi.mode, ViMode::Insert);
+    assert_eq!(buf.line_text(0).unwrap(), "hllo world second line");
+
+    // 5. 'o' (OpenLineBelow) の動作確認
+    vi.mode = ViMode::Normal;
+    cur.pos.line = 0;
+    cur.pos.col = 0;
+    let cmd = vi.feed_char('o');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(vi.mode, ViMode::Insert);
+    assert_eq!(cur.pos.line, 1);
+    assert_eq!(cur.pos.col, 0);
+    assert_eq!(buf.line_text(0).unwrap(), "hllo world second line");
+    assert_eq!(buf.line_text(1).unwrap(), "");
+    assert_eq!(buf.line_text(2).unwrap(), "third line");
 }

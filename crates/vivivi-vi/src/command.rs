@@ -157,6 +157,14 @@ pub enum ViCommand {
     JumpMark { mark: char, line_only: bool },
     /// マーク一覧の表示 (`:marks`)
     ListMarks,
+    /// カーソル位置の文字を置換 (`r<char>`)
+    ReplaceChar { ch: char, count: usize },
+    /// カーソル位置の文字を削除して挿入モード (`s`)
+    SubstituteChar(usize),
+    /// 次の行と連結 (`J`)
+    JoinLines { count: usize },
+    /// カーソル文字の大文字・小文字を反転 (`~`)
+    SwapCase,
     /// タグジャンプ (`Ctrl-]`, `:tag <name>`)
     TagJump(Option<String>),
     /// タグスタックからの復元ポップ (`Ctrl-t`, `Ctrl-[`)
