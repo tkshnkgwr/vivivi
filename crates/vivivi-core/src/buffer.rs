@@ -58,6 +58,46 @@ impl TextBuffer {
         self.undo_mgr.on_saved();
     }
 
+    /// 内部の UndoMgr への不変参照を返します。
+    pub fn undo_mgr(&self) -> &UndoMgr {
+        &self.undo_mgr
+    }
+
+    /// 内部の UndoMgr への可変参照を返します。
+    pub fn undo_mgr_mut(&mut self) -> &mut UndoMgr {
+        &mut self.undo_mgr
+    }
+
+    /// 指定されたファイルパスに対する undofile パス（例: `.filename.un~`）を生成します。
+    pub fn undofile_path<P: AsRef<std::path::Path>>(file_path: P) -> std::path::PathBuf {
+        let p = file_path.as_ref();
+        let file_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("untitled");
+        let undofile_name = format!(".{}.un~", file_name);
+        match p.parent() {
+            Some(parent) => parent.join(undofile_name),
+            None => std::path::PathBuf::from(undofile_name),
+        }
+    }
+
+    /// undofile に Undo/Redo 履歴を保存します。
+    pub fn save_undofile<P: AsRef<std::path::Path>>(&self, file_path: P) -> std::io::Result<()> {
+        let undopath = Self::undofile_path(file_path);
+        self.undo_mgr.save_to_file(undopath)
+    }
+
+    /// undofile から Undo/Redo 履歴を読み込み復元します。
+    pub fn load_undofile<P: AsRef<std::path::Path>>(
+        &mut self,
+        file_path: P,
+    ) -> std::io::Result<()> {
+        let undopath = Self::undofile_path(file_path);
+        if undopath.exists() {
+            let loaded = UndoMgr::load_from_file(undopath)?;
+            self.undo_mgr = loaded;
+        }
+        Ok(())
+    }
+
     /// 文字オフセット `pos` にある文字を取得します。
     pub fn char_at(&self, pos: usize) -> Option<char> {
         self.data.get(pos).copied()

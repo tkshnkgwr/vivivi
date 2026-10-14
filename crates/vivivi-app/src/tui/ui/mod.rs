@@ -6,6 +6,7 @@ pub mod clipboard_hist;
 pub mod editor;
 pub mod help;
 pub mod outline;
+pub mod preview;
 pub mod status;
 
 use ratatui::{
@@ -92,7 +93,13 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         help::render_help_view(frame, app, size);
     }
 
-    // 6. カーソルの画面配置
+    // 6. 印刷プレビューの描画（表示中のみ最前面に重ねて描画）
+    if app.show_preview {
+        preview::render_preview_view(frame, app, size);
+    }
+
+    // 7. カーソルの画面配置
+
     set_terminal_cursor(
         frame,
         app,

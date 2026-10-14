@@ -88,6 +88,11 @@ pub fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         vivivi_modes::SyntaxLang::JavaScript => "JS/TS",
         vivivi_modes::SyntaxLang::Json => "JSON",
         vivivi_modes::SyntaxLang::Markdown => "Markdown",
+        vivivi_modes::SyntaxLang::Sql => "SQL",
+        vivivi_modes::SyntaxLang::PlSql => "PL/SQL",
+        vivivi_modes::SyntaxLang::Java => "Java",
+        vivivi_modes::SyntaxLang::Html => "HTML",
+        vivivi_modes::SyntaxLang::Bash => "Bash",
     };
 
     let enc_info = format!(

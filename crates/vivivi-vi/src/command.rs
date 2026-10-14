@@ -180,4 +180,23 @@ pub enum ViCommand {
     StopRecordMacro,
     /// キーボードマクロの再生 (`@<reg>` または `@@`)
     ExecuteMacro(char),
+    /// コード折り畳み操作 (`zc`, `zo`, `za`, `zM`, `zR`, `z<lvl>`)
+    Fold(FoldAction),
+}
+
+/// コード折り畳みのアクション種別。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FoldAction {
+    /// カーソル行の折り畳みを閉じる (`zc`)
+    Close,
+    /// カーソル行の折り畳みを開く (`zo`)
+    Open,
+    /// カーソル行の折り畳みをトグル (`za`)
+    Toggle,
+    /// すべての折り畳みを閉じる (`zM`)
+    CloseAll,
+    /// すべての折り畳みを開く (`zR`)
+    OpenAll,
+    /// 指定ネストレベル以上の折り畳みを閉じる (`z<lvl>`)
+    CloseLevel(usize),
 }

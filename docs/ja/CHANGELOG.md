@@ -13,6 +13,8 @@
   - `GapBuffer` と `UndoMgr` を統合した `TextBuffer` 実装。
   - 文字コード自動判別・相互変換モジュール（`encoding.rs`）の実装（BOM判定、UTF-8, Shift_JIS/CP932, EUC-JP, UTF-16LE/BE 対応、CRLF/LF/CR 改行コードの自動判別と相互変換）。
   - 対応括弧探索モジュール（`paren.rs`）の実装（`()`, `{}`, `[]`, `<>` の文字列・コメントスキップ探索、カーソル位置対応ペア検出）。
+  - **永続Undo（Persistent Undo / undofile）の実装（`undo.rs`, `buffer.rs`）**:
+    - テキストベースのシリアライズ・デシリアライズ、およびファイル保存・復元（`undofile_path()`, `save_undofile()`, `load_undofile()`）。
 - **`vivivi-vi`**:
   - Viモード定義（Normal, Insert, Replace, Visual, VisualLine, VisualBlock, CommandLine）。
   - 基本コマンド・モーション・オペレータ定義。
@@ -34,6 +36,18 @@
     - 直前編集位置・行ジャンプ（`@`, `'@`, `` `@ ``）および直前行文字列複製（`=<char>`）。
     - マーク管理（ローカル `ma`〜`mz`、永続グローバル `mA`〜`mZ`、ジャンプ `'a`、一覧 `:marks`）。
     - タグジャンプ（`Ctrl-]`, `Ctrl-t`, `Ctrl-[`, `:tag`, `:tags`、`tags` ファイル＆AST構文解析フォールバック）。
+    - **コード折り畳み（Folding）コマンド & キーバインド（`command.rs`, `parser.rs`）**:
+      - `zc`（カーソル行のブロックを閉じる）、`zo`（開く）、`za`（開閉トグル）、`zM`（全ブロック折り畳み）、`zR`（全展開）、`z<lvl>`（指定インデント深度以下を折り畳み）。
+    - **フェーズ4.5 exコマンドの完全統合（`engine/ex.rs`）**:
+      - `:grep <pattern> [dir]`、`:cnext` / `:cn`、`:cprev` / `:cp`（プロジェクト内Grep・QuickFixナビゲーション）。
+      - `:todo` / `:undone`（コード内ToDo/FIXME抽出）。
+      - `:fold <toggle|close|open|all|none>`（折り畳み操作）。
+      - `:filer [path]`（2ペイン ディレクトリビュー起動）。
+      - `:difflog` / `:blame`（世代バックアップ一覧・差分復元・簡易blame表示）。
+      - `:preview` / `:print`（A4印刷プレビュー表示）。
+      - `:pdf [path]`（自己完結型 PDF 1.4 直接エクスポート）。
+      - `:maketags [dir]`（プロジェクト内tagsファイル一括生成）。
+      - `:undofile <save|load> [path]`（永続Undo手動入出力）。
 - **`vivivi-modes`**:
   - **式置換エンジン（`expr_subst.rs`）の実装**:
     - `:s/pattern/expression/e` での置換後文字列の動的数式評価（四則演算、`$0`〜`$9` キャプチャ展開、`$i`/`$n` 連番、`$line` 行番号、文字列結合）。
@@ -50,6 +64,24 @@
     - 全角英数記号 ⇄ 半角英数記号、ひらがな ⇄ 全角カタカナ、全角カタカナ ⇄ 半角カタカナ（濁点結合・分解対応）、大文字 ⇄ 小文字、ケース反転。
   - **アウトライン解析モジュール（`outline.rs`）の実装**:
     - Markdown（`#` 〜 `######` 見出し階層）、Rust（`fn`, `struct`, `impl`, `enum`, `trait`, `mod`）、C/C++、Pythonのシンボルツリー解析。
+  - **テキスト差分（DIFF）エンジン（`diff.rs`）の実装**:
+    - LCS（最長共通部分列）アルゴリズム、Unified Diff生成（`create_unified_diff`）・パッチ適用（`apply_unified_patch`）、左右2画面同期ビューデータ（`create_side_by_side`）の生成。
+  - **世代バックアップエンジン（DiffLog / `difflog.rs`）の実装**:
+    - 保存ごとの差分追記（`.difflog`）、世代一覧取得、任意世代の完全復元（`restore_from_initial`）、行別最終更新世代算出（簡易blame: `compute_blame`）。
+  - **テンプレート自動読み込みモジュール（`template.rs`）の実装**:
+    - ファイル拡張子に対応する `.template.<ext>` の探索、マクロ変数（`%FileName%`, `%FileBase%`, `%Ext%`, `%Date%`, `%Time%`, `%UserName%`, `%Cursor%` 等）の自動展開。
+  - **コード内 ToDo 抽出エンジン（`todo.rs`）の実装**:
+    - バッファ内およびディレクトリ再帰走査（`scan_buffer_todos`, `scan_dir_todos`）、キーワード（`TODO`, `FIXME`, `BUG`, `UNDONE`, `HACK`, `NOTE`, `XXX`）の抽出。
+  - **コード折り畳みエンジン（`folding.rs`）の実装**:
+    - インデント階層解析（`compute_indent_folds`）、ブロック開閉・全開閉、非表示行判定、プレビュー表示行生成。
+  - **プロジェクト内高速 Grep 検索エンジン（`grep.rs`）の実装**:
+    - 隠しディレクトリやビルド成果物の除外、バイナリスキップ、正規表現パターン走査、QuickFix型ナビゲーションセッション（`next`, `prev`, `select`）。
+  - **2ペイン ディレクトリビュー（ファイラー / `filer.rs`）の実装**:
+    - 左右独立ペイン（`FilerPane`）、Tabフォーカス切替、ディレクトリ移動、1キーファイル選択・コピー・移動・削除操作。
+  - **プロジェクト管理エンジン（`project.rs`）の実装**:
+    - 複数ファイル統合管理、一括tagsファイル生成（`:maketags`）。
+  - **印刷プレビュー & PDF直接出力エンジン（`print.rs`）の実装**:
+    - A4標準ページ分割（行番号・ヘッダー・フッター付与）、プレビューテキスト整形、外部ライブラリ不要の自己完結型 PDF 1.4 直接出力エンジン（`export_to_pdf`）。
 - **`vivivi-app`**:
   - `ratatui` (v0.29) と `crossterm` (v0.28) によるフルスクリーンTUIフロントエンド実装。
   - 代替スクリーン（Alternate Screen）とRawモードによる端末制御およびパニック耐性復元フック。
@@ -85,6 +117,11 @@
   - **AI連携アーキテクチャの先行統合**:
     - `:ai <指示>` および `:ai commit` のディスパッチスロット実装。
     - 非同期ゼロレイテンシ設計書（`docs/ja/AI_INTEGRATION_DESIGN.md`）の策定。
+  - **ツール機能・ファイル管理 TUI 統合（フェーズ4.5）**:
+    - ファイル保存時の DiffLog 世代差分自動追記（`.difflog`）および永続Undo自動保存（`.undofile`）。
+    - ファイルオープン時のテンプレート自動適用（`.template.<ext>` マクロ展開）および永続Undo自動復元。
+    - 印刷プレビュー全画面モーダルUI描画（`ui/preview.rs`）およびキーボードスクロール（`j`/`k`, `d`/`u`）・終了（`Esc`/`q`）操作。
+    - （※Desktop GUI (egui) およびGUI前提機能はユーザー指示によりフェーズ5へ移行し、TUIとコアツール機能に特化）
   - Visual / VisualLine / VisualBlock 選択範囲のリアルタイム背景色ハイライト描画。
   - リアルタイム・ステータスバー（Viモード・罫線/CSVバッジ・ファイル名・変更フラグ・文字コード/改行/言語バッジ・行/列・進捗%）の描画。
   - ファイル保存時の元の文字コード・改行コード維持保存。
@@ -95,6 +132,8 @@
   - リポジトリルートに LICENSE（MIT License）を配備。
   - `.agents/`（ルール・スキル群）、`GEMINI.md`、`RULES.md` のセットアップ。
   - 多言語ドキュメント体系（`docs/ja/`, `docs/en/`）の構築。
+  - 内蔵ヘルプシステム（`doc/help/tools.md`, `doc/help/index.md`）のツール機能反映。
+  - ユニット/統合テスト拡充（全115テスト合格）。
 
 ### Changed / Refactored
 - **モジュール分割・ファイル肥大化解消リファクタリング**:

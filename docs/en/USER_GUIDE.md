@@ -148,5 +148,69 @@ This document provides a comprehensive operational guide for `vivivi`, covering 
 
 ## 5. Help Viewer (`F1`, `:help`)
 
-- Press `F1` or execute `:help [topic]` (e.g. `:help keisen`, `:help calc`) to read built-in manuals.
+- Press `F1` or execute `:help [topic]` (e.g. `:help keisen`, `:help calc`, `:help tools`) to read built-in manuals.
 - Scroll with `j`/`k` and dismiss with `q` or `Esc`.
+
+---
+
+## 6. Tools & File Management User Guide (ViVi 3 / ViVi 4 Compatible)
+
+### (1) Persistent Undo
+- **Automatic Behavior**: Undo history is automatically saved to `.<filename>.undofile` upon write (`:w`) and restored when reopened, allowing edits to be undone across editor sessions.
+- **Manual Commands**:
+  - `:undofile save [path]`: Manually save current undo history.
+  - `:undofile load [path]`: Manually restore undo history from file.
+
+### (2) Differential Revision Backup & Lightweight Blame (DiffLog)
+- **Automatic Behavior**: Every overwrite save appends a Unified Diff and timestamp to `.<filename>.difflog`.
+- **Revision History**: Run `:difflog` to view timestamps and line delta counts for all saved revisions.
+- **Past Revision Restore**: Run `:difflog restore <generation>` to restore buffer content to any previous revision.
+- **Lightweight Blame**: Run `:blame` to inspect which revision/timestamp each line originated from.
+
+### (3) Template Auto-Loading
+- When opening a new non-existent file, automatically searches for `.template.<ext>` in the target and parent directories.
+- Automatically expands macros like `%FileName%`, `%FileBase%`, `%Ext%`, `%Date%`, `%Time%`, `%UserName%`, and `%Cursor%`.
+
+### (4) In-Code ToDo Extractor (`:todo`, `:undone`)
+- **Commands**: `:todo [dir]` or `:undone [dir]`
+- Scans current buffer or directory for tags like `TODO`, `FIXME`, `BUG`, `UNDONE`, `HACK`, `NOTE`, and `XXX`.
+- Lists filenames, line numbers, and comments for quick navigation.
+
+### (5) Code Folding (`z` commands)
+Folds code blocks based on indentation hierarchy.
+- **Keybindings**:
+  - `zc`: Close fold under cursor.
+  - `zo`: Open fold under cursor.
+  - `za`: Toggle fold open/close.
+  - `zM`: Close all folds across entire buffer.
+  - `zR`: Open all folds across entire buffer.
+  - `z<lvl>`: Fold blocks deeper than specified level (e.g., `z2`).
+- **Ex Command**: `:fold <toggle|close|open|all|none>`
+
+### (6) Fast Project Grep Search (`:grep`)
+- **Command**: `:grep <pattern> [dir]`
+- Recursively searches project text files (skipping `.git`, `target`, node modules, and binaries).
+- **Navigation**:
+  - `:cnext` or `:cn`: Jump to next match.
+  - `:cprev` or `:cp`: Jump to previous match.
+
+### (7) 2-Pane Directory Browser (Filer / `:filer`)
+- **Command**: `:filer [path]`
+- Dual independent directory panes.
+- **Controls**:
+  - `Tab`: Switch focus between left and right panes.
+  - `j` / `k`: Move cursor.
+  - `Enter`: Navigate directory (or `..` to go up) / open selected file.
+  - `Space`: Multi-select items.
+  - `c`: Copy selected items to opposite pane directory.
+  - `m`: Move selected items to opposite pane directory.
+  - `d`: Delete selected items.
+
+### (8) Project Management & Batch Tags (`:maketags`)
+- **Command**: `:maketags [dir]`
+- Scans workspace files and generates ctags-compatible `tags` files for instant symbol navigation with `Ctrl-]`.
+
+### (9) Print Preview & Standalone PDF Export (`:preview`, `:pdf`)
+- **Print Preview**: Run `:preview` or `:print` for a full-screen paginated A4 preview modal with line numbers, headers, and footers. Scroll with `j`/`k` or `d`/`u`, and exit with `Esc` or `q`.
+- **Direct PDF Export**: Run `:pdf [path]` to export standard PDF 1.4 documents directly to disk without any external tools or libraries.
+- *(Note: Desktop GUI (egui) and GUI-dependent features were migrated to Phase 5 per user instruction, focusing current capabilities on TUI and core tooling)*.

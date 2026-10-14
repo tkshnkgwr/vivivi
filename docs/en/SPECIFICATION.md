@@ -268,3 +268,91 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
 - `Ctrl-t` / `Ctrl-[`: Pop tag stack and return to previous jump coordinate.
 - `:tags`: Display list of tag jump history stack.
 
+---
+
+## 11. Tool Features & File Management Specification (ViVi 3 / ViVi 4 Compatible)
+
+### 11.1 Persistent Undo (`undo.rs`, `buffer.rs`)
+- **Overview**: Preserves full undo/redo transaction history across editor sessions or file reloads.
+- **Storage Location**: `.<filename>.undofile` in the same directory as the target file.
+- **Format**: Lightweight, zero-dependency plain-text format with escape sequence handling (`INSERT <pos> <text>`, `DELETE <pos> <text>`, `BLOCK_START`, `BLOCK_END`).
+- **Triggers**:
+  - Automatically saved upon file write (`:w`).
+  - Automatically discovered and loaded upon file open.
+  - Manual commands: `:undofile save [path]`, `:undofile load [path]`.
+
+### 11.2 Text Difference & Revision History (DIFF & DiffLog / `diff.rs`, `difflog.rs`)
+- **Diff Engine (`diff.rs`)**:
+  - High-accuracy line diff based on Longest Common Subsequence (LCS) algorithm.
+  - Unified Diff generation (`create_unified_diff`) and patch application (`apply_unified_patch`).
+  - Synchronized side-by-side line correspondence mapping (`create_side_by_side`).
+- **Revision Backup (`difflog.rs`)**:
+  - **Storage Location**: `.<filename>.difflog`.
+  - Records diffs and UNIX timestamps on each file save.
+  - **Commands**:
+    - `:difflog`: List all backup revisions with timestamps and line delta counts.
+    - `:difflog restore <generation>`: Sequentially apply patches from initial revision to completely restore past file state.
+    - `:blame`: Trace per-line last-modified revisions and timestamps (lightweight blame).
+
+### 11.3 Template Auto-Loading (`template.rs`)
+- **Specification**:
+  - When opening a non-existent new file, automatically searches for `.template.<ext>` in the target directory and parent hierarchy.
+  - Expands macro variables into initial buffer content:
+    - `%FileName%`: Full filename (e.g., `main.rs`)
+    - `%FileBase%`: Stem filename without extension (e.g., `main`)
+    - `%Ext%`: File extension (e.g., `rs`)
+    - `%Date%`: Current date (`YYYY-MM-DD`)
+    - `%Time%`: Current time (`HH:MM:SS`)
+    - `%UserName%`: System login username
+    - `%Cursor%`: Initial cursor position after loading
+
+### 11.4 In-Code ToDo Extractor (`todo.rs`)
+- **Commands**: `:todo [dir]`, `:undone [dir]`
+- **Specification**:
+  - Recursively scans the current buffer or target directory for tags (`TODO`, `FIXME`, `BUG`, `UNDONE`, `HACK`, `NOTE`, `XXX`).
+  - Outputs a structured list (filename, line number, tag, description) accessible via QuickFix navigation.
+
+### 11.5 Code Folding (`folding.rs`)
+- **Specification**:
+  - Analyzes indentation hierarchy (2/4 spaces or tabs) to detect parent and nested block boundaries.
+  - Collapses child blocks and replaces them with summary preview lines (`... (+N lines)`).
+- **Commands & Keybindings**:
+  - `zc`: Close fold under cursor.
+  - `zo`: Open fold under cursor.
+  - `za`: Toggle fold under cursor.
+  - `zM`: Close all folds across entire buffer.
+  - `zR`: Open all folds across entire buffer.
+  - `z<lvl>`: Fold all blocks deeper than specified indentation level `<lvl>`.
+  - `:fold <toggle|close|open|all|none>`
+
+### 11.6 Fast Project Grep Search (`grep.rs`)
+- **Commands**: `:grep <pattern> [dir]`, `:cnext` / `:cn`, `:cprev` / `:cp`
+- **Specification**:
+  - Scans project files using regex patterns, skipping ignore directories (`.git`, `target`, `node_modules`, `dist`, `build`) and binary files.
+  - Maintains an active search session navigable via `:cnext` / `:cprev`.
+
+### 11.7 2-Pane Directory Browser (Filer / `filer.rs`)
+- **Commands**: `:filer [path]`
+- **Specification**:
+  - Dual independent directory navigation panes.
+  - **Key Controls**:
+    - `Tab`: Switch focus between left and right panes.
+    - `j` / `k`: Move selection cursor.
+    - `Enter`: Open directory (or `..` to go up) / open selected file in editor.
+    - `Space`: Multi-item selection toggle.
+    - `c`: Copy selected items to target directory in opposite pane.
+    - `m`: Move selected items to target directory in opposite pane.
+    - `d`: Delete selected items.
+
+### 11.8 Project Management & Batch Tags Generation (`project.rs`)
+- **Commands**: `:maketags [dir]`
+- **Specification**:
+  - Traverses workspace files, performs AST symbol parsing (functions, structs, traits, modules), and outputs ctags-compatible `tags` files.
+
+### 11.9 Print Preview & Standalone PDF Export (`print.rs`)
+- **Commands**: `:preview` / `:print`, `:pdf [path]`
+- **Specification**:
+  - **Print Preview**: Standard A4 pagination (60 lines/page, line numbers, header with filename, footer with page numbers). Rendered in a full-screen modal UI with scroll navigation (`j`/`k`, `d`/`u`).
+  - **Direct PDF Export**: Zero-dependency standalone PDF 1.4 binary generator (Courier Type 1 font, page stream operators, xref table) written in pure Rust.
+  - *(Note: Desktop GUI frontend (egui) and GUI-dependent features were migrated to Phase 5 per user instruction, focusing current capabilities on TUI and core tooling engines)*.
+

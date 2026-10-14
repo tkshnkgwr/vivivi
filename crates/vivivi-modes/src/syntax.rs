@@ -17,6 +17,11 @@ pub enum SyntaxLang {
     JavaScript,
     Json,
     Markdown,
+    Sql,
+    PlSql,
+    Java,
+    Html,
+    Bash,
 }
 
 impl SyntaxLang {
@@ -36,6 +41,11 @@ impl SyntaxLang {
             "js" | "ts" | "jsx" | "tsx" => Self::JavaScript,
             "json" => Self::Json,
             "md" | "markdown" => Self::Markdown,
+            "sql" => Self::Sql,
+            "pls" | "plb" | "pks" | "pkb" => Self::PlSql,
+            "java" => Self::Java,
+            "html" | "htm" => Self::Html,
+            "sh" | "bash" | "zsh" => Self::Bash,
             _ => Self::PlainText,
         }
     }
@@ -98,9 +108,11 @@ pub fn tokenize_line(line: &str, lang: SyntaxLang) -> Vec<SyntaxToken> {
         }
 
         // 2. コメント判定
-        // C言語スタイル行コメント: //
-        if (lang == SyntaxLang::Rust || lang == SyntaxLang::Cpp || lang == SyntaxLang::JavaScript)
-            && ch == '/'
+        // C/Java/Rust/JSスタイル行コメント: //
+        if matches!(
+            lang,
+            SyntaxLang::Rust | SyntaxLang::Cpp | SyntaxLang::JavaScript | SyntaxLang::Java
+        ) && ch == '/'
             && i + 1 < len
             && chars[i + 1] == '/'
         {
@@ -111,13 +123,89 @@ pub fn tokenize_line(line: &str, lang: SyntaxLang) -> Vec<SyntaxToken> {
             break;
         }
 
-        // Python / シェルスタイル行コメント: #
-        if lang == SyntaxLang::Python && ch == '#' {
+        // C/Java/Rust/JS/SQL/PL-SQL スタイルブロックコメント: /* ... */
+        if matches!(
+            lang,
+            SyntaxLang::Rust
+                | SyntaxLang::Cpp
+                | SyntaxLang::JavaScript
+                | SyntaxLang::Java
+                | SyntaxLang::Sql
+                | SyntaxLang::PlSql
+        ) && ch == '/'
+            && i + 1 < len
+            && chars[i + 1] == '*'
+        {
+            let start = i;
+            i += 2;
+            let mut closed = false;
+            while i + 1 < len {
+                if chars[i] == '*' && chars[i + 1] == '/' {
+                    i += 2;
+                    closed = true;
+                    break;
+                }
+                i += 1;
+            }
+            if !closed {
+                i = len;
+            }
+            tokens.push(SyntaxToken {
+                text: chars[start..i].iter().collect(),
+                token_type: TokenType::Comment,
+            });
+            continue;
+        }
+
+        // Python / Bash 行コメント: #
+        if matches!(lang, SyntaxLang::Python | SyntaxLang::Bash) && ch == '#' {
             tokens.push(SyntaxToken {
                 text: chars[i..].iter().collect(),
                 token_type: TokenType::Comment,
             });
             break;
+        }
+
+        // SQL / PL/SQL 行コメント: --
+        if matches!(lang, SyntaxLang::Sql | SyntaxLang::PlSql)
+            && ch == '-'
+            && i + 1 < len
+            && chars[i + 1] == '-'
+        {
+            tokens.push(SyntaxToken {
+                text: chars[i..].iter().collect(),
+                token_type: TokenType::Comment,
+            });
+            break;
+        }
+
+        // HTML コメント: <!-- ... -->
+        if lang == SyntaxLang::Html
+            && ch == '<'
+            && i + 3 < len
+            && chars[i + 1] == '!'
+            && chars[i + 2] == '-'
+            && chars[i + 3] == '-'
+        {
+            let start = i;
+            i += 4;
+            let mut closed = false;
+            while i + 2 < len {
+                if chars[i] == '-' && chars[i + 1] == '-' && chars[i + 2] == '>' {
+                    i += 3;
+                    closed = true;
+                    break;
+                }
+                i += 1;
+            }
+            if !closed {
+                i = len;
+            }
+            tokens.push(SyntaxToken {
+                text: chars[start..i].iter().collect(),
+                token_type: TokenType::Comment,
+            });
+            continue;
         }
 
         // 3. 文字列リテラル
@@ -361,6 +449,332 @@ fn is_keyword(word: &str, lang: SyntaxLang) -> bool {
                 | "yield"
         ),
         SyntaxLang::Json => matches!(word, "true" | "false" | "null"),
+        SyntaxLang::Sql => {
+            let lower = word.to_ascii_lowercase();
+            matches!(
+                lower.as_str(),
+                "select"
+                    | "from"
+                    | "where"
+                    | "join"
+                    | "inner"
+                    | "left"
+                    | "right"
+                    | "outer"
+                    | "cross"
+                    | "full"
+                    | "on"
+                    | "group"
+                    | "by"
+                    | "having"
+                    | "order"
+                    | "asc"
+                    | "desc"
+                    | "insert"
+                    | "into"
+                    | "values"
+                    | "update"
+                    | "set"
+                    | "delete"
+                    | "create"
+                    | "drop"
+                    | "alter"
+                    | "table"
+                    | "view"
+                    | "index"
+                    | "union"
+                    | "all"
+                    | "distinct"
+                    | "as"
+                    | "and"
+                    | "or"
+                    | "not"
+                    | "in"
+                    | "is"
+                    | "null"
+                    | "like"
+                    | "between"
+                    | "exists"
+                    | "case"
+                    | "when"
+                    | "then"
+                    | "else"
+                    | "end"
+                    | "limit"
+                    | "offset"
+                    | "primary"
+                    | "key"
+                    | "foreign"
+                    | "references"
+                    | "check"
+                    | "default"
+                    | "unique"
+                    | "constraint"
+                    | "grant"
+                    | "revoke"
+                    | "commit"
+                    | "rollback"
+                    | "savepoint"
+                    | "truncate"
+                    | "with"
+                    | "true"
+                    | "false"
+            )
+        }
+        SyntaxLang::PlSql => {
+            let lower = word.to_ascii_lowercase();
+            matches!(
+                lower.as_str(),
+                "select"
+                    | "from"
+                    | "where"
+                    | "join"
+                    | "inner"
+                    | "left"
+                    | "right"
+                    | "outer"
+                    | "cross"
+                    | "full"
+                    | "on"
+                    | "group"
+                    | "by"
+                    | "having"
+                    | "order"
+                    | "asc"
+                    | "desc"
+                    | "insert"
+                    | "into"
+                    | "values"
+                    | "update"
+                    | "set"
+                    | "delete"
+                    | "create"
+                    | "drop"
+                    | "alter"
+                    | "table"
+                    | "view"
+                    | "index"
+                    | "union"
+                    | "all"
+                    | "distinct"
+                    | "as"
+                    | "and"
+                    | "or"
+                    | "not"
+                    | "in"
+                    | "is"
+                    | "null"
+                    | "like"
+                    | "between"
+                    | "exists"
+                    | "case"
+                    | "when"
+                    | "then"
+                    | "else"
+                    | "end"
+                    | "limit"
+                    | "offset"
+                    | "primary"
+                    | "key"
+                    | "foreign"
+                    | "references"
+                    | "check"
+                    | "default"
+                    | "unique"
+                    | "constraint"
+                    | "grant"
+                    | "revoke"
+                    | "commit"
+                    | "rollback"
+                    | "savepoint"
+                    | "truncate"
+                    | "with"
+                    | "true"
+                    | "false"
+                    | "declare"
+                    | "begin"
+                    | "exception"
+                    | "procedure"
+                    | "function"
+                    | "package"
+                    | "body"
+                    | "cursor"
+                    | "loop"
+                    | "while"
+                    | "for"
+                    | "exit"
+                    | "elsif"
+                    | "return"
+                    | "pragma"
+                    | "autonomous_transaction"
+                    | "bulk"
+                    | "collect"
+                    | "forall"
+                    | "execute"
+                    | "immediate"
+                    | "open"
+                    | "fetch"
+                    | "close"
+                    | "raise"
+                    | "record"
+                    | "rowtype"
+                    | "ref"
+                    | "out"
+                    | "nocopy"
+                    | "constant"
+                    | "authid"
+                    | "replace"
+                    | "pipe"
+                    | "row"
+                    | "others"
+            )
+        }
+        SyntaxLang::Java => matches!(
+            word,
+            "abstract"
+                | "assert"
+                | "break"
+                | "case"
+                | "catch"
+                | "class"
+                | "const"
+                | "continue"
+                | "default"
+                | "do"
+                | "else"
+                | "enum"
+                | "extends"
+                | "final"
+                | "finally"
+                | "for"
+                | "goto"
+                | "if"
+                | "implements"
+                | "import"
+                | "instanceof"
+                | "interface"
+                | "native"
+                | "new"
+                | "package"
+                | "private"
+                | "protected"
+                | "public"
+                | "return"
+                | "static"
+                | "strictfp"
+                | "super"
+                | "switch"
+                | "synchronized"
+                | "this"
+                | "throw"
+                | "throws"
+                | "transient"
+                | "try"
+                | "volatile"
+                | "while"
+                | "record"
+                | "sealed"
+                | "permits"
+                | "var"
+                | "yield"
+                | "true"
+                | "false"
+                | "null"
+        ),
+        SyntaxLang::Html => {
+            let lower = word.to_ascii_lowercase();
+            matches!(
+                lower.as_str(),
+                "html"
+                    | "head"
+                    | "body"
+                    | "title"
+                    | "meta"
+                    | "link"
+                    | "style"
+                    | "script"
+                    | "div"
+                    | "span"
+                    | "p"
+                    | "a"
+                    | "img"
+                    | "ul"
+                    | "ol"
+                    | "li"
+                    | "table"
+                    | "tr"
+                    | "td"
+                    | "th"
+                    | "thead"
+                    | "tbody"
+                    | "tfoot"
+                    | "form"
+                    | "input"
+                    | "button"
+                    | "textarea"
+                    | "select"
+                    | "option"
+                    | "h1"
+                    | "h2"
+                    | "h3"
+                    | "h4"
+                    | "h5"
+                    | "h6"
+                    | "header"
+                    | "footer"
+                    | "nav"
+                    | "section"
+                    | "article"
+                    | "main"
+                    | "aside"
+                    | "canvas"
+                    | "svg"
+                    | "video"
+                    | "audio"
+                    | "iframe"
+                    | "label"
+                    | "hr"
+                    | "br"
+                    | "doctype"
+            )
+        }
+        SyntaxLang::Bash => matches!(
+            word,
+            "if" | "then"
+                | "else"
+                | "elif"
+                | "fi"
+                | "case"
+                | "esac"
+                | "for"
+                | "select"
+                | "while"
+                | "until"
+                | "do"
+                | "done"
+                | "in"
+                | "function"
+                | "time"
+                | "return"
+                | "exit"
+                | "echo"
+                | "read"
+                | "export"
+                | "set"
+                | "unset"
+                | "local"
+                | "readonly"
+                | "source"
+                | "alias"
+                | "unalias"
+                | "shift"
+                | "trap"
+                | "eval"
+                | "exec"
+                | "test"
+                | "true"
+                | "false"
+        ),
         _ => false,
     }
 }
@@ -415,6 +829,128 @@ fn is_type(word: &str, lang: SyntaxLang) -> bool {
                 | "int32_t"
                 | "int64_t"
         ),
+        SyntaxLang::Sql => {
+            let lower = word.to_ascii_lowercase();
+            matches!(
+                lower.as_str(),
+                "int"
+                    | "integer"
+                    | "smallint"
+                    | "bigint"
+                    | "varchar"
+                    | "char"
+                    | "text"
+                    | "boolean"
+                    | "bool"
+                    | "date"
+                    | "time"
+                    | "timestamp"
+                    | "decimal"
+                    | "numeric"
+                    | "float"
+                    | "double"
+                    | "real"
+                    | "blob"
+                    | "clob"
+                    | "serial"
+            )
+        }
+        SyntaxLang::PlSql => {
+            let lower = word.to_ascii_lowercase();
+            matches!(
+                lower.as_str(),
+                "int"
+                    | "integer"
+                    | "smallint"
+                    | "bigint"
+                    | "varchar"
+                    | "char"
+                    | "text"
+                    | "boolean"
+                    | "bool"
+                    | "date"
+                    | "time"
+                    | "timestamp"
+                    | "decimal"
+                    | "numeric"
+                    | "float"
+                    | "double"
+                    | "real"
+                    | "blob"
+                    | "clob"
+                    | "serial"
+                    | "varchar2"
+                    | "nvarchar2"
+                    | "number"
+                    | "pls_integer"
+                    | "binary_integer"
+                    | "sys_refcursor"
+                    | "rowid"
+                    | "long"
+                    | "raw"
+            )
+        }
+        SyntaxLang::Java => matches!(
+            word,
+            "boolean"
+                | "byte"
+                | "char"
+                | "short"
+                | "int"
+                | "long"
+                | "float"
+                | "double"
+                | "void"
+                | "String"
+                | "Integer"
+                | "Long"
+                | "Boolean"
+                | "Double"
+                | "Float"
+                | "Byte"
+                | "Short"
+                | "Character"
+                | "Object"
+                | "Class"
+                | "List"
+                | "Map"
+                | "Set"
+                | "Optional"
+                | "ArrayList"
+                | "HashMap"
+                | "HashSet"
+                | "StringBuilder"
+        ),
+        SyntaxLang::Html => {
+            let lower = word.to_ascii_lowercase();
+            matches!(
+                lower.as_str(),
+                "class"
+                    | "id"
+                    | "href"
+                    | "src"
+                    | "style"
+                    | "rel"
+                    | "type"
+                    | "name"
+                    | "value"
+                    | "placeholder"
+                    | "action"
+                    | "method"
+                    | "target"
+                    | "width"
+                    | "height"
+                    | "alt"
+                    | "title"
+                    | "charset"
+                    | "content"
+                    | "disabled"
+                    | "readonly"
+                    | "required"
+                    | "checked"
+                    | "selected"
+            )
+        }
         _ => false,
     }
 }
@@ -463,5 +999,80 @@ mod tests {
         assert_eq!(tokens[2].token_type, TokenType::Text); // calculate
         assert_eq!(tokens[8].token_type, TokenType::Number); // 42
         assert_eq!(tokens.last().unwrap().token_type, TokenType::Comment);
+    }
+
+    #[test]
+    fn test_sql_and_plsql_tokenization() {
+        let sql = "SELECT id, name FROM users WHERE id = 1; -- find";
+        let tokens: Vec<_> = tokenize_line(sql, SyntaxLang::Sql)
+            .into_iter()
+            .filter(|t| !t.text.trim().is_empty())
+            .collect();
+        assert_eq!(tokens[0].text, "SELECT");
+        assert_eq!(tokens[0].token_type, TokenType::Keyword);
+        assert_eq!(tokens[4].text, "FROM");
+        assert_eq!(tokens[4].token_type, TokenType::Keyword);
+        assert_eq!(tokens[6].text, "WHERE");
+        assert_eq!(tokens[6].token_type, TokenType::Keyword);
+        assert_eq!(tokens.last().unwrap().token_type, TokenType::Comment);
+
+        let plsql = "PROCEDURE run(val IN NUMBER) IS BEGIN NULL; END;";
+        let pl_tokens: Vec<_> = tokenize_line(plsql, SyntaxLang::PlSql)
+            .into_iter()
+            .filter(|t| !t.text.trim().is_empty())
+            .collect();
+        assert_eq!(pl_tokens[0].text, "PROCEDURE");
+        assert_eq!(pl_tokens[0].token_type, TokenType::Keyword);
+        assert_eq!(pl_tokens[5].text, "NUMBER");
+        assert_eq!(pl_tokens[5].token_type, TokenType::Type);
+        assert_eq!(pl_tokens[8].text, "BEGIN");
+        assert_eq!(pl_tokens[8].token_type, TokenType::Keyword);
+    }
+
+    #[test]
+    fn test_java_tokenization() {
+        let java = "public class Main { String msg = \"hi\"; } // test";
+        let tokens: Vec<_> = tokenize_line(java, SyntaxLang::Java)
+            .into_iter()
+            .filter(|t| !t.text.trim().is_empty())
+            .collect();
+        assert_eq!(tokens[0].text, "public");
+        assert_eq!(tokens[0].token_type, TokenType::Keyword);
+        assert_eq!(tokens[1].text, "class");
+        assert_eq!(tokens[1].token_type, TokenType::Keyword);
+        assert_eq!(tokens[4].text, "String");
+        assert_eq!(tokens[4].token_type, TokenType::Type);
+        assert_eq!(tokens[7].text, "\"hi\"");
+        assert_eq!(tokens[7].token_type, TokenType::StringLiteral);
+        assert_eq!(tokens.last().unwrap().token_type, TokenType::Comment);
+    }
+
+    #[test]
+    fn test_html_and_bash_tokenization() {
+        let html = "<div class=\"box\">hello</div> <!-- note -->";
+        let tokens = tokenize_line(html, SyntaxLang::Html);
+        assert_eq!(tokens[1].token_type, TokenType::Keyword); // div
+        assert_eq!(tokens[3].token_type, TokenType::Type); // class
+        assert_eq!(tokens[5].token_type, TokenType::StringLiteral); // "box"
+        assert_eq!(tokens.last().unwrap().token_type, TokenType::Comment);
+
+        let bash = "if [ $val -eq 0 ]; then echo \"yes\"; fi # check";
+        let b_tokens = tokenize_line(bash, SyntaxLang::Bash);
+        assert_eq!(b_tokens[0].token_type, TokenType::Keyword); // if
+        assert_eq!(b_tokens.last().unwrap().token_type, TokenType::Comment);
+    }
+
+    #[test]
+    fn test_from_path_extensions() {
+        assert_eq!(SyntaxLang::from_path("query.sql"), SyntaxLang::Sql);
+        assert_eq!(SyntaxLang::from_path("pkg.pks"), SyntaxLang::PlSql);
+        assert_eq!(SyntaxLang::from_path("pkg.pkb"), SyntaxLang::PlSql);
+        assert_eq!(SyntaxLang::from_path("Main.java"), SyntaxLang::Java);
+        assert_eq!(SyntaxLang::from_path("index.html"), SyntaxLang::Html);
+        assert_eq!(SyntaxLang::from_path("index.htm"), SyntaxLang::Html);
+        assert_eq!(SyntaxLang::from_path("script.sh"), SyntaxLang::Bash);
+        assert_eq!(SyntaxLang::from_path("deploy.bash"), SyntaxLang::Bash);
+        assert_eq!(SyntaxLang::from_path(".zshrc"), SyntaxLang::PlainText);
+        assert_eq!(SyntaxLang::from_path("setup.zsh"), SyntaxLang::Bash);
     }
 }

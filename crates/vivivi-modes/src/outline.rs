@@ -45,8 +45,15 @@ pub fn parse_outline(lines: &[String], lang: SyntaxLang) -> Vec<OutlineItem> {
         SyntaxLang::Markdown => parse_markdown_outline(lines),
         SyntaxLang::Rust => parse_rust_outline(lines),
         SyntaxLang::Python => parse_python_outline(lines),
-        SyntaxLang::Cpp | SyntaxLang::JavaScript => parse_c_family_outline(lines),
-        SyntaxLang::Json | SyntaxLang::PlainText => parse_generic_outline(lines),
+        SyntaxLang::Cpp | SyntaxLang::JavaScript | SyntaxLang::Java => {
+            parse_c_family_outline(lines)
+        }
+        SyntaxLang::Sql
+        | SyntaxLang::PlSql
+        | SyntaxLang::Bash
+        | SyntaxLang::Html
+        | SyntaxLang::Json
+        | SyntaxLang::PlainText => parse_generic_outline(lines),
     }
 }
 

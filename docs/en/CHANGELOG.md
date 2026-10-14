@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - Implemented `TextBuffer` integrating `GapBuffer` and `UndoMgr`.
   - Implemented character encoding and newline conversion module (`encoding.rs`) with BOM detection, UTF-8, Shift_JIS/CP932, EUC-JP, UTF-16LE/BE, and CRLF/LF/CR normalization.
   - Implemented matching parentheses detection module (`paren.rs`) for `()`, `{}`, `[]`, `<>` with comment/string skipping and cursor pair detection.
+  - **Persistent Undo (`undo.rs`, `buffer.rs`)**:
+    - Standalone text-based serialization and deserialization, and disk file persistence (`undofile_path()`, `save_undofile()`, `load_undofile()`).
 - **`vivivi-vi`**:
   - Defined Vi modes (Normal, Insert, Replace, Visual, VisualLine, VisualBlock, CommandLine).
   - Defined basic commands, motions, operators, and registers.
@@ -35,6 +37,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     - Last edit location jump (`@`, `'@`, `` `@ ``) and above-line text replication (`=<char>`).
     - Local and global marks (`ma`-`mz`, `mA`-`mZ`, jump `'a`, list `:marks`).
     - Tag navigation (`Ctrl-]`, `Ctrl-t`, `Ctrl-[`, `:tag`, `:tags` with AST syntax analysis fallback).
+    - **Code Folding Commands & Keybindings (`command.rs`, `parser.rs`)**:
+      - `zc` (close fold under cursor), `zo` (open fold), `za` (toggle fold), `zM` (close all folds), `zR` (open all folds), `z<lvl>` (fold deeper than level).
+    - **Phase 4.5 Ex Commands Integration (`engine/ex.rs`)**:
+      - `:grep <pattern> [dir]`, `:cnext` / `:cn`, `:cprev` / `:cp` (in-project Grep and QuickFix navigation).
+      - `:todo` / `:undone` (extract ToDo/FIXME tags).
+      - `:fold <toggle|close|open|all|none>` (folding operations).
+      - `:filer [path]` (2-pane directory browser).
+      - `:difflog` / `:blame` (revision backup history, diff restoration, and lightweight blame).
+      - `:preview` / `:print` (A4 print preview modal).
+      - `:pdf [path]` (standalone zero-dependency PDF 1.4 direct export).
+      - `:maketags [dir]` (batch project tags file generation).
+      - `:undofile <save|load> [path]` (manual persistent undo operations).
 - **`vivivi-modes`**:
   - **Expression Substitution Engine (`expr_subst.rs`)**:
     - Dynamic arithmetic/script evaluation for `:s/pattern/expression/e` (`+`, `-`, `*`, `/`, `%`, `$0`-`$9` capture groups, `$i`/`$n` counter, `$line`, string concatenation).
@@ -51,6 +65,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     - Batch conversions: Full-width ⇄ Half-width alphanumeric, Hiragana ⇄ Katakana, Half-width Katakana ⇄ Full-width Katakana (with voiced sound mark synthesis/decomposition), Uppercase ⇄ Lowercase, and SwapCase.
   - **Outline Analysis Module (`outline.rs`)**:
     - Symbol hierarchy extraction for Markdown (`#` - `######`), Rust (`fn`, `struct`, `impl`, `enum`, `trait`, `mod`), C/C++, and Python.
+  - **Text Difference (DIFF) Engine (`diff.rs`)**:
+    - Longest Common Subsequence (LCS) algorithm, Unified Diff generation (`create_unified_diff`), patch application (`apply_unified_patch`), and 2-pane side-by-side view data generation (`create_side_by_side`).
+  - **Differential Revision Backup (DiffLog / `difflog.rs`)**:
+    - Per-save diff appending (`.difflog`), generation listing, full state restoration from initial revision (`restore_from_initial`), and per-line last modified revision calculation (lightweight blame: `compute_blame`).
+  - **Template Auto-Loading Module (`template.rs`)**:
+    - Extension-based `.template.<ext>` discovery, macro variable expansion (`%FileName%`, `%FileBase%`, `%Ext%`, `%Date%`, `%Time%`, `%UserName%`, `%Cursor%`).
+  - **In-Code ToDo Extractor (`todo.rs`)**:
+    - In-buffer and directory recursive scanning (`scan_buffer_todos`, `scan_dir_todos`), extracting `TODO`, `FIXME`, `BUG`, `UNDONE`, `HACK`, `NOTE`, `XXX`.
+  - **Code Folding Engine (`folding.rs`)**:
+    - Indentation hierarchy analysis (`compute_indent_folds`), fold toggling, hidden line resolution, and collapsed preview line generation.
+  - **Fast Project Grep Search Engine (`grep.rs`)**:
+    - Hidden/build directory exclusion, binary skipping, regex pattern matching, and QuickFix-style navigation session (`next`, `prev`, `select`).
+  - **2-Pane Directory Browser (Filer / `filer.rs`)**:
+    - Dual independent panes (`FilerPane`), Tab focus toggling, directory navigation, 1-key file select, copy, move, and delete operations.
+  - **Project Management Engine (`project.rs`)**:
+    - Multi-file project workspace handling and batch `tags` file generation (`:maketags`).
+  - **Print Preview & Direct PDF Export Engine (`print.rs`)**:
+    - Standard A4 pagination with line numbers, header, and footer, preview formatting, and zero-dependency standalone PDF 1.4 direct export (`export_to_pdf`).
 - **`vivivi-app`**:
   - Implemented full-screen Terminal UI (TUI) frontend powered by `ratatui` (v0.29) and `crossterm` (v0.28).
   - Terminal lifecycle management with Alternate Screen, Raw mode, and panic recovery hooks.
@@ -86,6 +118,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **AI Integration Architecture**:
     - Interactive command dispatch slots for `:ai <instruction>` and `:ai commit`.
     - Published zero-latency AI architecture specification (`docs/ja/AI_INTEGRATION_DESIGN.md`).
+  - **Tools & File Management TUI Integration (Phase 4.5)**:
+    - Auto-append DiffLog revisions (`.difflog`) and auto-save Persistent Undo (`.undofile`) on file save.
+    - Auto-apply templates (`.template.<ext>` macro substitution) and auto-restore Persistent Undo on file open.
+    - Full-screen print preview modal UI (`ui/preview.rs`) with keyboard navigation (`j`/`k`, `d`/`u`) and exit (`Esc`/`q`).
+    - *(Note: Desktop GUI (egui) and GUI-dependent features were migrated to Phase 5 per user instruction, focusing entirely on TUI and core tooling capabilities)*.
   - Real-time Visual / VisualLine / VisualBlock selection background highlighting.
   - Real-time status bar displaying Vi mode, keisen/CSV badges, filename, modified flag, encoding/newline/language badges, line/col, and percentage.
   - Preserved original charset and newline sequence upon file save.
@@ -96,6 +133,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - Placed LICENSE (MIT License) in repository root.
   - Setup `.agents/` rules and skills, `GEMINI.md`, and `RULES.md`.
   - Established bilingual documentation system (`docs/ja/`, `docs/en/`).
+  - Added built-in help system documentation (`doc/help/tools.md`, `doc/help/index.md`).
+  - Expanded unit and integration test suite (all 115 tests passing).
 
 ### Changed / Refactored
 - **Code Modularization & Source Decomposition Refactoring**:

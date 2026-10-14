@@ -111,6 +111,30 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
         return;
     }
 
+    // 印刷プレビュー表示中のキーハンドリング
+    if app.show_preview {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                app.show_preview = false;
+                app.status_message = Some("印刷プレビューを閉じました".to_string());
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                app.preview_scroll += 1;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                app.preview_scroll = app.preview_scroll.saturating_sub(1);
+            }
+            KeyCode::PageDown | KeyCode::Char('d') => {
+                app.preview_scroll += 10;
+            }
+            KeyCode::PageUp | KeyCode::Char('u') => {
+                app.preview_scroll = app.preview_scroll.saturating_sub(10);
+            }
+            _ => {}
+        }
+        return;
+    }
+
     // Shift + F5 または F5: 罫線モードのトグル
     if key.code == KeyCode::F(5)
         || (key.modifiers.contains(KeyModifiers::SHIFT) && key.code == KeyCode::F(5))

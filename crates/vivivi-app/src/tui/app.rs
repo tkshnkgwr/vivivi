@@ -92,6 +92,11 @@ pub struct App {
     pub help_title: String,
     pub help_lines: Vec<String>,
     pub help_scroll: usize,
+
+    // --- 印刷・整形プレビュー ---
+    pub show_preview: bool,
+    pub preview_lines: Vec<String>,
+    pub preview_scroll: usize,
 }
 
 impl App {
@@ -102,7 +107,17 @@ impl App {
         encoding: CharEncoding,
         newline: NewlineType,
     ) -> Self {
-        let buffer = TextBuffer::from_text(initial_text);
+        let mut buffer = TextBuffer::from_text(initial_text);
+        if let Some(ref path) = file_path {
+            if !path.exists() && initial_text.is_empty() {
+                let tm = vivivi_modes::TemplateManager::new();
+                if let Some(res) = tm.load_and_expand(path, "2026-10-14", "12:00:00") {
+                    buffer = TextBuffer::from_text(&res.text);
+                }
+            } else {
+                let _ = buffer.load_undofile(path);
+            }
+        }
         let mut csv_mode = CsvMode::default();
         let is_csv = file_path.as_ref().is_some_and(|p| {
             p.extension()
@@ -170,6 +185,10 @@ impl App {
             help_title: String::new(),
             help_lines: Vec::new(),
             help_scroll: 0,
+
+            show_preview: false,
+            preview_lines: Vec::new(),
+            preview_scroll: 0,
         }
     }
 
@@ -190,6 +209,11 @@ impl App {
             if let Some(msg) = res.message {
                 self.status_message = Some(msg);
             }
+            if let Some(preview_str) = res.preview_requested {
+                self.preview_lines = preview_str.lines().map(|s| s.to_string()).collect();
+                self.show_preview = true;
+                self.preview_scroll = 0;
+            }
         }
     }
 
@@ -197,11 +221,29 @@ impl App {
     pub fn save_file(&mut self) -> Result<(), std::io::Error> {
         if let Some(path) = &self.file_path {
             let content = self.buffer.to_string();
+
+            // 既存ファイルとの差分を DiffLog に記録
+            if path.exists()
+                && let Ok(old_content) = std::fs::read_to_string(path)
+            {
+                let _ = vivivi_modes::DiffLog::record_generation(
+                    path,
+                    &old_content,
+                    &content,
+                    "2026-10-14 14:00:00",
+                    "auto-save",
+                );
+            }
+
             let bytes = vivivi_core::encode_text(&content, self.encoding, self.newline);
             std::fs::write(path, bytes)?;
             self.buffer.on_saved();
+
+            // 永続Undoを保存
+            let _ = self.buffer.save_undofile(path);
+
             self.status_message = Some(format!(
-                "\"{path:?}\" 書込完了 [{}/{}]",
+                "\"{path:?}\" 書込完了 [{}/{}] (DiffLog & Undo永続化)",
                 self.encoding.name(),
                 self.newline.name()
             ));
@@ -1062,6 +1104,16 @@ mod tests {
         assert!(app.show_help);
         assert!(!app.help_lines.is_empty());
 
+        // トピック指定ヘルプ (syntax)
+        app.open_help(Some("syntax"));
+        assert!(app.show_help);
+        assert!(!app.help_lines.is_empty());
+        assert!(
+            app.help_lines
+                .iter()
+                .any(|l| l.contains("シンタックスハイライト"))
+        );
+
         // 存在しないトピック（フォールバック動作）
         app.open_help(Some("non_existent_topic_12345"));
         assert!(app.show_help);
@@ -1220,6 +1272,66 @@ mod tests {
             &mut app.cursor,
         );
         assert!(res.message.unwrap().contains("'Z': 2行"));
+    }
+
+    #[test]
+    fn test_phase4_5_features_in_app() {
+        let text =
+            "fn main() {\n    // TODO: refactor logic\n    let x = 10;\n    let y = 20;\n}\n";
+        let mut app = App::new(
+            text,
+            Some(PathBuf::from("dummy.rs")),
+            CharEncoding::Utf8,
+            NewlineType::Lf,
+        );
+
+        // 1. コード折り畳み (:fold, zc, zo, za)
+        let res = app.vi.execute(
+            &vivivi_vi::ViCommand::ExCommand("fold".to_string()),
+            &mut app.buffer,
+            &mut app.cursor,
+        );
+        assert!(res.message.unwrap().contains("コード折り畳み: 1 箇所"));
+        assert_eq!(app.vi.fold_manager.folds.len(), 1);
+
+        let cmd = app.vi.feed_char('z');
+        assert_eq!(cmd, None);
+        let cmd = app.vi.feed_char('c');
+        assert!(cmd.is_some());
+        let res = app
+            .vi
+            .execute(&cmd.unwrap(), &mut app.buffer, &mut app.cursor);
+        assert_eq!(res.message, Some("折り畳みを閉じました (zc)".to_string()));
+
+        // 2. コード内 ToDo 抽出 (:todo)
+        let res = app.vi.execute(
+            &vivivi_vi::ViCommand::ExCommand("todo".to_string()),
+            &mut app.buffer,
+            &mut app.cursor,
+        );
+        assert!(res.message.unwrap().contains("ToDo: 1 件見つかりました"));
+        assert_eq!(app.cursor.pos.line, 1); // 2行目 (0-indexed 1)
+
+        // 3. 印刷プレビュー (:preview)
+        let res = app.vi.execute(
+            &vivivi_vi::ViCommand::ExCommand("preview".to_string()),
+            &mut app.buffer,
+            &mut app.cursor,
+        );
+        assert!(res.preview_requested.is_some());
+        assert!(
+            res.message
+                .unwrap()
+                .contains("印刷プレビューを生成しました")
+        );
+
+        // 4. Grep検索 (:grep)
+        let res = app.vi.execute(
+            &vivivi_vi::ViCommand::ExCommand("grep main src".to_string()),
+            &mut app.buffer,
+            &mut app.cursor,
+        );
+        assert!(res.message.unwrap().contains("Grep完了"));
     }
 
     fn vi_cmd_bang(vi: &mut ViEngine) -> Option<vivivi_vi::ViCommand> {

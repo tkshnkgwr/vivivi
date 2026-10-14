@@ -41,6 +41,8 @@ enum ParserState {
     WaitingForMacroRecord,
     /// マクロ再生対象レジスタ待ち (`@` の後)
     WaitingForMacroExecute,
+    /// コード折り畳み待ち (`z` の後)
+    WaitingForZ,
     /// コマンドラインまたは検索文字列入力中 (`:`, `/`, `?`)
     CommandLine { prefix: char, buffer: String },
 }
@@ -335,6 +337,22 @@ impl CommandParser {
                 }
             }
 
+            ParserState::WaitingForZ => {
+                self.state = ParserState::Idle;
+                match ch {
+                    'c' => Some(ViCommand::Fold(crate::command::FoldAction::Close)),
+                    'o' => Some(ViCommand::Fold(crate::command::FoldAction::Open)),
+                    'a' => Some(ViCommand::Fold(crate::command::FoldAction::Toggle)),
+                    'M' => Some(ViCommand::Fold(crate::command::FoldAction::CloseAll)),
+                    'R' => Some(ViCommand::Fold(crate::command::FoldAction::OpenAll)),
+                    d if d.is_ascii_digit() => {
+                        let lvl = d.to_digit(10).unwrap() as usize;
+                        Some(ViCommand::Fold(crate::command::FoldAction::CloseLevel(lvl)))
+                    }
+                    _ => None,
+                }
+            }
+
             ParserState::WaitingForMotion {
                 op,
                 count,
@@ -456,6 +474,12 @@ impl CommandParser {
                 // マクロ再生 (`@`)
                 if ch == '@' {
                     self.state = ParserState::WaitingForMacroExecute;
+                    return None;
+                }
+
+                // コード折り畳み (`z`)
+                if ch == 'z' {
+                    self.state = ParserState::WaitingForZ;
                     return None;
                 }
 

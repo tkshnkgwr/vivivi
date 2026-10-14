@@ -137,6 +137,201 @@ impl ViEngine {
             let res = self.execute(&ViCommand::TagJump(Some(tag)), buffer, cursor);
             result.message = res.message;
             result.need_redraw = res.need_redraw;
+        } else if let Some(grep_args) = cmd.strip_prefix("grep ") {
+            // プロジェクト内Grep検索 (:grep <pattern> [path])
+            let parts: Vec<&str> = grep_args.split_whitespace().collect();
+            if parts.is_empty() {
+                result.message = Some("使用法: :grep <pattern> [path]".to_string());
+            } else {
+                let pat = parts[0];
+                let search_dir = parts.get(1).copied().unwrap_or(".");
+                match vivivi_modes::execute_grep(search_dir, pat, false, &[]) {
+                    Ok(session) => {
+                        let count = session.matches.len();
+                        if let Some(first) = session.current_match() {
+                            cursor.pos.line = first.lineno.saturating_sub(1);
+                            cursor.pos.col = first.col.saturating_sub(1);
+                            result.need_redraw = true;
+                        }
+                        self.grep_session = Some(session);
+                        result.message =
+                            Some(format!("Grep完了: {count} 件の一致 (pattern: '{pat}')"));
+                    }
+                    Err(e) => {
+                        result.message = Some(format!("Grepエラー: {e}"));
+                    }
+                }
+            }
+        } else if cmd == "cnext" || cmd == "cn" {
+            // Grep結果の次へジャンプ
+            if let Some(session) = &mut self.grep_session {
+                if let Some(m) = session.next().cloned() {
+                    cursor.pos.line = m.lineno.saturating_sub(1);
+                    cursor.pos.col = m.col.saturating_sub(1);
+                    result.need_redraw = true;
+                    result.message = Some(format!(
+                        "[{}/{}] {}:{} {}",
+                        session.current_idx + 1,
+                        session.matches.len(),
+                        m.file_path.display(),
+                        m.lineno,
+                        m.line_text.trim()
+                    ));
+                }
+            } else {
+                result.message =
+                    Some("有効な Grep 結果がありません (:grep で検索してください)".to_string());
+            }
+        } else if cmd == "cprev" || cmd == "cp" {
+            // Grep結果の前へジャンプ
+            if let Some(session) = &mut self.grep_session {
+                if let Some(m) = session.prev().cloned() {
+                    cursor.pos.line = m.lineno.saturating_sub(1);
+                    cursor.pos.col = m.col.saturating_sub(1);
+                    result.need_redraw = true;
+                    result.message = Some(format!(
+                        "[{}/{}] {}:{} {}",
+                        session.current_idx + 1,
+                        session.matches.len(),
+                        m.file_path.display(),
+                        m.lineno,
+                        m.line_text.trim()
+                    ));
+                }
+            } else {
+                result.message =
+                    Some("有効な Grep 結果がありません (:grep で検索してください)".to_string());
+            }
+        } else if cmd == "todo" || cmd == "undone" {
+            // コード内 ToDo 抽出 (:todo / :undone)
+            let items =
+                vivivi_modes::scan_buffer_todos(&buffer.to_string(), Some(&self.current_file_path));
+            let count = items.len();
+            if let Some(first) = items.first() {
+                cursor.pos.line = first.lineno.saturating_sub(1);
+                cursor.pos.col = first.col.saturating_sub(1);
+                result.need_redraw = true;
+                result.message = Some(format!(
+                    "ToDo: {count} 件見つかりました (先頭: [{}] {})",
+                    first.tag.as_str(),
+                    first.message
+                ));
+            } else {
+                result.message = Some("ToDo タグは見つかりませんでした".to_string());
+            }
+            self.todo_items = items;
+        } else if cmd == "fold" || cmd == "foldindent" {
+            // インデント折り畳み自動計算
+            self.fold_manager
+                .compute_indent_folds(&buffer.to_string(), 4);
+            result.need_redraw = true;
+            result.message = Some(format!(
+                "コード折り畳み: {} 箇所のブロックを検出しました",
+                self.fold_manager.folds.len()
+            ));
+        } else if cmd == "filer" || cmd == "explore" {
+            // 2ペインファイラーの初期化
+            let dir = if self.current_file_path.is_empty() {
+                "."
+            } else {
+                std::path::Path::new(&self.current_file_path)
+                    .parent()
+                    .and_then(|p| p.to_str())
+                    .unwrap_or(".")
+            };
+            self.filer = Some(vivivi_modes::TwoPaneFiler::new(dir));
+            result.need_redraw = true;
+            result.message = Some("2ペインファイラーを起動しました (Tabでペイン切替)".to_string());
+        } else if cmd == "difflog" || cmd == "blame" {
+            // 世代バックアップログの確認
+            let log_path = vivivi_modes::DiffLog::difflog_path(&self.current_file_path);
+            match vivivi_modes::DiffLog::load_from_file(&log_path) {
+                Ok(log) => {
+                    let gen_count = log.entries.len();
+                    let blame = log.compute_blame(&buffer.to_string());
+                    let cur_line = cursor.pos.line + 1;
+                    let line_info = blame.get(cursor.pos.line);
+                    let info_str = line_info
+                        .map(|b| format!("第{}世代 ({})", b.generation, b.timestamp))
+                        .unwrap_or_else(|| "未記録".to_string());
+                    result.message = Some(format!(
+                        "DiffLog: 蓄積世代数: {gen_count} 件 / {cur_line}行目の更新世代: {info_str}"
+                    ));
+                    self.difflog = Some(log);
+                }
+                Err(e) => {
+                    result.message = Some(format!("DiffLog 読み込みエラー: {e}"));
+                }
+            }
+        } else if cmd == "preview" || cmd == "print" {
+            // 印刷プレビュー生成
+            let settings = vivivi_modes::PrintSettings::default();
+            let pages = vivivi_modes::paginate_text(
+                &buffer.to_string(),
+                &self.current_file_path,
+                "2026-10-14",
+                &settings,
+            );
+            let preview_text = vivivi_modes::format_preview_text(&pages);
+            result.preview_requested = Some(preview_text);
+            result.message = Some(format!(
+                "印刷プレビューを生成しました (全 {} ページ)",
+                pages.len()
+            ));
+        } else if let Some(pdf_path) = cmd.strip_prefix("pdf") {
+            // PDF出力 (:pdf [file.pdf])
+            let out_file = pdf_path.trim();
+            let target_pdf = if out_file.is_empty() {
+                if self.current_file_path.is_empty() {
+                    "document.pdf".to_string()
+                } else {
+                    format!("{}.pdf", self.current_file_path)
+                }
+            } else {
+                out_file.to_string()
+            };
+            let settings = vivivi_modes::PrintSettings::default();
+            let pages = vivivi_modes::paginate_text(
+                &buffer.to_string(),
+                &self.current_file_path,
+                "2026-10-14",
+                &settings,
+            );
+            match vivivi_modes::export_to_pdf(&pages, &target_pdf) {
+                Ok(()) => {
+                    result.message = Some(format!("PDFを出力しました: {target_pdf}"));
+                }
+                Err(e) => {
+                    result.message = Some(format!("PDF出力エラー: {e}"));
+                }
+            }
+        } else if cmd == "maketags" || cmd == "tags gen" {
+            // プロジェクト内tags一括生成
+            let pm = vivivi_modes::ProjectManager::new(".");
+            match pm.generate_tags() {
+                Ok(count) => {
+                    result.message = Some(format!(
+                        "tags ファイルを生成しました ({count} 件のシンボル)"
+                    ));
+                }
+                Err(e) => {
+                    result.message = Some(format!("tags 生成エラー: {e}"));
+                }
+            }
+        } else if cmd == "undofile" {
+            // 永続Undoの手動保存
+            if self.current_file_path.is_empty() {
+                result.message = Some("ファイル名が未指定です".to_string());
+            } else {
+                match buffer.save_undofile(&self.current_file_path) {
+                    Ok(()) => {
+                        result.message = Some("永続 undofile を保存しました".to_string());
+                    }
+                    Err(e) => {
+                        result.message = Some(format!("undofile 保存エラー: {e}"));
+                    }
+                }
+            }
         } else {
             result.message = Some(format!("未定義のコマンドです: :{cmd}"));
         }

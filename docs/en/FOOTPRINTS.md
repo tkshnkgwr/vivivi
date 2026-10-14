@@ -16,11 +16,12 @@ This document defines resource consumption targets and benchmarks for `vivivi`.
 
 ---
 
-## 2. Benchmark Status (Phase 3 & 4 Progress)
+## 2. Benchmark Status (Phase 4.5 Progress)
 
-| Measurement Item             | Measured Value | Status  | Notes                                                |
-| :--------------------------- | :------------: | :-----: | :--------------------------------------------------- |
-| **Full Unit Test Duration**  |  **~0.03 s**   | ✅ PASS | Instantaneous test pass across all 103 tests         |
-| **Incremental Build Time**   |  **~1.5 s**    | ✅ PASS | Rapid developer iteration cycles maintained          |
-| **Static Analysis Time**     |  **~0.9 s**    | ✅ PASS | Zero Clippy warnings maintained                      |
-| **Startup & Frame Latency**  |  **< 15 ms**   | ✅ PASS | Immediate alternate screen switch and event intake   |
+| Measurement Item            | Measured Value | Status  | Notes                                              |
+| :-------------------------- | :------------: | :-----: | :------------------------------------------------- |
+| **Full Unit Test Duration** |  **~0.05 s**   | ✅ PASS | Instantaneous test pass across all 115 tests       |
+| **Incremental Build Time**  |   **~1.8 s**   | ✅ PASS | Rapid developer iteration cycles maintained        |
+| **Static Analysis Time**    |   **~0.9 s**   | ✅ PASS | Zero Clippy warnings maintained                    |
+| **Startup & Frame Latency** |  **< 15 ms**   | ✅ PASS | Immediate alternate screen switch and event intake |
+| **PDF Generation Duration** |   **< 5 ms**   | ✅ PASS | Zero-dependency pure Rust direct binary output     |

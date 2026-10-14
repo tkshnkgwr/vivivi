@@ -32,6 +32,10 @@ pub struct ViExecutionResult {
     pub force_quit: bool,
     /// ステータスライン等に表示するメッセージ
     pub message: Option<String>,
+    /// ファイルオープン要求（ファイラー等から）
+    pub open_file_requested: Option<String>,
+    /// プレビュー表示要求（印刷プレビュー等）
+    pub preview_requested: Option<String>,
 }
 
 /// Vi コマンドエンジン本体。
@@ -64,6 +68,16 @@ pub struct ViEngine {
     pub tag_stack: Vec<(String, CursorPosition, String)>,
     /// 現在編集中のファイルパス
     pub current_file_path: String,
+    /// Grep 検索セッション
+    pub grep_session: Option<vivivi_modes::GrepSession>,
+    /// コード折り畳みマネージャ
+    pub fold_manager: vivivi_modes::FoldManager,
+    /// 抽出された ToDo アイテム一覧
+    pub todo_items: Vec<vivivi_modes::TodoItem>,
+    /// 2ペインファイラー
+    pub filer: Option<vivivi_modes::TwoPaneFiler>,
+    /// 世代バックアップログ
+    pub difflog: Option<vivivi_modes::DiffLog>,
 }
 
 impl ViEngine {
@@ -85,6 +99,11 @@ impl ViEngine {
             marks: std::collections::HashMap::new(),
             tag_stack: Vec::new(),
             current_file_path: String::new(),
+            grep_session: None,
+            fold_manager: vivivi_modes::FoldManager::new(),
+            todo_items: Vec::new(),
+            filer: None,
+            difflog: None,
         }
     }
 
@@ -566,6 +585,30 @@ impl ViEngine {
                         }
                     }
                     result.need_redraw = true;
+                }
+            }
+
+            ViCommand::Fold(action) => {
+                result.need_redraw = true;
+                match action {
+                    crate::command::FoldAction::Close => {
+                        result.message = Some("折り畳みを閉じました (zc)".to_string())
+                    }
+                    crate::command::FoldAction::Open => {
+                        result.message = Some("折り畳みを開きました (zo)".to_string())
+                    }
+                    crate::command::FoldAction::Toggle => {
+                        result.message = Some("折り畳みをトグルしました (za)".to_string())
+                    }
+                    crate::command::FoldAction::CloseAll => {
+                        result.message = Some("すべての折り畳みを閉じました (zM)".to_string())
+                    }
+                    crate::command::FoldAction::OpenAll => {
+                        result.message = Some("すべての折り畳みを開きました (zR)".to_string())
+                    }
+                    crate::command::FoldAction::CloseLevel(lvl) => {
+                        result.message = Some(format!("レベル {lvl} 以上の折り畳みを閉じました"))
+                    }
                 }
             }
         }

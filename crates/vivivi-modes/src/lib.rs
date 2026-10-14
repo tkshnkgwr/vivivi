@@ -19,20 +19,42 @@ pub mod expr_subst;
 pub mod fftt;
 pub mod renumber;
 
+pub mod diff;
+pub mod difflog;
+pub mod filer;
+pub mod folding;
+pub mod grep;
+pub mod print;
+pub mod project;
+pub mod template;
+pub mod todo;
+
 pub use abbrev::AbbrevManager;
 pub use align::align_lines;
 pub use calc::{BoxCalculationResult, calculate_box_lines, calculate_box_selection};
 pub use conv::{ConversionType, convert_text};
 pub use csv::{CsvCell, CsvMode, CsvOptions, Delimiter};
 pub use dabbrev::DabbrevSession;
+pub use diff::{
+    DiffLine, DiffType, SideBySideLine, apply_unified_patch, create_side_by_side,
+    create_unified_diff, diff_lines,
+};
+pub use difflog::{BlameInfo, DiffLog, DiffLogEntry};
 pub use dynamic_macro::DynamicMacroEngine;
 pub use expr_subst::{ExprContext, ExprParser, ExprValue, execute_expr_substitute};
 pub use fftt::{char_matches_fftt, find_char_backward, find_char_forward};
+pub use filer::{ActiveFilerPane, FileEntry, FilerPane, TwoPaneFiler};
+pub use folding::{FoldManager, FoldRange};
+pub use grep::{GrepMatch, GrepSession, execute_grep};
 pub use keisen::{BoxAlignment, KeisenDirection, KeisenMode, KeisenType};
 pub use lex_edit::{LexEditEngine, WordEditRecord};
 pub use line_edit::insert_beg_end_lines;
 pub use migemo::MigemoEngine;
 pub use outline::{OutlineItem, OutlineKind, parse_outline};
+pub use print::{PrintPage, PrintSettings, export_to_pdf, format_preview_text, paginate_text};
+pub use project::ProjectManager;
 pub use renumber::renumber_lines;
 pub use syntax::{SyntaxLang, SyntaxToken, TokenType, tokenize_line};
+pub use template::{TemplateManager, TemplateResult};
+pub use todo::{TodoItem, TodoTag, scan_buffer_todos, scan_dir_todos};
 pub use zen_coding::{ZenElement, expand_zen_coding};
