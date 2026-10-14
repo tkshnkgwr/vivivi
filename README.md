@@ -15,6 +15,24 @@
 
 ---
 
+## Background & Motivation
+
+The text editor "vivivi" is rooted in the design philosophy of the classic vi-compatible Windows editor "ViVi 3 / ViVi 4" and its open-source reincarnation "OpenViVi".
+
+As a long-time user of ViVi, I had high expectations for OpenViVi, but when its development ceased, I felt the need to create a successor environment for daily use.  
+Taking over and maintaining the original C++ codebase via a direct fork felt far beyond my capabilities and somewhat daunting. Therefore, I decided to build a fresh implementation from scratch in Rust, faithfully referencing OpenViVi's architecture and data structures.
+
+It would be a privilege if former ViVi or OpenViVi users find a home here, though meeting everyone's expectations remains a humble challenge. I am striving to recreate that familiar, intuitive workflow in a modern language.
+
+* **Development Approach**:  
+  The Rust implementation is developed in active collaboration with AI (Gemini). As I am relatively new to GitHub and open-source workflows, I appreciate your patience and understanding.
+* **Current Status**:  
+  Currently in Alpha (TUI only). The immediate focus is stabilizing essential daily editing workflows to reach Beta and an official release as soon as possible.
+* **GUI Roadmap**:  
+  A desktop GUI version using `egui` will be undertaken once core editing features have matured.
+
+---
+
 ## 📌 Overview
 
 `vivivi` is a ground-up reimagining in **Rust** of the classic C++ / Qt text editor "**OpenViVi**", engineered for memory safety, concurrency, and uncompromising performance.
