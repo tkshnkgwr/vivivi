@@ -3,10 +3,10 @@ use crossterm::event::KeyEvent;
 use std::path::PathBuf;
 use vivivi_core::{CharEncoding, CursorPosition, NewlineType, TextBuffer, TextCursor};
 use vivivi_modes::{
-    AbbrevManager, BoxAlignment, ConversionType, CsvMode, DabbrevSession, DynamicMacroEngine,
-    KeisenDirection, KeisenMode, LexEditEngine, MigemoEngine, OutlineItem, SyntaxLang, align_lines,
-    calculate_box_selection, convert_text, expand_zen_coding, insert_beg_end_lines, parse_outline,
-    renumber_lines,
+    AbbrevManager, BoxAlignment, ChangeTracker, ConversionType, CsvMode, DabbrevSession,
+    DynamicMacroEngine, KeisenDirection, KeisenMode, LexEditEngine, ListCharsConfig, MigemoEngine,
+    OutlineItem, RecentManager, SyntaxLang, align_lines, calculate_box_selection, convert_text,
+    expand_zen_coding, insert_beg_end_lines, parse_outline, renumber_lines,
 };
 use vivivi_vi::{RegisterContent, ViEngine, ViMode};
 
@@ -97,6 +97,17 @@ pub struct App {
     pub show_preview: bool,
     pub preview_lines: Vec<String>,
     pub preview_scroll: usize,
+
+    // --- 変更行ガター追跡 (Change Markers) ---
+    pub change_tracker: ChangeTracker,
+
+    // --- 最近使ったファイル & お気に入り (Recent Files / Favorites) ---
+    pub recent_manager: RecentManager,
+    pub show_recent_modal: bool,
+    pub selected_recent_idx: usize,
+
+    // --- 不可視文字可視化 (:set list / :set nolist) ---
+    pub list_chars_config: ListCharsConfig,
 }
 
 impl App {
@@ -140,6 +151,23 @@ impl App {
         if let Some(ref path) = file_path {
             vi.current_file_path = path.to_string_lossy().to_string();
         }
+
+        // 変更行ガター追跡の初期化
+        let lines: Vec<String> = (0..buffer.line_count())
+            .filter_map(|i| buffer.get_line(i))
+            .collect();
+        let change_tracker = ChangeTracker::new(&lines);
+
+        // 最近使ったファイルとお気に入りの読み込み
+        let mut recent_manager = RecentManager::new();
+        let recent_file_path = get_recent_file_path();
+        let _ = recent_manager.load_from_file(&recent_file_path);
+        if let Some(ref path) = file_path {
+            recent_manager.add_recent(path.clone());
+            let _ = recent_manager.save_to_file(&recent_file_path);
+        }
+
+        let list_chars_config = ListCharsConfig::default();
 
         Self {
             buffer,
@@ -189,6 +217,12 @@ impl App {
             show_preview: false,
             preview_lines: Vec::new(),
             preview_scroll: 0,
+
+            change_tracker,
+            recent_manager,
+            show_recent_modal: false,
+            selected_recent_idx: 0,
+            list_chars_config,
         }
     }
 
@@ -239,6 +273,17 @@ impl App {
             std::fs::write(path, bytes)?;
             self.buffer.on_saved();
 
+            // 変更行ガター追跡の保存状態を更新
+            let current_lines: Vec<String> = (0..self.buffer.line_count())
+                .filter_map(|i| self.buffer.get_line(i))
+                .collect();
+            self.change_tracker.on_save(&current_lines);
+
+            // 最近使ったファイルリストに追加・永続化
+            self.recent_manager.add_recent(path.clone());
+            let recent_file_path = get_recent_file_path();
+            let _ = self.recent_manager.save_to_file(&recent_file_path);
+
             // 永続Undoを保存
             let _ = self.buffer.save_undofile(path);
 
@@ -252,6 +297,63 @@ impl App {
             self.status_message =
                 Some("ファイル名が指定されていません (:w <ファイル名>)".to_string());
             Ok(())
+        }
+    }
+
+    /// 指定されたパスのファイルを読み込んでバッファを切り替えます。
+    pub fn open_file(&mut self, path: PathBuf) -> Result<(), std::io::Error> {
+        let (content, enc, nl) = if path.exists() {
+            let bytes = std::fs::read(&path)?;
+            vivivi_core::decode_bytes(&bytes)
+        } else {
+            (String::new(), CharEncoding::Utf8, NewlineType::default())
+        };
+
+        self.buffer = TextBuffer::from_text(&content);
+        let _ = self.buffer.load_undofile(&path);
+
+        let lines: Vec<String> = (0..self.buffer.line_count())
+            .filter_map(|i| self.buffer.get_line(i))
+            .collect();
+        self.change_tracker = ChangeTracker::new(&lines);
+
+        let is_csv = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| matches!(ext.to_lowercase().as_str(), "csv" | "tsv"))
+            .unwrap_or(false);
+        self.is_csv_active = is_csv;
+
+        self.syntax_lang = SyntaxLang::from_path(&path);
+        self.vi.current_file_path = path.to_string_lossy().to_string();
+        self.file_path = Some(path.clone());
+        self.encoding = enc;
+        self.newline = nl;
+        self.cursor = TextCursor::new(0, 0);
+        self.scroll = (0, 0);
+
+        self.recent_manager.add_recent(path);
+        let recent_file_path = get_recent_file_path();
+        let _ = self.recent_manager.save_to_file(&recent_file_path);
+
+        self.status_message = Some(format!("ファイルを開きました: {:?}", self.file_path));
+        Ok(())
+    }
+
+    /// 現在開いているファイルのお気に入り登録／解除を切り替えます。
+    pub fn toggle_favorite_current_file(&mut self) {
+        if let Some(ref path) = self.file_path {
+            let is_fav = self.recent_manager.toggle_favorite(path.clone());
+            let recent_file_path = get_recent_file_path();
+            let _ = self.recent_manager.save_to_file(&recent_file_path);
+            if is_fav {
+                self.status_message = Some(format!("お気に入りに追加: {:?}", path));
+            } else {
+                self.status_message = Some(format!("お気に入りを解除: {:?}", path));
+            }
+        } else {
+            self.status_message =
+                Some("名前のないバッファはお気に入りに登録できません".to_string());
         }
     }
 
@@ -1014,6 +1116,19 @@ impl App {
     }
 }
 
+/// 最近使ったファイル永続化パスの取得 (%USERPROFILE%/.vivivi/recent.txt または ~/.vivivi/recent.txt)
+pub fn get_recent_file_path() -> PathBuf {
+    if let Ok(userprofile) = std::env::var("USERPROFILE") {
+        PathBuf::from(userprofile)
+            .join(".vivivi")
+            .join("recent.txt")
+    } else if let Ok(home) = std::env::var("HOME") {
+        PathBuf::from(home).join(".vivivi").join("recent.txt")
+    } else {
+        PathBuf::from(".vivivi_recent.txt")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1112,6 +1227,16 @@ mod tests {
             app.help_lines
                 .iter()
                 .any(|l| l.contains("シンタックスハイライト"))
+        );
+
+        // トピック指定ヘルプ (visual)
+        app.open_help(Some("visual"));
+        assert!(app.show_help);
+        assert!(!app.help_lines.is_empty());
+        assert!(
+            app.help_lines
+                .iter()
+                .any(|l| l.contains("視覚・編集支援機能"))
         );
 
         // 存在しないトピック（フォールバック動作）
@@ -1332,6 +1457,47 @@ mod tests {
             &mut app.cursor,
         );
         assert!(res.message.unwrap().contains("Grep完了"));
+    }
+
+    #[test]
+    fn test_phase4_6_gutter_and_recent() {
+        let initial_text = "line1\nline2\nline3";
+        let mut app = App::new(initial_text, None, CharEncoding::Utf8, NewlineType::Lf);
+
+        // ガターマーカー初期状態
+        let lines: Vec<String> = (0..app.buffer.line_count())
+            .filter_map(|i| app.buffer.get_line(i))
+            .collect();
+        let markers = app.change_tracker.compute_markers(&lines);
+        assert_eq!(
+            markers,
+            vec![
+                vivivi_modes::LineChangeState::Unchanged,
+                vivivi_modes::LineChangeState::Unchanged,
+                vivivi_modes::LineChangeState::Unchanged,
+            ]
+        );
+
+        // 1行目を編集
+        app.buffer.insert_char(0, 'x');
+        let lines: Vec<String> = (0..app.buffer.line_count())
+            .filter_map(|i| app.buffer.get_line(i))
+            .collect();
+        let markers = app.change_tracker.compute_markers(&lines);
+        assert_eq!(markers[0], vivivi_modes::LineChangeState::Modified);
+
+        // お気に入りの登録トグル
+        app.file_path = Some(PathBuf::from("test_file.rs"));
+        app.toggle_favorite_current_file();
+        assert!(
+            app.recent_manager
+                .is_favorite(&PathBuf::from("test_file.rs"))
+        );
+
+        // 不可視文字設定の初期値
+        assert!(!app.list_chars_config.enabled);
+        app.list_chars_config.enabled = true;
+        assert!(app.list_chars_config.enabled);
     }
 
     fn vi_cmd_bang(vi: &mut ViEngine) -> Option<vivivi_vi::ViCommand> {

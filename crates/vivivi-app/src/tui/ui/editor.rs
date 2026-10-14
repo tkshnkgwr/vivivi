@@ -57,11 +57,17 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect) {
 
     let mut lines_spans = Vec::new();
 
+    // 変更行マーカーの算出
+    let all_lines: Vec<String> = (0..total_lines)
+        .filter_map(|i| app.buffer.get_line(i))
+        .collect();
+    let change_markers = app.change_tracker.compute_markers(&all_lines);
+
     for line_idx in start_line..end_line {
         let is_current_line = line_idx == cur.line;
 
         // 行番号のフォーマット
-        let line_num_str = format!("{:>4} │", line_idx + 1);
+        let line_num_str = format!("{:>4} ", line_idx + 1);
         let num_style = if is_current_line {
             Style::default()
                 .fg(Color::Yellow)
@@ -70,12 +76,43 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect) {
             Style::default().fg(Color::DarkGray)
         };
 
+        // ガター変更マーカーのスタイル判定
+        let marker = change_markers
+            .get(line_idx)
+            .copied()
+            .unwrap_or(vivivi_modes::LineChangeState::Unchanged);
+        let (gutter_sym, gutter_style) = match marker {
+            vivivi_modes::LineChangeState::Added | vivivi_modes::LineChangeState::Modified => (
+                "▌",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            vivivi_modes::LineChangeState::SavedModified => (
+                "▌",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            vivivi_modes::LineChangeState::Unchanged => ("│", Style::default().fg(Color::DarkGray)),
+        };
+
         // 行テキストの取得（CSVモード有効時は整列フォーマット適用）
         let raw_line = app.buffer.get_line(line_idx).unwrap_or_default();
         let display_line = if app.is_csv_active {
             app.csv_mode.format_line(&raw_line, is_current_line)
         } else {
             raw_line
+        };
+
+        // 不可視文字可視化が有効な場合、専用フォーマットを適用
+        let (processed_line, inv_info) = if app.list_chars_config.enabled && !app.is_csv_active {
+            let inv_chars =
+                vivivi_modes::format_line_invisibles(&display_line, 4, &app.list_chars_config);
+            let s: String = inv_chars.iter().map(|c| c.ch).collect();
+            (s, Some(inv_chars))
+        } else {
+            (display_line.clone(), None)
         };
 
         // 構文解析（シンタックスハイライト）トークンの取得
@@ -89,7 +126,7 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect) {
         };
 
         // 各文字のベーススタイルを計算
-        let chars: Vec<char> = display_line.chars().collect();
+        let chars: Vec<char> = processed_line.chars().collect();
         let mut styles: Vec<Style> = Vec::with_capacity(chars.len());
 
         for token in tokens {
@@ -108,6 +145,23 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect) {
             };
             for _ in token.text.chars() {
                 styles.push(token_style);
+            }
+        }
+
+        // 不可視文字で文字数が増減した場合のスタイル長調整
+        if let Some(ref inv) = inv_info {
+            styles.resize(chars.len(), Style::default().fg(Color::DarkGray));
+            for (idx, item) in inv.iter().enumerate() {
+                if idx < styles.len() {
+                    if item.is_zenkaku_space {
+                        styles[idx] = Style::default()
+                            .fg(Color::Red)
+                            .bg(Color::Rgb(50, 20, 20))
+                            .add_modifier(Modifier::BOLD);
+                    } else if item.is_invisible {
+                        styles[idx] = Style::default().fg(Color::DarkGray);
+                    }
+                }
             }
         }
 
@@ -199,6 +253,7 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect) {
 
         let mut row_spans = vec![
             Span::styled(line_num_str, num_style),
+            Span::styled(gutter_sym, gutter_style),
             Span::styled(" ", base_bg),
         ];
 

@@ -7,6 +7,7 @@ pub mod editor;
 pub mod help;
 pub mod outline;
 pub mod preview;
+pub mod recent;
 pub mod status;
 
 use ratatui::{
@@ -64,7 +65,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     let active_editor_area = window_areas[active_idx];
 
     // アクティブウィンドウに合わせてスクロール調整
-    let line_number_width = 5; // " 123 │" の幅
+    let line_number_width = 6; // " 123 ▌ " の幅
     let text_view_width = (active_editor_area.width as usize).saturating_sub(line_number_width);
     let text_view_height = active_editor_area.height as usize;
     app.adjust_scroll(text_view_height, text_view_width);
@@ -98,7 +99,12 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         preview::render_preview_view(frame, app, size);
     }
 
-    // 7. カーソルの画面配置
+    // 7. 最近使ったファイル & お気に入りモーダルの描画（表示中のみ最前面に重ねて描画）
+    if app.show_recent_modal {
+        recent::render_recent_modal(frame, app, size);
+    }
+
+    // 8. カーソルの画面配置
 
     set_terminal_cursor(
         frame,

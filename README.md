@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024%20Edition-orange.svg)](https://www.rust-lang.org)
 [![Version](https://img.shields.io/badge/version-v0.1.0-brightgreen.svg)](Cargo.toml)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/tkshnkgwr/vivivi)
+[![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/tkshnkgwr/vivivi)
 
 [English](./README.md) | [日本語](./README_JA.md)
 
@@ -96,12 +96,12 @@ graph TD
     Modes --> Core
 ```
 
-| Crate Name     | Responsibilities & Roles                                                   | Dependencies  |
-| :------------- | :------------------------------------------------------------------------- | :------------ |
-| `vivivi-core`  | GapBuffer, line manager, cursor, Undo/Redo, charset & newline detection    | None          |
-| `vivivi-vi`    | Vi state machine, command parser, registers, block editing, ex commands    | `vivivi-core` |
-| `vivivi-modes` | CSV/TSV mode, Unicode box drawing, outline parser, conversions, syntax     | `vivivi-core` |
-| `vivivi-app`   | Full-screen TUI (Ratatui + crossterm), window splitting, main loop         | All crates    |
+| Crate Name     | Responsibilities & Roles                                                | Dependencies  |
+| :------------- | :---------------------------------------------------------------------- | :------------ |
+| `vivivi-core`  | GapBuffer, line manager, cursor, Undo/Redo, charset & newline detection | None          |
+| `vivivi-vi`    | Vi state machine, command parser, registers, block editing, ex commands | `vivivi-core` |
+| `vivivi-modes` | CSV/TSV mode, Unicode box drawing, outline parser, conversions, syntax  | `vivivi-core` |
+| `vivivi-app`   | Full-screen TUI (Ratatui + crossterm), window splitting, main loop      | All crates    |
 
 ---
 

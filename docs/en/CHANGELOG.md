@@ -128,13 +128,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - Preserved original charset and newline sequence upon file save.
   - Interactive command-line UI for ex commands (`:w`, `:q`, `:wq`, `:align`, `:%s`).
   - Native hardware blinking cursor integration.
-  - Supported `--demo` console demo mode flag.
-- **Repository, Licensing & Infrastructure**:
-  - Placed LICENSE (MIT License) in repository root.
-  - Setup `.agents/` rules and skills, `GEMINI.md`, and `RULES.md`.
-  - Established bilingual documentation system (`docs/ja/`, `docs/en/`).
-  - Added built-in help system documentation (`doc/help/tools.md`, `doc/help/index.md`).
-  - Expanded unit and integration test suite (all 115 tests passing).
+  - **TUI/UX Editing & Visual Enhancements Integration (Phase 4.6)**:
+    - **Modified / Saved Line Gutter Indicators (Change Markers)**: Real-time gutter indicators beside line numbers showing unsaved modified lines (yellow `▌`) and saved lines (green `▌`) (`:set gutter` / `:set nogutter`).
+    - **Recent Files (MRU) & Favorite Files Modal**: Quick access to recent and pinned files (`F7` / `:recent` / `:mru`), instant buffer loading on `Enter`, bookmark toggling (`f`), and entry removal (`d`).
+    - **Invisible / Whitespace Character Visualization**: Toggle visible markers for full-width spaces (red highlighted `□`), tab indents (`▸---`), and end-of-line symbols (`$`) via `:set list` / `:set nolist`.
+    - **Integrated Tool Ex Commands**: Interactive dispatch for `:todo` / `:undone` (in-code ToDo extraction), `:diff` (pre-save unified diff), `:difflog` (revision history), `:filer` (2-pane directory browser), and `:preview` / `:print` (paginated print preview).
+  - **Built-in Documentation Expansion**:
+    - Created `doc/help/visual.md` covering visual and editing enhancements.
+    - Updated `doc/help/index.md` and ensured strict table column vertical alignment.
+  - Expanded unit and integration test suite (all 129 tests passing, 0 clippy warnings, fmt check passed).
 
 ### Changed / Refactored
 - **Code Modularization & Source Decomposition Refactoring**:

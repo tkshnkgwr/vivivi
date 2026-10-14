@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024%20Edition-orange.svg)](https://www.rust-lang.org)
 [![Version](https://img.shields.io/badge/version-v0.1.0-brightgreen.svg)](Cargo.toml)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/tkshnkgwr/vivivi)
+[![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/tkshnkgwr/vivivi)
 
 [English](./README.md) | [日本語](./README_JA.md)
 
@@ -95,12 +95,12 @@ graph TD
     Modes --> Core
 ```
 
-| クレート名     | 役割・責務                                                             | 依存クレート  |
-| :------------- | :--------------------------------------------------------------------- | :------------ |
-| `vivivi-core`  | テキストバッファ、行管理、カーソル、Undo/Redo、文字コード・改行判別    | なし          |
-| `vivivi-vi`    | Vi状態機械、コマンドパーサー、レジスタ、矩形編集、exコマンド           | `vivivi-core` |
+| クレート名     | 役割・責務                                                               | 依存クレート  |
+| :------------- | :----------------------------------------------------------------------- | :------------ |
+| `vivivi-core`  | テキストバッファ、行管理、カーソル、Undo/Redo、文字コード・改行判別      | なし          |
+| `vivivi-vi`    | Vi状態機械、コマンドパーサー、レジスタ、矩形編集、exコマンド             | `vivivi-core` |
 | `vivivi-modes` | CSV/TSVモード、Unicode罫線描画、アウトライン解析、文字変換、シンタックス | `vivivi-core` |
-| `vivivi-app`   | フルスクリーンTUI（Ratatui + crossterm）、画面分割、メインループ       | 全クレート    |
+| `vivivi-app`   | フルスクリーンTUI（Ratatui + crossterm）、画面分割、メインループ         | 全クレート    |
 
 ---
 

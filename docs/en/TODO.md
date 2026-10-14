@@ -190,10 +190,12 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - **Markdown Print Preview**: Modal paginated print preview with headers and footers.
 
 #### 4.6 TUI/UX Editing & Visual Enhancements (Phase 4.6)
-- [ ] **[OpenViVi] Modified / Saved Line Gutter Indicators (Change Markers)**
+- [x] **[OpenViVi] Modified / Saved Line Gutter Indicators (Change Markers)**
   - Visual gutter indicators and highlighting for unsaved modified lines (yellow) and saved lines (green) in TUI line number area.
-- [ ] **[OpenViVi] Recent Files & Favorite Files Management**
-  - Persistent tracking and quick access to recently edited and bookmarked documents via TUI modal dialog.
+- [x] **[OpenViVi] Recent Files & Favorite Files Management**
+  - Persistent tracking and quick access to recently edited and bookmarked documents via TUI modal dialog (`F7` / `:recent` / `:fav`).
+- [x] **[Gvim / Custom] Invisible / Whitespace Character Visualization (`:set list` / `listchars`)**
+  - Toggle visual markers for fullwidth spaces (`□`), tabs (`▸---`), and end-of-line symbols (`$`).
 
 ---
 
@@ -213,3 +215,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 - [ ] **[Original]** Gigabyte file (1GB+) handling via Piece Tree & Memory-Mapped Files (`memmap2`).
 - [ ] **[Original]** LSP (Language Server Protocol) client integration.
 - [ ] **[Original]** Multi-cursor editing.
+- [ ] **[Platform Expansion] macOS Support (Low priority)**
+  - Validate and ensure compatibility for terminal TUI keybindings and future GUI under macOS.
+- [ ] **[Platform Expansion] Linux Support (Low priority)**
+  - Validate and ensure compatibility for terminal TUI and future GUI under Linux (X11/Wayland).

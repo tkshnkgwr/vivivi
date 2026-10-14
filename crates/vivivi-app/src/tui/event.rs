@@ -156,6 +156,73 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
         return;
     }
 
+    // F7: 最近使ったファイル & お気に入りダイアログのトグル
+    if key.code == KeyCode::F(7) {
+        app.show_recent_modal = !app.show_recent_modal;
+        app.selected_recent_idx = 0;
+        return;
+    }
+
+    // 最近使ったファイル & お気に入りモーダル表示中のキーハンドリング
+    if app.show_recent_modal {
+        let mut all_entries = Vec::new();
+        for fav in &app.recent_manager.favorite_files {
+            all_entries.push(fav.clone());
+        }
+        for rec in &app.recent_manager.recent_files {
+            if !app.recent_manager.favorite_files.contains(rec) {
+                all_entries.push(rec.clone());
+            }
+        }
+        let total_count = all_entries.len();
+
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                app.show_recent_modal = false;
+                app.status_message = Some("履歴モーダルを閉じました".to_string());
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                app.selected_recent_idx = app.selected_recent_idx.saturating_sub(1);
+            }
+            KeyCode::Down | KeyCode::Char('j') if total_count > 0 => {
+                app.selected_recent_idx = (app.selected_recent_idx + 1).min(total_count - 1);
+            }
+            KeyCode::Enter if total_count > 0 => {
+                if let Some(target_path) = all_entries.get(app.selected_recent_idx).cloned() {
+                    app.show_recent_modal = false;
+                    if let Err(e) = app.open_file(target_path) {
+                        app.status_message = Some(format!("ファイル読込エラー: {e}"));
+                    }
+                }
+            }
+            KeyCode::Char('f') if total_count > 0 => {
+                if let Some(target_path) = all_entries.get(app.selected_recent_idx).cloned() {
+                    let is_fav = app.recent_manager.toggle_favorite(target_path.clone());
+                    let p = crate::tui::app::get_recent_file_path();
+                    let _ = app.recent_manager.save_to_file(&p);
+                    if is_fav {
+                        app.status_message = Some(format!("お気に入りに追加: {:?}", target_path));
+                    } else {
+                        app.status_message = Some(format!("お気に入りを解除: {:?}", target_path));
+                    }
+                }
+            }
+            KeyCode::Char('d') | KeyCode::Delete if total_count > 0 => {
+                if let Some(target_path) = all_entries.get(app.selected_recent_idx).cloned() {
+                    app.recent_manager.remove_recent(&target_path);
+                    if app.recent_manager.is_favorite(&target_path) {
+                        app.recent_manager.toggle_favorite(target_path.clone());
+                    }
+                    let p = crate::tui::app::get_recent_file_path();
+                    let _ = app.recent_manager.save_to_file(&p);
+                    app.status_message = Some(format!("履歴から削除: {:?}", target_path));
+                }
+            }
+            _ => {}
+        }
+        return;
+    }
+
     // クリップボード履歴ダイアログ表示中のキーハンドリング
     if app.show_clipboard_hist {
         let history_len = app.vi.registers().history().len();
@@ -719,6 +786,173 @@ fn execute_ex_command(app: &mut App, cmd: &str) {
         _ if trimmed.starts_with("help ") || trimmed.starts_with("h ") => {
             let topic = trimmed.split_whitespace().nth(1);
             app.open_help(topic);
+        }
+
+        // --- 最近使ったファイル & お気に入り (:recent, :mru, :fav, :favorite, :e) ---
+        "recent" | "mru" | "favs" => {
+            app.show_recent_modal = true;
+            app.selected_recent_idx = 0;
+            app.status_message = Some(
+                "最近使ったファイル (j/k:選択, Enter:開く, f:お気に入り, d:削除, Esc:閉じる)"
+                    .to_string(),
+            );
+        }
+        "fav" | "favorite" | "addfav" => {
+            app.toggle_favorite_current_file();
+        }
+        _ if trimmed.starts_with("e ") || trimmed.starts_with("edit ") => {
+            let path_str = trimmed
+                .strip_prefix("edit ")
+                .or_else(|| trimmed.strip_prefix("e "))
+                .unwrap_or(trimmed)
+                .trim();
+            if let Err(e) = app.open_file(std::path::PathBuf::from(path_str)) {
+                app.status_message = Some(format!("ファイル読込エラー: {e}"));
+            }
+        }
+
+        // --- 不可視文字可視化 (:set list / :set nolist / :list / :nolist) ---
+        "list" | "set list" => {
+            app.list_chars_config.enabled = true;
+            app.status_message =
+                Some("不可視文字表示 (全角スペース□ / タブ▸--- / 改行$): ON".to_string());
+        }
+        "nolist" | "set nolist" => {
+            app.list_chars_config.enabled = false;
+            app.status_message = Some("不可視文字表示: OFF".to_string());
+        }
+
+        // --- 変更行ガター強調 (:set gutter / :set nogutter / :gutter / :nogutter) ---
+        "gutter" | "set gutter" => {
+            app.change_tracker.enabled = true;
+            app.status_message =
+                Some("変更行ガター強調表示 (黄:未保存, 緑:保存済): ON".to_string());
+        }
+        "nogutter" | "set nogutter" => {
+            app.change_tracker.enabled = false;
+            app.status_message = Some("変更行ガター強調表示: OFF".to_string());
+        }
+
+        // --- ToDo抽出・一覧プレビュー (:todo, :undone) ---
+        "todo" | "undone" => {
+            let content = app.buffer.to_string();
+            let file_name = app.file_path.as_ref().and_then(|p| p.to_str());
+            let todos = vivivi_modes::scan_buffer_todos(&content, file_name);
+            if todos.is_empty() {
+                app.status_message =
+                    Some("バッファ内に ToDo タグは見つかりませんでした".to_string());
+            } else {
+                let mut lines = vec![
+                    format!("# バッファ内 ToDo 一覧 (全 {} 件)", todos.len()),
+                    "".to_string(),
+                ];
+                for t in &todos {
+                    lines.push(format!("* 行 {:>4} [{:?}]: {}", t.lineno, t.tag, t.message));
+                }
+                app.preview_lines = lines;
+                app.show_preview = true;
+                app.preview_scroll = 0;
+                app.status_message = Some(format!(
+                    "ToDo: {} 件を抽出しました (Escで閉じる)",
+                    todos.len()
+                ));
+            }
+        }
+
+        // --- 差分比較プレビュー (:diff) ---
+        "diff" => {
+            if let Some(ref path) = app.file_path {
+                if let Ok(orig) = std::fs::read_to_string(path) {
+                    let cur = app.buffer.to_string();
+                    let diff_text = vivivi_modes::create_unified_diff(
+                        &orig,
+                        &cur,
+                        &format!("a/{}", path.display()),
+                        &format!("b/{}", path.display()),
+                    );
+                    app.preview_lines = diff_text.lines().map(|s| s.to_string()).collect();
+                    app.show_preview = true;
+                    app.preview_scroll = 0;
+                    app.status_message = Some("保存前との差分を表示中 (Escで閉じる)".to_string());
+                } else {
+                    app.status_message = Some("ディスク上の元ファイルが読み込めません".to_string());
+                }
+            } else {
+                app.status_message = Some("ファイル名のないバッファはdiffできません".to_string());
+            }
+        }
+
+        // --- 差分ログ世代一覧 (:difflog) ---
+        "difflog" => {
+            if let Some(ref path) = app.file_path {
+                let log_res = vivivi_modes::DiffLog::load_from_file(path);
+                if let Ok(difflog) = log_res {
+                    let mut lines = vec![
+                        format!("# 差分ログ世代履歴 (全 {} 世代)", difflog.entries.len()),
+                        "".to_string(),
+                    ];
+                    for e in &difflog.entries {
+                        lines.push(format!(
+                            "* [世代 #{}] {} - {}",
+                            e.generation, e.timestamp, e.comment
+                        ));
+                    }
+                    app.preview_lines = lines;
+                    app.show_preview = true;
+                    app.preview_scroll = 0;
+                    app.status_message = Some(format!(
+                        "差分ログ: {} 世代 (Escで閉じる)",
+                        difflog.entries.len()
+                    ));
+                } else {
+                    app.status_message = Some("差分ログ (.difflog) が存在しません".to_string());
+                }
+            } else {
+                app.status_message =
+                    Some("ファイル名のないバッファはdifflogがありません".to_string());
+            }
+        }
+
+        // --- インラインファイラー (:filer, :explore) ---
+        "filer" | "explore" => {
+            let cur_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let filer = vivivi_modes::TwoPaneFiler::new(cur_dir);
+            let mut lines = vec![
+                format!(
+                    "# 2ペイン ファイラープレビュー (作業ディレクトリ: {})",
+                    filer.left.current_dir.display()
+                ),
+                "".to_string(),
+                "## ファイル一覧:".to_string(),
+            ];
+            for ent in &filer.left.entries {
+                let prefix = if ent.is_dir { "[DIR] " } else { "      " };
+                lines.push(format!("* {prefix}{}", ent.name));
+            }
+            app.preview_lines = lines;
+            app.show_preview = true;
+            app.preview_scroll = 0;
+            app.status_message = Some(format!(
+                "ファイラー: {} 件 (Escで閉じる)",
+                filer.left.entries.len()
+            ));
+        }
+
+        // --- 印刷プレビュー (:preview, :print) ---
+        "preview" | "print" => {
+            let content = app.buffer.to_string();
+            let file_name = app
+                .file_path
+                .as_ref()
+                .and_then(|p| p.to_str())
+                .unwrap_or("Untitled");
+            let settings = vivivi_modes::PrintSettings::default();
+            let pages = vivivi_modes::paginate_text(&content, file_name, "2026-10-14", &settings);
+            let preview_text = vivivi_modes::format_preview_text(&pages);
+            app.preview_lines = preview_text.lines().map(|s| s.to_string()).collect();
+            app.show_preview = true;
+            app.preview_scroll = 0;
+            app.status_message = Some("印刷プレビュー (Escで閉じる)".to_string());
         }
 
         _ => {
