@@ -5,7 +5,18 @@
 
 use crate::mode::ViMode;
 
-/// カーソル移動（モーション）の種類と移動量。
+/// カーソル移動（モーション）の種類と移動量を表す列挙体。
+///
+/// 単独の移動コマンドとして実行されるほか、オペレータ（[`Operator`]）の適用範囲としても利用されます。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_vi::Motion;
+///
+/// let m = Motion::Down(3);
+/// assert!(matches!(m, Motion::Down(3)));
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Motion {
     /// 左移動 (`h`, BackSpace)
@@ -56,7 +67,16 @@ pub enum Motion {
     RepeatFindChar { reverse: bool, count: usize },
 }
 
-/// オペレータ（操作種別）。
+/// オペレータ（削除、ヤンク、変更などの操作種別）。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_vi::Operator;
+///
+/// let op = Operator::Delete;
+/// assert_eq!(op, Operator::Delete);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operator {
     /// 削除 (`d`)
@@ -68,6 +88,15 @@ pub enum Operator {
 }
 
 /// 単語検索の一致条件種別。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_vi::WordSearchKind;
+///
+/// let kind = WordSearchKind::ExactWord;
+/// assert_eq!(kind, WordSearchKind::ExactWord);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WordSearchKind {
     /// 完全単語一致 (`*`, `#` / `\bword\b`)
@@ -80,7 +109,22 @@ pub enum WordSearchKind {
     Suffix,
 }
 
-/// パースされた Vi コマンド。
+/// パースされた Vi コマンドを表す列挙体。
+///
+/// モーション、オペレータ、モード遷移、検索、編集など、すべての Vi 操作を表現します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_vi::{Motion, Operator, ViCommand};
+///
+/// let cmd = ViCommand::Operate {
+///     op: Operator::Delete,
+///     motion: Motion::NextWord(1),
+///     register: None,
+/// };
+/// assert!(matches!(cmd, ViCommand::Operate { .. }));
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ViCommand {
     /// カーソル移動
@@ -193,6 +237,15 @@ pub enum ViCommand {
 }
 
 /// コード折り畳みのアクション種別。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_vi::command::FoldAction;
+///
+/// let act = FoldAction::Toggle;
+/// assert_eq!(act, FoldAction::Toggle);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FoldAction {
     /// カーソル行の折り畳みを閉じる (`zc`)

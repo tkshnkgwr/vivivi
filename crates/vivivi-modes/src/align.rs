@@ -7,13 +7,27 @@ use unicode_width::UnicodeWidthStr;
 
 /// 複数行のテキストを、指定された区切り文字列の位置で垂直に整列します。
 ///
-/// # 引数
-/// - `lines`: 整列対象の行スライス
-/// - `target`: 整列の基準とする区切り文字列（例: `"="`, `":"`, `","`, `"//"`）
+/// 各行内で最初に出現する `target` 文字列（`=` や `:` など）を基準とし、
+/// その手前（左辺）の表示幅（全角/半角を考慮）が揃うように空白を補填して整列します。
+/// `target` を含まない行は変更されずにそのまま保持されます。
 ///
-/// # 動作
-/// 各行内で最初に出現する `target` を探し、その手前（左辺）の表示文字幅を揃えるように
-/// スペースを補填して整列します。`target` を含まない行はそのまま維持されます。
+/// # Parameters
+/// - `lines`: 整列対象の行スライス。
+/// - `target`: 整列の基準とする区切り文字列（例: `"="`, `":"`, `","`, `"//"`）。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::align::align_lines;
+///
+/// let lines = vec![
+///     "let x = 1;",
+///     "let target_val = 100;",
+/// ];
+/// let aligned = align_lines(&lines, "=");
+/// assert_eq!(aligned[0], "let x          = 1;");
+/// assert_eq!(aligned[1], "let target_val = 100;");
+/// ```
 pub fn align_lines(lines: &[&str], target: &str) -> Vec<String> {
     if target.is_empty() || lines.is_empty() {
         return lines.iter().map(|s| s.to_string()).collect();

@@ -3,8 +3,22 @@
 //! 半角ASCII（英数字・記号・空白）入力時、対応する全角文字（全角英数・日本語括弧・句読点等）にも
 //! 自動的に透過マッチさせます。
 
-/// 与えられた検索対象文字 `target` と、バッファ内の文字 `candidate` が一致するかどうか判定します。
-/// `target` が半角文字の場合、対応する全角文字も一致とみなします。
+/// 与えられた検索文字 `target` と候補文字 `candidate` が一致するか判定します。
+///
+/// 半角文字が指定された場合、対応する全角文字（全角英数字、全角スペース、日本語括弧・句読点等）も
+/// 一致として判定します（OpenViVi の `fFtT.txt` 準拠）。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::fftt::char_matches_fftt;
+///
+/// assert!(char_matches_fftt('a', 'ａ'));
+/// assert!(char_matches_fftt('(', '（'));
+/// assert!(char_matches_fftt('(', '「'));
+/// assert!(char_matches_fftt(' ', '　'));
+/// assert!(!char_matches_fftt('a', 'b'));
+/// ```
 pub fn char_matches_fftt(target: char, candidate: char) -> bool {
     if target == candidate {
         return true;
@@ -44,10 +58,26 @@ pub fn char_matches_fftt(target: char, candidate: char) -> bool {
     }
 }
 
-/// 指定された行文字列において、カーソル位置 `col` から前方に向かって `target`（全角含む）を探します。
+/// 指定行内において、現在列 `col` から右（前方）に向かって `target`（全角含む）を探索します。
 ///
-/// - `till`: true の場合、見つかった文字の1文字手前（左隣）の位置を返します。
-/// - `count`: 何番目の一致を探すか（1-based）。
+/// # Parameters
+/// - `line`: 対象行文字列。
+/// - `col`: 探索起点のカラム位置（0-indexed）。
+/// - `target`: 検索する文字（半角指定時は全角もヒット）。
+/// - `till`: `true`（`t` コマンド）なら一致文字の1文字手前、`false`（`f` コマンド）なら一致文字そのものの位置を返します。
+/// - `count`: 何番目の一致を探すか（通常は 1）。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::fftt::find_char_forward;
+///
+/// let line = "hello (world)";
+/// // 'o' (col 4) から右の '(' を探す
+/// assert_eq!(find_char_forward(line, 4, '(', false, 1), Some(6));
+/// // 't' コマンド（1文字手前）
+/// assert_eq!(find_char_forward(line, 4, '(', true, 1), Some(5));
+/// ```
 pub fn find_char_forward(
     line: &str,
     col: usize,
@@ -73,10 +103,24 @@ pub fn find_char_forward(
     None
 }
 
-/// 指定された行文字列において、カーソル位置 `col` から後方に向かって `target`（全角含む）を探します。
+/// 指定行内において、現在列 `col` から左（後方）に向かって `target`（全角含む）を探索します。
 ///
-/// - `till`: true の場合、見つかった文字の1文字直後（右隣）の位置を返します。
-/// - `count`: 何番目の一致を探すか（1-based）。
+/// # Parameters
+/// - `line`: 対象行文字列。
+/// - `col`: 探索起点のカラム位置（0-indexed）。
+/// - `target`: 検索する文字（半角指定時は全角もヒット）。
+/// - `till`: `true`（`T` コマンド）なら一致文字の1文字直後、`false`（`F` コマンド）なら一致文字そのものの位置を返します。
+/// - `count`: 何番目の一致を探すか（通常は 1）。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::fftt::find_char_backward;
+///
+/// let line = "hello (world)";
+/// // ')' (col 12) から左の '(' を探す
+/// assert_eq!(find_char_backward(line, 12, '(', false, 1), Some(6));
+/// ```
 pub fn find_char_backward(
     line: &str,
     col: usize,

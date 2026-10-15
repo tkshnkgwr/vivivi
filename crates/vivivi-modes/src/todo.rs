@@ -9,20 +9,45 @@ use std::fs;
 use std::path::Path;
 use std::sync::LazyLock;
 
-/// ToDo タグの種類。
+/// 検出された ToDo タグのカテゴリ種別。
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::todo::TodoTag;
+///
+/// let tag = TodoTag::Todo;
+/// assert_eq!(tag.as_str(), "TODO");
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TodoTag {
+    /// 修正が必要な既知の不具合・クリティカルな問題
     Fixme,
+    /// バグ箇所のマーク
     Bug,
+    /// 今後実装・対応予定のタスク
     Todo,
+    /// 未完了・仕掛かり中の処理
     Undone,
+    /// 暫定的なハック・改善が望まれる実装
     Hack,
+    /// 要注意・警告・危険なコード
     Xxx,
+    /// 補足事項・留意事項のメモ
     Note,
+    /// その他のカスタムまたは未分類タグ
     Other,
 }
 
 impl TodoTag {
+    /// タグの標準表記文字列表現（大文字）を取得します。
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::todo::TodoTag;
+    ///
+    /// assert_eq!(TodoTag::Fixme.as_str(), "FIXME");
+    /// assert_eq!(TodoTag::Todo.as_str(), "TODO");
+    /// ```
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Fixme => "FIXME",
@@ -37,18 +62,35 @@ impl TodoTag {
     }
 }
 
-/// 抽出された ToDo アイテム。
+/// 抽出された単一の ToDo 項目。
+///
+/// ファイル名、出現行・列番号、タグの種類、およびコメントメッセージ本文を保持します。
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::todo::{TodoItem, TodoTag};
+///
+/// let item = TodoItem {
+///     file_path: Some("main.rs".to_string()),
+///     lineno: 10,
+///     col: 5,
+///     tag: TodoTag::Todo,
+///     message: "リファクタリング".to_string(),
+/// };
+/// assert_eq!(item.lineno, 10);
+/// assert_eq!(item.tag, TodoTag::Todo);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TodoItem {
     /// ファイルパス（単一バッファ解析時は None またはバッファ名）
     pub file_path: Option<String>,
-    /// 行番号（1-indexed）
+    /// 行番号（1-based）
     pub lineno: usize,
-    /// 列番号（1-indexed）
+    /// 列番号（1-based、タグの開始カラム）
     pub col: usize,
-    /// タグ種別
+    /// タグの種別
     pub tag: TodoTag,
-    /// 本文メッセージ
+    /// コメント本文メッセージ（コロンやハイフン直後のテキスト）
     pub message: String,
 }
 
@@ -57,7 +99,29 @@ static TODO_REGEX: LazyLock<Regex> = LazyLock::new(|| {
         .expect("regex compile")
 });
 
-/// 単一テキスト（バッファ内容）から ToDo アイテムを抽出します。
+/// 単一テキスト（エディタバッファ内容等）から ToDo アイテムを抽出します。
+///
+/// コメント行等に含まれる `TODO: ...`, `FIXME - ...` などのパターンを正規表現で走査し、
+/// 行番号・列番号・種別・メッセージ本文を収集して返します。
+///
+/// # 引数
+/// - `text`: 検索対象のテキスト文字列
+/// - `file_name`: 登録用ファイル名（オプション）
+///
+/// # 戻り値
+/// 抽出された [`TodoItem`] のベクタ
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::todo::{scan_buffer_todos, TodoTag};
+///
+/// let code = "// TODO: エラーハンドリングの追加\nlet x = 1;";
+/// let todos = scan_buffer_todos(code, Some("lib.rs"));
+/// assert_eq!(todos.len(), 1);
+/// assert_eq!(todos[0].tag, TodoTag::Todo);
+/// assert_eq!(todos[0].message, "エラーハンドリングの追加");
+/// assert_eq!(todos[0].lineno, 1);
+/// ```
 pub fn scan_buffer_todos(text: &str, file_name: Option<&str>) -> Vec<TodoItem> {
     let mut items = Vec::new();
 
@@ -98,7 +162,25 @@ pub fn scan_buffer_todos(text: &str, file_name: Option<&str>) -> Vec<TodoItem> {
     items
 }
 
-/// 指定ディレクトリ配下のソースファイルから ToDo アイテムを再帰走査して抽出します。
+/// 指定ディレクトリ配下のソースファイルを再帰走査し、全 ToDo アイテムを抽出します。
+///
+/// 隠しディレクトリ（`.` 始まり）、`target`、`node_modules`、`build` ディレクトリは自動的にスキップされます。
+/// `target_exts` に対象拡張子一覧（例: `&["rs", "toml"]`）を指定でき、空スライスの場合は全ファイルを対象とします。
+///
+/// # 引数
+/// - `dir`: 走査対象のルートディレクトリパス
+/// - `target_exts`: 対象とするファイル拡張子のスライス（空スライスの場合は全拡張子）
+///
+/// # 戻り値
+/// 抽出された全 [`TodoItem`] のベクタ
+///
+/// # Examples
+/// ```rust,no_run
+/// use vivivi_modes::todo::scan_dir_todos;
+///
+/// let todos = scan_dir_todos("src", &["rs"]);
+/// println!("見つかったTODO件数: {}", todos.len());
+/// ```
 pub fn scan_dir_todos<P: AsRef<Path>>(dir: P, target_exts: &[&str]) -> Vec<TodoItem> {
     let mut results = Vec::new();
     let dir = dir.as_ref();

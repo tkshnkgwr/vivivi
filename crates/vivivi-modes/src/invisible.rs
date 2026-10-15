@@ -3,7 +3,23 @@
 //! 全角スペース (U+3000)、半角スペース、タブ (\t)、行末記号 (EOL) を
 //! 視覚的に識別可能な記号に置換・フォーマットします。
 
-/// 不可視文字表示の設定
+/// 不可視文字表示の設定。
+///
+/// タブ、半角スペース、全角スペース（`\u{3000}`）、行末改行記号（EOL）の可視化記号を設定します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::invisible::ListCharsConfig;
+///
+/// let config = ListCharsConfig {
+///     enabled: true,
+///     space: '·',
+///     ..Default::default()
+/// };
+/// assert!(config.enabled);
+/// assert_eq!(config.space, '·');
+/// ```
 #[derive(Debug, Clone)]
 pub struct ListCharsConfig {
     /// 不可視文字表示が有効かどうか (:set list / :set nolist)
@@ -33,7 +49,20 @@ impl Default for ListCharsConfig {
     }
 }
 
-/// 不可視文字可視化後の1文字あたりの情報
+/// 不可視文字可視化後の1文字あたりの描画情報。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::invisible::InvisibleChar;
+///
+/// let ch = InvisibleChar {
+///     ch: '·',
+///     is_invisible: true,
+///     is_zenkaku_space: false,
+/// };
+/// assert!(ch.is_invisible);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvisibleChar {
     /// 表示する文字
@@ -44,7 +73,26 @@ pub struct InvisibleChar {
     pub is_zenkaku_space: bool,
 }
 
-/// 1行のテキストを不可視文字設定に従って変換します。
+/// 1行のテキストを不可視文字設定に従って変換し、描画用文字リストを生成します。
+///
+/// タブ文字の空白桁パディング展開や、全角スペース・末尾空白のハイライト用フラグ付与を行います。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::invisible::{format_line_invisibles, ListCharsConfig};
+///
+/// let config = ListCharsConfig {
+///     enabled: true,
+///     show_all_spaces: true,
+///     ..Default::default()
+/// };
+/// let formatted = format_line_invisibles(" a ", 4, &config);
+/// assert_eq!(formatted[0].ch, '·');
+/// assert!(formatted[0].is_invisible);
+/// assert_eq!(formatted[1].ch, 'a');
+/// assert!(!formatted[1].is_invisible);
+/// ```
 pub fn format_line_invisibles(
     line: &str,
     tab_width: usize,

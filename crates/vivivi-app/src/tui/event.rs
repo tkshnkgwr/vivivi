@@ -1,10 +1,37 @@
+//! キーイベント処理およびコマンドディスパッチモジュール。
+//!
+//! ターミナルから受信したキーストローク（[`KeyEvent`]）を解析し、
+//! 現在のモード（Viノーマル、挿入、ビジュアル、罫線、CSV、モーダルダイアログ）に応じた
+//! コマンド実行やバッファ編集へディスパッチします。
+
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use vivivi_modes::KeisenDirection;
 use vivivi_vi::ViMode;
 
 use super::app::App;
 
-/// キーイベントを処理し、App の状態やバッファを更新します。
+/// キーイベントを処理し、アプリケーション状態やテキストバッファを更新します。
+///
+/// Windows Terminal / Crossterm におけるキー解放（Release）イベントを自動無視して二重入力を防ぎ、
+/// キーボードマクロ記録中であればイベントをキューに記録した上で、モード別のディスパッチ処理を実行します。
+///
+/// # 引数
+/// - `app`: アプリケーション状態への可変参照
+/// - `key`: 受信したキーイベント
+///
+/// # Panics
+/// パニックは発生しません。不正なキー入力は無視されるかエラーメッセージとしてステータスラインに表示されます。
+///
+/// # Examples
+/// ```rust,ignore
+/// use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+/// use vivivi_app::tui::event::handle_key_event;
+/// use vivivi_app::tui::App;
+///
+/// let mut app = App::new("", None, Default::default(), Default::default());
+/// let key = KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE);
+/// handle_key_event(&mut app, key);
+/// ```
 pub fn handle_key_event(app: &mut App, key: KeyEvent) {
     // Windows Terminal / Crossterm におけるキー解放 (Release) イベントを無視し、二重入力を防止
     if key.kind == KeyEventKind::Release {
@@ -1259,7 +1286,23 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent) {
     }
 }
 
-/// 記録されたキーボードマクロを再生・実行します。
+/// 直近に記録されたキーボードマクロのキーストローク列を再生・実行します。
+///
+/// 再生中は一時的にマクロの二重記録を無効化し、記録されたイベントを順番に
+/// キーディスパッチャへ投入します。再生が完了した際、またはマクロが存在しない場合は
+/// ステータスラインにメッセージを表示します。
+///
+/// # 引数
+/// - `app`: アプリケーション状態への可変参照
+///
+/// # Examples
+/// ```rust,ignore
+/// use vivivi_app::tui::event::play_macro;
+/// use vivivi_app::tui::App;
+///
+/// let mut app = App::new("", None, Default::default(), Default::default());
+/// play_macro(&mut app);
+/// ```
 pub fn play_macro(app: &mut App) {
     if let Some(events) = app.last_macro_events.clone() {
         let count = events.len();

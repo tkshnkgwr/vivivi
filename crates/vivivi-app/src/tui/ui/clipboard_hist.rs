@@ -13,7 +13,14 @@ use ratatui::{
 
 use crate::tui::app::App;
 
-/// クリップボード履歴のポップアップを描画します。
+/// 過去のコピー・ヤンク履歴（[`vivivi_vi::ClipboardHistory`]）を中央ポップアップダイアログとして描画します。
+///
+/// 背景をクリアした上で枠線・タイトルを描画し、カーソル選択中の履歴アイテムをハイライト表示します。
+///
+/// # 引数
+/// - `frame`: Ratatui の描画フレーム
+/// - `app`: アプリケーション状態への参照
+/// - `area`: 親画面全体の描画領域
 pub fn render_clipboard_history(frame: &mut Frame, app: &App, area: Rect) {
     let popup_area = centered_rect(60, 60, area);
 

@@ -11,7 +11,16 @@ use ratatui::{
 use crate::tui::app::App;
 use vivivi_vi::ViMode;
 
-/// 最下行（ステータスバーまたはコマンドライン）の描画
+/// 画面最下行（ステータスライン、コマンドライン入力行、またはMigemo検索行）を描画します。
+///
+/// コマンドラインモード時は `:` プロンプトと入力中コマンド、Migemo検索時は `g/` プロンプトを表示します。
+/// 通常時は現在のViモード名（色分け表示）、マクロ記録中アイコン、ファイル名、エンコーディング、改行コード、
+/// シンタックス言語、カーソル座標、および進行率（%）を表示します。
+///
+/// # 引数
+/// - `frame`: Ratatui の描画フレーム
+/// - `app`: アプリケーション状態への参照
+/// - `area`: 描画領域の矩形（高さ1行）
 pub fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     if app.is_migemo_search {
         // Migemo ローマ字検索入力中の表示 (`g/nihon` 等)

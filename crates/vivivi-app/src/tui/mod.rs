@@ -15,10 +15,27 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-/// TUI の実行エントリポイント。
+/// ターミナル UI（TUI）アプリケーションを実行するメインエントリポイント。
 ///
-/// ターミナルを Raw モードおよび代替スクリーンに切り替え、
-/// メインイベントループを実行します。終了時には必ず画面を復元します。
+/// ターミナルを Raw モードおよび代替スクリーンバッファへ切り替え、
+/// 50ms の周期でイベントポーリングと画面再描画（Ratatui）を行うメインループを開始します。
+/// アプリケーション終了時、または万一のパニック発生時でも、確実にターミナル設定
+/// （カーソル形状、Raw モード無効化、スクリーン復帰）を元の状態にリストアします。
+///
+/// # 引数
+/// - `app`: 初期化された [`App`] インスタンス
+///
+/// # Errors
+/// ターミナルの Raw モード有効化、代替スクリーン切り替え、描画バックエンドの初期化、
+/// またはイベントポーリング中に I/O エラー等が発生した場合に [`anyhow::Error`] を返します。
+///
+/// # Examples
+/// ```rust,no_run
+/// use vivivi_app::tui::{run, App};
+///
+/// let app = App::new("Hello, world!", None, Default::default(), Default::default());
+/// // run(app).unwrap(); // ターミナル対話セッションを開始
+/// ```
 pub fn run(mut app: App) -> anyhow::Result<()> {
     // 1. パニック時でも確実にターミナルを復元するフックを設定
     let original_hook = std::panic::take_hook();

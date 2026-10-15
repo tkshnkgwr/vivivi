@@ -8,13 +8,31 @@ use crate::buffer::TextBuffer;
 /// 探索対象の括弧種別。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParenKind {
-    Round,  // ( )
-    Curly,  // { }
-    Square, // [ ]
-    Angle,  // < >
+    /// 丸括弧: `( )`
+    Round,
+    /// 波括弧: `{ }`
+    Curly,
+    /// 角括弧: `[ ]`
+    Square,
+    /// 山括弧: `< >`
+    Angle,
 }
 
-/// 指定文字が開き括弧か閉じ括弧かを判定し、その相方と探索方向を返します。
+/// 指定文字が括弧であるかを判定し、対となる相方文字と探索方向を返します。
+///
+/// 前方探索（開き括弧）の場合は `(相方, true)`、後方探索（閉じ括弧）の場合は `(相方, false)` を返します。
+/// 半角括弧だけでなく、日本語全角括弧（`「」`, `『』`, `【】` 等）にも対応しています。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::paren_pair;
+///
+/// assert_eq!(paren_pair('('), Some((')', true)));
+/// assert_eq!(paren_pair('}'), Some(('{', false)));
+/// assert_eq!(paren_pair('「'), Some(('」', true)));
+/// assert_eq!(paren_pair('a'), None);
+/// ```
 pub fn paren_pair(ch: char) -> Option<(char, bool)> {
     match ch {
         // 半角括弧
@@ -55,6 +73,23 @@ pub fn paren_pair(ch: char) -> Option<(char, bool)> {
 
 /// バッファ内の指定文字オフセット `pos` にある括弧に対して、
 /// 対になる対応括弧の文字オフセットを探索して返します。
+///
+/// 文字列リテラル（`"..."`, `'...'`）やコメント（`//`, `/* ... */`）内の括弧をスキップし、
+/// 正しいネスト深度の相方のみを検出します。
+///
+/// # Panics
+///
+/// パニックは発生しません。対応括弧が存在しない場合は `None` を返します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::{TextBuffer, find_matching_paren};
+///
+/// let buf = TextBuffer::from_text("fn test() { let x = 1; }");
+/// assert_eq!(find_matching_paren(&buf, 10), Some(23)); // '{' -> '}'
+/// assert_eq!(find_matching_paren(&buf, 7), Some(8));   // '(' -> ')'
+/// ```
 pub fn find_matching_paren(buffer: &TextBuffer, pos: usize) -> Option<usize> {
     let target_ch = buffer.char_at(pos)?;
     let (match_ch, forward) = paren_pair(target_ch)?;
@@ -183,6 +218,17 @@ pub fn find_matching_paren(buffer: &TextBuffer, pos: usize) -> Option<usize> {
 }
 
 /// カーソル位置（またはその直前）にある括弧とその対応括弧のペア `(pos, matching_pos)` を取得します。
+///
+/// エディタのリアルタイム括弧強調表示（カーソル周辺の括弧ペアのハイライト）に使用されます。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::{TextBuffer, get_cursor_matching_paren};
+///
+/// let buf = TextBuffer::from_text("(abc)");
+/// assert_eq!(get_cursor_matching_paren(&buf, 0), Some((0, 4)));
+/// ```
 pub fn get_cursor_matching_paren(buffer: &TextBuffer, cursor_pos: usize) -> Option<(usize, usize)> {
     let check_pos = |pos: usize| -> Option<(usize, usize)> {
         let ch = buffer.char_at(pos)?;
@@ -202,7 +248,19 @@ pub fn get_cursor_matching_paren(buffer: &TextBuffer, cursor_pos: usize) -> Opti
 }
 
 /// カレント行のカーソル位置から行末に向かって最初の括弧を探し、
-/// その対応括弧の文字オフセットを返します（Vim の `%` コマンド標準挙動）。
+/// その対応括弧の文字オフセットを返します。
+///
+/// Vim の `%` コマンド標準挙動（カーソル直下に括弧がない場合、行内の後続括弧へ自動ジャンプして探索）をサポートします。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::{CursorPosition, TextBuffer, find_matching_paren_in_line};
+///
+/// let buf = TextBuffer::from_text("println!(\"hello\");");
+/// let cursor = CursorPosition::new(0, 0); // 行頭から探索
+/// assert_eq!(find_matching_paren_in_line(&buf, cursor), Some(16)); // '(' の相方 ')'
+/// ```
 pub fn find_matching_paren_in_line(
     buffer: &TextBuffer,
     cursor: crate::cursor::CursorPosition,
@@ -222,66 +280,4 @@ pub fn find_matching_paren_in_line(
     }
 
     None
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_matching_paren_simple() {
-        let buffer = TextBuffer::from_text("fn test() { let x = (1 + 2); }");
-
-        // '(' at 7 -> ')' at 8
-        assert_eq!(find_matching_paren(&buffer, 7), Some(8));
-        assert_eq!(find_matching_paren(&buffer, 8), Some(7));
-
-        // '{' at 10 -> '}' at 29
-        assert_eq!(find_matching_paren(&buffer, 10), Some(29));
-        assert_eq!(find_matching_paren(&buffer, 29), Some(10));
-
-        // '(' at 20 -> ')' at 26
-        assert_eq!(find_matching_paren(&buffer, 20), Some(26));
-    }
-
-    #[test]
-    fn test_matching_paren_with_string_and_comments() {
-        let buffer =
-            TextBuffer::from_text("let a = ( \"quoted ( paren )\" + /* comment ( */ 10 );");
-        // '(' at 8 -> ')' at 50
-        assert_eq!(find_matching_paren(&buffer, 8), Some(50));
-        assert_eq!(find_matching_paren(&buffer, 50), Some(8));
-    }
-
-    #[test]
-    fn test_matching_paren_zenkaku() {
-        let buffer = TextBuffer::from_text("こんにちは「世界」と【Rust】");
-        // 「 at 5 -> 」 at 8
-        assert_eq!(find_matching_paren(&buffer, 5), Some(8));
-        assert_eq!(find_matching_paren(&buffer, 8), Some(5));
-
-        // 【 at 10 -> 】 at 15
-        assert_eq!(find_matching_paren(&buffer, 10), Some(15));
-        assert_eq!(find_matching_paren(&buffer, 15), Some(10));
-    }
-
-    #[test]
-    fn test_find_matching_paren_in_line() {
-        let buffer = TextBuffer::from_text("fn main() {\n    let msg = 「こんにちは」;\n}");
-
-        // 1行目: カーソルが 'f'(col 0) にあるとき、行内の最初の括弧 '(' (col 7) の対応 ')' (col 8) へ
-        let match1 = find_matching_paren_in_line(&buffer, crate::cursor::CursorPosition::new(0, 0));
-        assert_eq!(match1, Some(8));
-
-        // 2行目: カーソルがインデント空白(col 0) にあるとき、全角括弧 '「' (col 14) の対応 '」' (col 20) へ
-        let match2 = find_matching_paren_in_line(&buffer, crate::cursor::CursorPosition::new(1, 0));
-        // position of '」': line 0 has "fn main() {\n" (12 chars). line 1 has "    let msg = 「こんにちは」;\n".
-        // 「 is at 12 + 14 = 26. こんにちは is 5 chars. 」 is at 26 + 1 + 5 = 32.
-        assert_eq!(match2, Some(32));
-
-        // カーソルが '」' の上にあるとき、対応する '「' (pos 26) へ
-        let match3 =
-            find_matching_paren_in_line(&buffer, crate::cursor::CursorPosition::new(1, 20));
-        assert_eq!(match3, Some(26));
-    }
 }

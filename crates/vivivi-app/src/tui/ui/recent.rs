@@ -13,7 +13,14 @@ use ratatui::{
 
 use crate::tui::app::App;
 
-/// 最近使ったファイルとお気に入りのポップアップモーダルを描画します。
+/// 最近開いたファイル（MRU）およびお気に入りファイルの選択ダイアログを描画します。
+///
+/// お気に入りファイルには★マークを付与して先頭に配置し、最近使ったファイルを一覧表示します。
+///
+/// # 引数
+/// - `frame`: Ratatui の描画フレーム
+/// - `app`: アプリケーション状態への参照
+/// - `area`: 親画面全体の描画領域
 pub fn render_recent_modal(frame: &mut Frame, app: &App, area: Rect) {
     let popup_area = centered_rect(70, 70, area);
 

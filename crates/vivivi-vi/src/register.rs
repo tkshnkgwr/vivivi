@@ -5,7 +5,19 @@
 
 use std::collections::{HashMap, VecDeque};
 
-/// レジスタに格納されるテキストの指向性・形式。
+/// レジスタに格納されるテキストの形式・指向性。
+///
+/// 文字単位（インライン）、行単位（行末改行付き）、矩形ブロック選択の3形式をサポートします。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_vi::RegisterContent;
+///
+/// let c = RegisterContent::LineWise("hello\n".to_string());
+/// assert!(c.is_line_wise());
+/// assert_eq!(c.as_str(), "hello\n");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RegisterContent {
     /// 文字単位（インライン）のテキスト
@@ -17,7 +29,16 @@ pub enum RegisterContent {
 }
 
 impl RegisterContent {
-    /// 内容のプレーン文字列を返します。
+    /// 格納されているテキストの文字列スライスを取得します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::RegisterContent;
+    ///
+    /// let content = RegisterContent::CharacterWise("text".to_string());
+    /// assert_eq!(content.as_str(), "text");
+    /// ```
     pub fn as_str(&self) -> &str {
         match self {
             Self::CharacterWise(s) | Self::LineWise(s) => s.as_str(),
@@ -25,12 +46,32 @@ impl RegisterContent {
         }
     }
 
-    /// 行指向テキストかどうかを判定します。
+    /// 行指向（LineWise）テキストであるかを判定します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::RegisterContent;
+    ///
+    /// assert!(RegisterContent::LineWise("line\n".to_string()).is_line_wise());
+    /// assert!(!RegisterContent::CharacterWise("word".to_string()).is_line_wise());
+    /// ```
     pub fn is_line_wise(&self) -> bool {
         matches!(self, Self::LineWise(_))
     }
 
-    /// プレビュー用の一行サマリー文字列を返します。
+    /// UI表示・プレビュー用の 1 行要約文字列を生成します。
+    ///
+    /// 改行の手前までの文字列を抽出し、`max_len` を超える場合は末尾に `...` を付与します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::RegisterContent;
+    ///
+    /// let content = RegisterContent::LineWise("A very long line text for testing".to_string());
+    /// assert_eq!(content.preview_text(10), "A very lon...");
+    /// ```
     pub fn preview_text(&self, max_len: usize) -> String {
         let raw = match self {
             Self::CharacterWise(s) | Self::LineWise(s) => s.lines().next().unwrap_or(s),
@@ -45,7 +86,16 @@ impl RegisterContent {
         }
     }
 
-    /// 行数を返します。
+    /// 格納されているテキストの総行数を取得します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::RegisterContent;
+    ///
+    /// let content = RegisterContent::LineWise("Line1\nLine2\n".to_string());
+    /// assert_eq!(content.line_count(), 2);
+    /// ```
     pub fn line_count(&self) -> usize {
         match self {
             Self::CharacterWise(s) | Self::LineWise(s) => s.lines().count().max(1),
@@ -54,16 +104,30 @@ impl RegisterContent {
     }
 }
 
-/// クリップボード履歴の1アイテム。
+/// クリップボード履歴の1アイテムを表す構造体。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClipboardItem {
+    /// 一意な連番ID
     pub id: usize,
+    /// 格納されたレジスタコンテンツ
     pub content: RegisterContent,
+    /// 1行プレビュー要約文字列
     pub preview: String,
+    /// 行数
     pub line_count: usize,
 }
 
-/// クリップボード履歴マネージャ。
+/// ヤンク・削除されたテキスト履歴を管理するクリップボード履歴マネージャ。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_vi::{ClipboardHistory, RegisterContent};
+///
+/// let mut history = ClipboardHistory::new(10);
+/// history.push(RegisterContent::CharacterWise("item 1".to_string()));
+/// assert_eq!(history.len(), 1);
+/// ```
 #[derive(Debug, Clone)]
 pub struct ClipboardHistory {
     pub max_items: usize,
@@ -82,7 +146,17 @@ impl Default for ClipboardHistory {
 }
 
 impl ClipboardHistory {
-    /// 指定最大件数でクリップボード履歴を生成します。
+    /// 指定最大件数で空の [`ClipboardHistory`] を生成します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::ClipboardHistory;
+    ///
+    /// let history = ClipboardHistory::new(20);
+    /// assert_eq!(history.max_items, 20);
+    /// assert!(history.is_empty());
+    /// ```
     pub fn new(max_items: usize) -> Self {
         Self {
             max_items,
@@ -91,7 +165,20 @@ impl ClipboardHistory {
         }
     }
 
-    /// 新しい履歴アイテムを追加します。空文字列や直前と完全に同一の内容は重複排除します。
+    /// 新しい履歴アイテムを追加します。
+    ///
+    /// 空文字列や直前と完全に同一の内容は自動的に重複排除されます。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{ClipboardHistory, RegisterContent};
+    ///
+    /// let mut history = ClipboardHistory::new(10);
+    /// history.push(RegisterContent::CharacterWise("copied".to_string()));
+    /// history.push(RegisterContent::CharacterWise("copied".to_string())); // 重複スキップ
+    /// assert_eq!(history.len(), 1);
+    /// ```
     pub fn push(&mut self, content: RegisterContent) {
         let text = content.as_str().trim();
         if text.is_empty() {
@@ -119,33 +206,97 @@ impl ClipboardHistory {
         }
     }
 
-    /// 履歴アイテム一覧のスライスを返します（新しい順）。
+    /// 履歴アイテム一覧の参照を取得します（新しい順）。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::ClipboardHistory;
+    ///
+    /// let history = ClipboardHistory::new(5);
+    /// assert_eq!(history.items().len(), 0);
+    /// ```
     pub fn items(&self) -> &VecDeque<ClipboardItem> {
         &self.items
     }
 
-    /// インデックス指定でアイテムを取得します。
+    /// インデックス指定で履歴アイテムを取得します。
+    ///
+    /// # Panics
+    ///
+    /// パニックは発生しません。インデックスが範囲外の場合は `None` を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{ClipboardHistory, RegisterContent};
+    ///
+    /// let mut history = ClipboardHistory::new(5);
+    /// history.push(RegisterContent::CharacterWise("first".to_string()));
+    /// assert!(history.get(0).is_some());
+    /// assert!(history.get(10).is_none());
+    /// ```
     pub fn get(&self, index: usize) -> Option<&ClipboardItem> {
         self.items.get(index)
     }
 
-    /// 履歴件数を返します。
+    /// 保持している履歴件数を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::ClipboardHistory;
+    ///
+    /// let history = ClipboardHistory::new(5);
+    /// assert_eq!(history.len(), 0);
+    /// ```
     pub fn len(&self) -> usize {
         self.items.len()
     }
 
-    /// 履歴が空かどうかを返します。
+    /// 履歴が空かどうかを判定します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::ClipboardHistory;
+    ///
+    /// let history = ClipboardHistory::new(5);
+    /// assert!(history.is_empty());
+    /// ```
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
 
-    /// 履歴を全消去します。
+    /// 保持している履歴を全消去します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{ClipboardHistory, RegisterContent};
+    ///
+    /// let mut history = ClipboardHistory::new(5);
+    /// history.push(RegisterContent::CharacterWise("temp".to_string()));
+    /// history.clear();
+    /// assert!(history.is_empty());
+    /// ```
     pub fn clear(&mut self) {
         self.items.clear();
     }
 }
 
-/// レジスタマネージャ。
+/// Vi の全レジスタ（無名、名前付き、大文字アペンド）およびクリップボード履歴を統括するマネージャ。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_vi::{RegisterContent, RegisterMgr};
+///
+/// let mut mgr = RegisterMgr::new();
+/// mgr.set(Some('a'), RegisterContent::CharacterWise("yanked".to_string()));
+/// assert_eq!(mgr.get(Some('a')).unwrap().as_str(), "yanked");
+/// assert_eq!(mgr.get_unnamed().unwrap().as_str(), "yanked");
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct RegisterMgr {
     /// 無名レジスタ (デフォルトのコピー・削除先)
@@ -157,15 +308,37 @@ pub struct RegisterMgr {
 }
 
 impl RegisterMgr {
-    /// 新しい RegisterMgr を生成します。
+    /// 新しい空の [`RegisterMgr`] を生成します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::RegisterMgr;
+    ///
+    /// let mgr = RegisterMgr::new();
+    /// assert!(mgr.get_unnamed().is_none());
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// レジスタに内容を設定します。
+    /// 指定されたレジスタにテキスト内容を格納します。
     ///
-    /// レジスタ名が `None` または `Some('"')` の場合は無名レジスタに設定します。
-    /// 指定された名前がある場合は、無名レジスタと名前付きレジスタの両方に設定します（Viの標準動作）。
+    /// - レジスタ名が `None` の場合は無名レジスタに設定します。
+    /// - 小文字レジスタ（`'a'`〜`'z'`）は上書き保存されます。
+    /// - 大文字レジスタ（`'A'`〜`'Z'`）は対応する小文字レジスタの既存内容へ末尾追記（アペンド）されます。
+    /// - 格納された内容は、無名レジスタおよびクリップボード履歴にも自動同期されます。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{RegisterContent, RegisterMgr};
+    ///
+    /// let mut mgr = RegisterMgr::new();
+    /// mgr.set(Some('a'), RegisterContent::CharacterWise("Hello".to_string()));
+    /// mgr.set(Some('A'), RegisterContent::CharacterWise(" World".to_string()));
+    /// assert_eq!(mgr.get(Some('a')).unwrap().as_str(), "Hello World");
+    /// ```
     pub fn set(&mut self, reg_name: Option<char>, content: RegisterContent) {
         // 履歴に自動蓄積
         self.history.push(content.clone());
@@ -204,7 +377,17 @@ impl RegisterMgr {
         }
     }
 
-    /// クリップボード履歴の参照を取得します。
+    /// クリップボード履歴の不変参照を取得します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{RegisterContent, RegisterMgr};
+    ///
+    /// let mut mgr = RegisterMgr::new();
+    /// mgr.set(None, RegisterContent::CharacterWise("copy".to_string()));
+    /// assert_eq!(mgr.history().len(), 1);
+    /// ```
     pub fn history(&self) -> &ClipboardHistory {
         &self.history
     }
@@ -216,7 +399,22 @@ impl RegisterMgr {
 
     /// 指定されたレジスタの内容を取得します。
     ///
-    /// `reg_name` が `None` の場合は無名レジスタを返します。
+    /// `reg_name` が `None` の場合は無名レジスタの内容を返します。
+    ///
+    /// # Panics
+    ///
+    /// パニックは発生しません。未登録または存在しない場合は `None` を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{RegisterContent, RegisterMgr};
+    ///
+    /// let mut mgr = RegisterMgr::new();
+    /// mgr.set(Some('b'), RegisterContent::CharacterWise("data".to_string()));
+    /// assert_eq!(mgr.get(Some('b')).unwrap().as_str(), "data");
+    /// assert!(mgr.get(Some('z')).is_some()); // 未登録時は無名レジスタにフォールバック
+    /// ```
     pub fn get(&self, reg_name: Option<char>) -> Option<&RegisterContent> {
         match reg_name {
             Some(name) if name.is_ascii_alphabetic() => self
@@ -228,11 +426,31 @@ impl RegisterMgr {
     }
 
     /// 無名レジスタの内容を取得します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{RegisterContent, RegisterMgr};
+    ///
+    /// let mut mgr = RegisterMgr::new();
+    /// mgr.set_unnamed(RegisterContent::CharacterWise("unnamed".to_string()));
+    /// assert_eq!(mgr.get_unnamed().unwrap().as_str(), "unnamed");
+    /// ```
     pub fn get_unnamed(&self) -> Option<&RegisterContent> {
         self.unnamed.as_ref()
     }
 
     /// 無名レジスタに内容を設定します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{RegisterContent, RegisterMgr};
+    ///
+    /// let mut mgr = RegisterMgr::new();
+    /// mgr.set_unnamed(RegisterContent::CharacterWise("test".to_string()));
+    /// assert!(mgr.get_unnamed().is_some());
+    /// ```
     pub fn set_unnamed(&mut self, content: RegisterContent) {
         self.unnamed = Some(content);
     }
@@ -243,61 +461,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_register_basic_unnamed() {
+    fn test_internal_register_storage_and_limit() {
         let mut mgr = RegisterMgr::new();
-        assert!(mgr.get(None).is_none());
-
-        mgr.set(None, RegisterContent::CharacterWise("hello".to_string()));
-        let content = mgr.get(None).unwrap();
-        assert_eq!(content.as_str(), "hello");
-        assert!(!content.is_line_wise());
-    }
-
-    #[test]
-    fn test_named_register_and_unnamed_sync() {
-        let mut mgr = RegisterMgr::new();
-
-        // "a に設定すると、無名レジスタにも同期される
-        mgr.set(Some('a'), RegisterContent::LineWise("line1\n".to_string()));
-        assert_eq!(mgr.get(Some('a')).unwrap().as_str(), "line1\n");
-        assert_eq!(mgr.get(None).unwrap().as_str(), "line1\n");
-
-        // "b に別内容を設定
-        mgr.set(
-            Some('b'),
-            RegisterContent::CharacterWise("word".to_string()),
-        );
-        assert_eq!(mgr.get(Some('b')).unwrap().as_str(), "word");
-        // "a は維持される
-        assert_eq!(mgr.get(Some('a')).unwrap().as_str(), "line1\n");
-    }
-
-    #[test]
-    fn test_uppercase_register_append() {
-        let mut mgr = RegisterMgr::new();
-        mgr.set(Some('a'), RegisterContent::CharacterWise("foo".to_string()));
-
-        // 大文字 "A でアペンド
-        mgr.set(Some('A'), RegisterContent::CharacterWise("bar".to_string()));
-        assert_eq!(mgr.get(Some('a')).unwrap().as_str(), "foobar");
-    }
-
-    #[test]
-    fn test_clipboard_history() {
-        let mut mgr = RegisterMgr::new();
-        mgr.set(None, RegisterContent::CharacterWise("first".to_string()));
-        mgr.set(
-            Some('a'),
-            RegisterContent::CharacterWise("second".to_string()),
-        );
-        // 同一内容の連続は重複排除される
-        mgr.set(None, RegisterContent::CharacterWise("second".to_string()));
-        mgr.set(None, RegisterContent::CharacterWise("third".to_string()));
-
-        let history = mgr.history();
-        assert_eq!(history.len(), 3);
-        assert_eq!(history.get(0).unwrap().content.as_str(), "third");
-        assert_eq!(history.get(1).unwrap().content.as_str(), "second");
-        assert_eq!(history.get(2).unwrap().content.as_str(), "first");
+        // 60 回異なる内容をセットして内部履歴上限 (50) を直接検証
+        for i in 0..60 {
+            mgr.set(None, RegisterContent::CharacterWise(format!("item_{i}")));
+        }
+        assert_eq!(mgr.history.items.len(), 50);
+        assert_eq!(mgr.history.items[0].content.as_str(), "item_59");
     }
 }

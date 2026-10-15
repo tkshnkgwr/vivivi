@@ -6,21 +6,41 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-/// 行の変更状態
+/// 行の変更状態（未変更・追加・未保存変更・保存済み変更）。
+///
+/// エディタの行番号左側（ガター部）に表示するマーカーの色分けに用いられます。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::gutter::LineChangeState;
+///
+/// let state = LineChangeState::Modified;
+/// assert_eq!(state.symbol(), "▌");
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineChangeState {
-    /// 変更なし
+    /// 変更なし（ファイル読み込み時から一致）
     Unchanged,
     /// 新規追加された行（未保存）
     Added,
     /// 変更された行（未保存）
     Modified,
-    /// 今回のセッションで変更され、保存済みの行
+    /// 今回のセッションで変更され、ディスクに保存済みの行
     SavedModified,
 }
 
 impl LineChangeState {
-    /// ガターに表示するシンボル文字
+    /// ガターに描画するシンボル文字列（`"▌"` または空白）を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::gutter::LineChangeState;
+    ///
+    /// assert_eq!(LineChangeState::Unchanged.symbol(), " ");
+    /// assert_eq!(LineChangeState::Added.symbol(), "▌");
+    /// ```
     pub fn symbol(self) -> &'static str {
         match self {
             LineChangeState::Unchanged => " ",
@@ -31,7 +51,24 @@ impl LineChangeState {
     }
 }
 
-/// 変更行追跡マネージャー
+/// 変更行追跡マネージャー。
+///
+/// ファイルの初期状態（ロード時）と直近保存時の各行ハッシュを保持し、
+/// バッファの各行について未保存の追加/変更か、保存済みの変更かを高速に判定します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::gutter::{ChangeTracker, LineChangeState};
+///
+/// let initial = vec!["line 1".to_string(), "line 2".to_string()];
+/// let mut tracker = ChangeTracker::new(&initial);
+///
+/// let modified = vec!["line 1".to_string(), "line 2 modified".to_string()];
+/// let markers = tracker.compute_markers(&modified);
+/// assert_eq!(markers[0], LineChangeState::Unchanged);
+/// assert_eq!(markers[1], LineChangeState::Modified);
+/// ```
 #[derive(Debug, Clone)]
 pub struct ChangeTracker {
     /// ファイル初回読み込み時の各行ハッシュ
@@ -44,6 +81,15 @@ pub struct ChangeTracker {
 
 impl ChangeTracker {
     /// 初期行リストから追跡マネージャーを生成します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::gutter::ChangeTracker;
+    ///
+    /// let tracker = ChangeTracker::new(&["hello".to_string()]);
+    /// assert!(tracker.enabled);
+    /// ```
     pub fn new(initial_lines: &[String]) -> Self {
         let hashes: Vec<u64> = initial_lines.iter().map(|l| hash_line(l)).collect();
         Self {
@@ -53,7 +99,16 @@ impl ChangeTracker {
         }
     }
 
-    /// 空のバッファから初期化します。
+    /// 空のバッファから追跡マネージャーを生成します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::gutter::ChangeTracker;
+    ///
+    /// let tracker = ChangeTracker::empty();
+    /// assert!(tracker.enabled);
+    /// ```
     pub fn empty() -> Self {
         Self {
             original_hashes: Vec::new(),
@@ -62,12 +117,36 @@ impl ChangeTracker {
         }
     }
 
-    /// ファイル保存時に呼び出し、保存済み状態を更新します。
+    /// ファイル保存時に呼び出し、直近保存済み状態のハッシュを更新します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::gutter::{ChangeTracker, LineChangeState};
+    ///
+    /// let lines = vec!["line 1".to_string()];
+    /// let mut tracker = ChangeTracker::new(&lines);
+    /// let new_lines = vec!["line 1 changed".to_string()];
+    /// tracker.on_save(&new_lines);
+    /// let markers = tracker.compute_markers(&new_lines);
+    /// assert_eq!(markers[0], LineChangeState::SavedModified);
+    /// ```
     pub fn on_save(&mut self, current_lines: &[String]) {
         self.saved_hashes = current_lines.iter().map(|l| hash_line(l)).collect();
     }
 
-    /// 各行の変更状態リストを算出します。
+    /// 現在の行リストに対する各行の変更状態（[`LineChangeState`]）を算出します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::gutter::{ChangeTracker, LineChangeState};
+    ///
+    /// let tracker = ChangeTracker::new(&["a".to_string()]);
+    /// let markers = tracker.compute_markers(&["a".to_string(), "b".to_string()]);
+    /// assert_eq!(markers[0], LineChangeState::Unchanged);
+    /// assert_eq!(markers[1], LineChangeState::Added);
+    /// ```
     pub fn compute_markers(&self, current_lines: &[String]) -> Vec<LineChangeState> {
         if !self.enabled || current_lines.is_empty() {
             return vec![LineChangeState::Unchanged; current_lines.len()];

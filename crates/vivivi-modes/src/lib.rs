@@ -1,4 +1,17 @@
-//! vivivi-modes: Advanced editing modes such as Inline CSV/TSV mode and Box Drawing (Keisen) mode.
+//! vivivi-modes: 罫線描画、インラインCSV/TSV、Diff、アウトライン等の高度編集モード群。
+//!
+//! 日本語全角文字を考慮した罫線モード（[`keisen`]）、高速アライメント（[`align`]）、
+//! 矩形計算（[`calc`]）、文字種変換（[`conv`]）、Migemo 検索（[`migemo`]）など、
+//! ViVi の高度な拡張編集機能を純粋な Rust ロジック（UI非依存）で提供します。
+//!
+//! # Examples
+//!
+//! ```
+//! use vivivi_modes::conv::{ConversionType, convert_text};
+//!
+//! let converted = convert_text("あいうえお", ConversionType::ToKatakana);
+//! assert_eq!(converted, "アイウエオ");
+//! ```
 
 pub mod abbrev;
 pub mod align;

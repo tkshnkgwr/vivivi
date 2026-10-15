@@ -4,9 +4,21 @@
 //! キーボード入力やバックスペース等の連続した局所的編集を $O(1)$（償却）で高速処理する
 //! テキストエディタ専用の古典的かつ強力なデータ構造です。
 
-/// ギャップバッファ構造体。
+/// 局所的な挿入・削除を高速に行うジェネリックなギャップバッファ。
 ///
-/// 内部の物理配列の中間に `gap_start` から `gap_len` 長の空き領域（ギャップ）を保持します。
+/// 物理配列の中間に「ギャップ（空き領域）」を維持し、カーソル周辺での連続した文字入力や削除を
+/// $O(1)$（償却）で処理するテキストエディタ向けのコレクションです。
+/// 要素型 `T` には `Default + Clone` を要求します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::GapBuffer;
+///
+/// let mut buf = GapBuffer::from_text("Hello");
+/// buf.insert(5, '!');
+/// assert_eq!(buf.to_string(), "Hello!");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GapBuffer<T> {
     /// 物理メモリ配列（データ前半部 + ギャップ + データ後半部）
@@ -24,12 +36,32 @@ impl<T: Default + Clone> Default for GapBuffer<T> {
 }
 
 impl<T: Default + Clone> GapBuffer<T> {
-    /// デフォルト容量で空の新しい `GapBuffer` を生成します。
+    /// デフォルトのギャップ容量（32要素）で空の新しい [`GapBuffer`] を生成します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let buf: GapBuffer<char> = GapBuffer::new();
+    /// assert!(buf.is_empty());
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// 指定した初期ギャップ容量を持つ新しい `GapBuffer` を生成します。
+    /// 指定した初期ギャップ容量を持つ新しい [`GapBuffer`] を生成します。
+    ///
+    /// 最低でも 8 要素分の容量が自動的に確保されます。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let buf: GapBuffer<char> = GapBuffer::with_capacity(64);
+    /// assert_eq!(buf.capacity(), 64);
+    /// ```
     pub fn with_capacity(capacity: usize) -> Self {
         let cap = capacity.max(8);
         Self {
@@ -39,27 +71,79 @@ impl<T: Default + Clone> GapBuffer<T> {
         }
     }
 
-    /// バッファに格納されている有効要素数（ギャップを除く）を返します。
+    /// バッファ内に格納されている有効な要素数を返します。
+    ///
+    /// 物理配列長からギャップの長さを差し引いた論理要素数です。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let buf = GapBuffer::from_text("abc");
+    /// assert_eq!(buf.len(), 3);
+    /// ```
     pub fn len(&self) -> usize {
         self.data.len() - self.gap_len
     }
 
-    /// バッファが空かどうかを判定します。
+    /// バッファに有効な要素が存在しないかどうかを判定します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let buf: GapBuffer<char> = GapBuffer::new();
+    /// assert!(buf.is_empty());
+    /// ```
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    /// 物理メモリ配列の総容量（データ要素数 + ギャップサイズ）を返します。
+    /// 物理メモリ配列の総容量（有効データ数 + ギャップ空き容量）を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let buf: GapBuffer<char> = GapBuffer::with_capacity(16);
+    /// assert_eq!(buf.capacity(), 16);
+    /// ```
     pub fn capacity(&self) -> usize {
         self.data.len()
     }
 
-    /// ギャップの現在の開始位置インデックスを返します。
+    /// ギャップの現在の開始論理インデックスを返します。
+    ///
+    /// 要素の挿入や削除が直ちに行われるカーソル位置に相当します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let mut buf = GapBuffer::from_text("hello");
+    /// buf.move_gap(2);
+    /// assert_eq!(buf.gap_start(), 2);
+    /// ```
     pub fn gap_start(&self) -> usize {
         self.gap_start
     }
 
-    /// ギャップの現在の空き要素数を返します。
+    /// ギャップが現在保持している空き要素数を返します。
+    ///
+    /// この容量を超える挿入が行われると、自動的にメモリ拡張（再アロケーション）が発生します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let buf: GapBuffer<char> = GapBuffer::with_capacity(32);
+    /// assert_eq!(buf.gap_len(), 32);
+    /// ```
     pub fn gap_len(&self) -> usize {
         self.gap_len
     }
@@ -75,6 +159,19 @@ impl<T: Default + Clone> GapBuffer<T> {
     }
 
     /// ギャップを指定した論理インデックス `index` へ移動させます。
+    ///
+    /// 移動区間に存在する要素を物理配列内でシフトします。
+    /// `index` が有効要素数を超える場合は自動的に末尾（`len()`）にクランプされます。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let mut buf = GapBuffer::from_text("Hello");
+    /// buf.move_gap(2);
+    /// assert_eq!(buf.gap_start(), 2);
+    /// ```
     pub fn move_gap(&mut self, index: usize) {
         let index = index.min(self.len());
         if index == self.gap_start {
@@ -103,6 +200,18 @@ impl<T: Default + Clone> GapBuffer<T> {
     }
 
     /// ギャップの空き容量が少なくとも `required` 要素分あることを保証（必要に応じて自動拡張）します。
+    ///
+    /// 空き容量が不足している場合、メモリを拡張してギャップ後方の要素を末尾側へ退避させます。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let mut buf: GapBuffer<char> = GapBuffer::with_capacity(8);
+    /// buf.reserve_gap(16);
+    /// assert!(buf.gap_len() >= 16);
+    /// ```
     pub fn reserve_gap(&mut self, required: usize) {
         if self.gap_len >= required {
             return;
@@ -127,6 +236,22 @@ impl<T: Default + Clone> GapBuffer<T> {
     }
 
     /// 論理インデックス `index` にある要素の不変参照を取得します。
+    ///
+    /// ギャップの空き領域を透過的にスキップして物理インデックスを参照します。
+    ///
+    /// # Panics
+    ///
+    /// パニックは発生しません。`index` が範囲外の場合は `None` を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let buf = GapBuffer::from_text("Rust");
+    /// assert_eq!(buf.get(1), Some(&'u'));
+    /// assert_eq!(buf.get(10), None);
+    /// ```
     pub fn get(&self, index: usize) -> Option<&T> {
         if index < self.len() {
             Some(&self.data[self.to_physical_index(index)])
@@ -136,6 +261,24 @@ impl<T: Default + Clone> GapBuffer<T> {
     }
 
     /// 論理インデックス `index` にある要素の可変参照を取得します。
+    ///
+    /// ギャップの空き領域を透過的にスキップして物理インデックスを参照します。
+    ///
+    /// # Panics
+    ///
+    /// パニックは発生しません。`index` が範囲外の場合は `None` を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let mut buf = GapBuffer::from_text("Rust");
+    /// if let Some(ch) = buf.get_mut(0) {
+    ///     *ch = 'D';
+    /// }
+    /// assert_eq!(buf.to_string(), "Dust");
+    /// ```
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         if index < self.len() {
             let phys = self.to_physical_index(index);
@@ -145,7 +288,20 @@ impl<T: Default + Clone> GapBuffer<T> {
         }
     }
 
-    /// 論理インデックス `index` に単一要素を挿入します。
+    /// 指定した論理インデックス `index` に単一要素を挿入します。
+    ///
+    /// ギャップを `index` へ移動させ、必要に応じて容量を自動拡張した上で要素を格納します。
+    /// `index` が有効要素数を超える場合は末尾に挿入されます。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let mut buf = GapBuffer::from_text("ac");
+    /// buf.insert(1, 'b');
+    /// assert_eq!(buf.to_string(), "abc");
+    /// ```
     pub fn insert(&mut self, index: usize, val: T) {
         self.move_gap(index);
         self.reserve_gap(1);
@@ -155,7 +311,20 @@ impl<T: Default + Clone> GapBuffer<T> {
         self.gap_len -= 1;
     }
 
-    /// 論理インデックス `index` に要素のスライスを一括挿入します。
+    /// 指定した論理インデックス `index` に要素のスライスを一括挿入します。
+    ///
+    /// ギャップの移動とメモリ拡張を1回で済ませるため、単一挿入を繰り返すより高速です。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let mut buf = GapBuffer::from_text("Hello!");
+    /// let slice: Vec<char> = " World".chars().collect();
+    /// buf.insert_slice(5, &slice);
+    /// assert_eq!(buf.to_string(), "Hello World!");
+    /// ```
     pub fn insert_slice(&mut self, index: usize, slice: &[T]) {
         if slice.is_empty() {
             return;
@@ -171,6 +340,23 @@ impl<T: Default + Clone> GapBuffer<T> {
     }
 
     /// 論理インデックス `index` の要素を削除して返します。
+    ///
+    /// ギャップを `index` へ移動し、要素を取り出した上でギャップの長さを 1 増加させます。
+    ///
+    /// # Panics
+    ///
+    /// パニックは発生しません。`index` が範囲外の場合は `None` を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let mut buf = GapBuffer::from_text("abc");
+    /// assert_eq!(buf.remove(1), Some('b'));
+    /// assert_eq!(buf.to_string(), "ac");
+    /// assert_eq!(buf.remove(5), None);
+    /// ```
     pub fn remove(&mut self, index: usize) -> Option<T> {
         if index >= self.len() {
             return None;
@@ -182,6 +368,19 @@ impl<T: Default + Clone> GapBuffer<T> {
     }
 
     /// 範囲 `[start, end)` の要素を一括削除します。
+    ///
+    /// `start` または `end` が `len()` を超える場合は自動的にクランプされます。
+    /// `start >= end` の場合は何も行いません。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let mut buf = GapBuffer::from_text("Hello, World!");
+    /// buf.remove_range(5, 12);
+    /// assert_eq!(buf.to_string(), "Hello!");
+    /// ```
     pub fn remove_range(&mut self, start: usize, end: usize) {
         let start = start.min(self.len());
         let end = end.min(self.len());
@@ -198,6 +397,19 @@ impl<T: Default + Clone> GapBuffer<T> {
     }
 
     /// バッファ内のすべての要素をクリアします。
+    ///
+    /// 物理メモリ配列の領域は解放せず、全領域を空きギャップとして初期化します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let mut buf = GapBuffer::from_text("Rust");
+    /// buf.clear();
+    /// assert!(buf.is_empty());
+    /// assert_eq!(buf.len(), 0);
+    /// ```
     pub fn clear(&mut self) {
         let cap = self.data.len();
         self.data.fill_with(T::default);
@@ -205,7 +417,17 @@ impl<T: Default + Clone> GapBuffer<T> {
         self.gap_len = cap;
     }
 
-    /// バッファ内のすべての要素をイテレータとして返します。
+    /// バッファ内のすべての要素を先頭から順に走査するイテレータを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let buf = GapBuffer::from_text("Vi");
+    /// let s: String = buf.iter().collect();
+    /// assert_eq!(s, "Vi");
+    /// ```
     pub fn iter(&self) -> GapBufferIter<'_, T> {
         GapBufferIter {
             buffer: self,
@@ -214,6 +436,7 @@ impl<T: Default + Clone> GapBuffer<T> {
     }
 }
 
+/// [`GapBuffer`] の全要素を順次参照するためのイテレータ構造体。
 pub struct GapBufferIter<'a, T> {
     buffer: &'a GapBuffer<T>,
     index: usize,
@@ -239,7 +462,19 @@ impl std::fmt::Display for GapBuffer<char> {
 }
 
 impl GapBuffer<char> {
-    /// 文字列スライスから文字単位の GapBuffer を生成するヘルパーです。
+    /// 文字列スライスから文字単位の [`GapBuffer`] を生成します。
+    ///
+    /// 文字列の文字数に加え、初期編集用の空き容量（32文字分）があらかじめ確保されます。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::GapBuffer;
+    ///
+    /// let buf = GapBuffer::from_text("Hello ViVi");
+    /// assert_eq!(buf.len(), 10);
+    /// assert_eq!(buf.to_string(), "Hello ViVi");
+    /// ```
     pub fn from_text(s: &str) -> Self {
         let chars: Vec<char> = s.chars().collect();
         let mut buf = Self::with_capacity(chars.len() + 32);
@@ -253,43 +488,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_gap_buffer_basic() {
+    fn test_internal_gap_position_and_movement() {
         let mut gb: GapBuffer<char> = GapBuffer::new();
-        assert!(gb.is_empty());
-        assert_eq!(gb.len(), 0);
+        // 初期状態のギャップ位置と長さ
+        assert_eq!(gb.gap_start, 0);
+        let initial_gap_len = gb.gap_len;
+        assert!(initial_gap_len > 0);
 
         gb.insert(0, 'a');
         gb.insert(1, 'b');
-        gb.insert(2, 'd');
-        assert_eq!(gb.to_string(), "abd");
+        // 'a', 'b' を挿入後、gap_start は 2 に進む
+        assert_eq!(gb.gap_start, 2);
+        assert_eq!(gb.gap_len, initial_gap_len - 2);
 
-        gb.insert(2, 'c');
-        assert_eq!(gb.to_string(), "abcd");
+        // ギャップを先頭 (0) へ移動
+        gb.move_gap(0);
+        assert_eq!(gb.gap_start, 0);
 
-        let removed = gb.remove(1);
-        assert_eq!(removed, Some('b'));
-        assert_eq!(gb.to_string(), "acd");
-
-        gb.remove_range(1, 3);
-        assert_eq!(gb.to_string(), "a");
-    }
-
-    #[test]
-    fn test_gap_buffer_slice_insertion_and_growth() {
-        let mut gb = GapBuffer::from_text("Hello World!");
-        assert_eq!(gb.to_string(), "Hello World!");
-
-        let insert_text: Vec<char> = " beautiful".chars().collect();
-        gb.insert_slice(5, &insert_text);
-        assert_eq!(gb.to_string(), "Hello beautiful World!");
-
-        // ギャップを先頭へ移動して挿入
-        gb.insert(0, '>');
-        assert_eq!(gb.to_string(), ">Hello beautiful World!");
-
-        // ギャップを末尾へ移動して挿入
-        let end = gb.len();
-        gb.insert(end, '<');
-        assert_eq!(gb.to_string(), ">Hello beautiful World!<");
+        // ギャップを末尾 (2) へ移動
+        gb.move_gap(2);
+        assert_eq!(gb.gap_start, 2);
     }
 }

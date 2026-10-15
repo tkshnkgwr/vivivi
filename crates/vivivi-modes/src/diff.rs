@@ -4,45 +4,107 @@
 //! 2つのテキスト間の差分抽出、Unified Diff 生成・適用、
 //! および Side-by-Side 比較用データ構造を提供します。
 
-/// 差分の種類。
+/// 差分の種類（一致・追加・削除）。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::diff::DiffType;
+///
+/// assert_eq!(DiffType::Equal, DiffType::Equal);
+/// assert_ne!(DiffType::Insert, DiffType::Delete);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiffType {
+    /// 変更なし（新旧両方に存在）
     Equal,
+    /// 新規追加行（新テキストのみに存在）
     Insert,
+    /// 削除行（旧テキストのみに存在）
     Delete,
 }
 
 /// 差分行データ。
+///
+/// 新旧テキストにおける行番号情報と変更種別、行テキストを保持します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::diff::{DiffLine, DiffType};
+///
+/// let line = DiffLine {
+///     diff_type: DiffType::Insert,
+///     old_lineno: None,
+///     new_lineno: Some(1),
+///     text: "let a = 10;".to_string(),
+/// };
+/// assert_eq!(line.diff_type, DiffType::Insert);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiffLine {
+    /// 差分の種類
     pub diff_type: DiffType,
+    /// 旧テキストにおける行番号（1-indexed。追加行の場合は `None`）
     pub old_lineno: Option<usize>,
+    /// 新テキストにおける行番号（1-indexed。削除行の場合は `None`）
     pub new_lineno: Option<usize>,
+    /// 行文字列
     pub text: String,
 }
 
 /// Unified Diff のハンク（変更ブロック）。
+///
+/// `@@ -old_start,old_len +new_start,new_len @@` に対応する差分単位です。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiffHunk {
+    /// 旧テキストでの開始行
     pub old_start: usize,
+    /// 旧テキストでの行数
     pub old_len: usize,
+    /// 新テキストでの開始行
     pub new_start: usize,
+    /// 新テキストでの行数
     pub new_len: usize,
+    /// ハンクに含まれる差分行リスト
     pub lines: Vec<DiffLine>,
 }
 
 /// 左右2画面比較（Side-by-Side DIFF）の1行。
+///
+/// 左右画面で同期してスクロール・表示するための構造体です。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SideBySideLine {
+    /// 左ペイン（旧テキスト）の行番号
     pub left_lineno: Option<usize>,
+    /// 左ペインの行文字列
     pub left_text: Option<String>,
+    /// 左ペインの差分種別
     pub left_type: DiffType,
+    /// 右ペイン（新テキスト）の行番号
     pub right_lineno: Option<usize>,
+    /// 右ペインの行文字列
     pub right_text: Option<String>,
+    /// 右ペインの差分種別
     pub right_type: DiffType,
 }
 
-/// 2つの行スライスから LCS（最長共通部分列）テーブルを計算し、差分行リストを生成します。
+/// 2つのテキストから LCS（最長共通部分列）を計算し、差分行リストを生成します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::diff::{diff_lines, DiffType};
+///
+/// let old_text = "apple\nbanana";
+/// let new_text = "apple\ncherry";
+/// let diff = diff_lines(old_text, new_text);
+///
+/// assert_eq!(diff.len(), 3);
+/// assert_eq!(diff[0].diff_type, DiffType::Equal);
+/// assert_eq!(diff[1].diff_type, DiffType::Delete);
+/// assert_eq!(diff[2].diff_type, DiffType::Insert);
+/// ```
 pub fn diff_lines(old_text: &str, new_text: &str) -> Vec<DiffLine> {
     let old_lines: Vec<&str> = old_text.lines().collect();
     let new_lines: Vec<&str> = new_text.lines().collect();
@@ -100,7 +162,22 @@ pub fn diff_lines(old_text: &str, new_text: &str) -> Vec<DiffLine> {
     raw_diff
 }
 
-/// 2つのテキストから Unified Diff 形式の文字列を生成します。
+/// 2つのテキストから Unified Diff 形式（`---` / `+++` / `@@`）のパッチ文字列を生成します。
+///
+/// 差異が全くない場合は空文字列を返します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::diff::create_unified_diff;
+///
+/// let old_text = "line 1\nline 2\n";
+/// let new_text = "line 1\nline 2 modified\n";
+/// let patch = create_unified_diff(old_text, new_text, "a.txt", "b.txt");
+/// assert!(patch.starts_with("--- a.txt\n+++ b.txt"));
+/// assert!(patch.contains("-line 2"));
+/// assert!(patch.contains("+line 2 modified"));
+/// ```
 pub fn create_unified_diff(
     old_text: &str,
     new_text: &str,
@@ -134,6 +211,16 @@ pub fn create_unified_diff(
 }
 
 /// 差分行リストを指定コンテキスト行数でハンク（Hunk）にグループ化します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::diff::{diff_lines, group_into_hunks};
+///
+/// let diff = diff_lines("a\nb\nc", "a\nB\nc");
+/// let hunks = group_into_hunks(&diff, 3);
+/// assert_eq!(hunks.len(), 1);
+/// ```
 pub fn group_into_hunks(diff: &[DiffLine], context: usize) -> Vec<DiffHunk> {
     let mut hunks = Vec::new();
     let mut idx = 0;
@@ -212,6 +299,25 @@ pub fn group_into_hunks(diff: &[DiffLine], context: usize) -> Vec<DiffHunk> {
 }
 
 /// Unified Diff パッチを元テキストに適用して新しいテキストを再構築します。
+///
+/// ハンク情報（`@@` 行）および行プレフィックス（`+`, `-`, `' '`）を解析し、
+/// 元テキストに差分を適用します。
+///
+/// # Errors
+/// パッチの書式が不正な場合、またはハンクの適用対象行が整合しない場合にエラーメッセージを返します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::diff::{apply_unified_patch, create_unified_diff};
+///
+/// let old_text = "hello\nworld\n";
+/// let new_text = "hello\nRust world\n";
+/// let patch = create_unified_diff(old_text, new_text, "a", "b");
+///
+/// let restored = apply_unified_patch(old_text, &patch).unwrap();
+/// assert_eq!(restored, new_text);
+/// ```
 pub fn apply_unified_patch(original: &str, patch: &str) -> Result<String, String> {
     let orig_lines: Vec<&str> = original.lines().collect();
     let mut result = Vec::new();
@@ -280,6 +386,22 @@ pub fn apply_unified_patch(original: &str, patch: &str) -> Result<String, String
 }
 
 /// 左右2画面分割（Side-by-Side DIFF）表示用の同期行リストを構築します。
+///
+/// 連続する削除行と追加行を1つの変更ブロック（左右横並び）として合成し、
+/// 2ペインでの直感的な比較表示を可能にします。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::diff::{create_side_by_side, DiffType};
+///
+/// let sbs = create_side_by_side("old_line", "new_line");
+/// assert_eq!(sbs.len(), 1);
+/// assert_eq!(sbs[0].left_text.as_deref(), Some("old_line"));
+/// assert_eq!(sbs[0].right_text.as_deref(), Some("new_line"));
+/// assert_eq!(sbs[0].left_type, DiffType::Delete);
+/// assert_eq!(sbs[0].right_type, DiffType::Insert);
+/// ```
 pub fn create_side_by_side(old_text: &str, new_text: &str) -> Vec<SideBySideLine> {
     let diff = diff_lines(old_text, new_text);
     let mut sbs = Vec::new();

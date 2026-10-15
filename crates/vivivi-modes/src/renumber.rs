@@ -19,15 +19,30 @@ static RENUM_PATTERN_BRACKET: LazyLock<Regex> =
 
 /// 複数行のリストテキスト内の連番を再付番します。
 ///
-/// # 引数
-/// - `lines`: 対象行のスライス
-/// - `start`: 開始番号（通常は 1）
-/// - `step`: 増分ステップ（通常は 1）
-///
-/// # 動作
-/// 最初に見つかった連番形式（`1.` 型、`(1)` 型、`[1]` 型）に合致する行の番号を、
-/// `start`, `start + step`, `start + 2*step` ... と順次書き換えます。
+/// 箇条書き番号（`1.` 型、`2)` 型、`(1)` 型、`[1]` 型）を自動検出し、
+/// 指定した開始番号と増分ステップで連番を再計算・更新します。
 /// パターンに合致しない行はそのまま維持されます。
+///
+/// # Parameters
+/// - `lines`: 対象行のスライス。
+/// - `start`: 開始番号（通常は 1）。
+/// - `step`: 増分ステップ（通常は 1）。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::renumber::renumber_lines;
+///
+/// let lines = vec![
+///     "1. First item",
+///     "5. Second item",
+///     "3. Third item",
+/// ];
+/// let renumbered = renumber_lines(&lines, 1, 1);
+/// assert_eq!(renumbered[0], "1. First item");
+/// assert_eq!(renumbered[1], "2. Second item");
+/// assert_eq!(renumbered[2], "3. Third item");
+/// ```
 pub fn renumber_lines(lines: &[&str], start: usize, step: usize) -> Vec<String> {
     let mut current_num = start;
     let mut result = Vec::with_capacity(lines.len());

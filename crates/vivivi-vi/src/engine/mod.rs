@@ -19,7 +19,19 @@ use crate::parser::CommandParser;
 use crate::register::{RegisterContent, RegisterMgr};
 use vivivi_core::{CursorPosition, TextBuffer, TextCursor};
 
-/// exコマンドやエディタ制御の実行結果。
+/// exコマンドやエディタ制御の実行結果を表す構造体。
+///
+/// 画面再描画の要否、ファイル保存/終了の要求フラグ、ステータスメッセージなどを伝達します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_vi::engine::ViExecutionResult;
+///
+/// let res = ViExecutionResult::default();
+/// assert!(!res.quit_requested);
+/// assert!(!res.save_requested);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ViExecutionResult {
     /// 画面再描画が必要かどうか
@@ -38,7 +50,21 @@ pub struct ViExecutionResult {
     pub preview_requested: Option<String>,
 }
 
-/// Vi コマンドエンジン本体。
+/// Vi コマンドのパース、モード管理、およびバッファ操作を統合実行するエンジン本体。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::{TextBuffer, TextCursor};
+/// use vivivi_vi::{Motion, ViCommand, ViEngine, ViMode};
+///
+/// let mut engine = ViEngine::new();
+/// let mut buffer = TextBuffer::from_text("hello");
+/// let mut cursor = TextCursor::new(0, 0);
+///
+/// engine.execute(&ViCommand::Move(Motion::Right(2)), &mut buffer, &mut cursor);
+/// assert_eq!(cursor.pos.col, 2);
+/// ```
 #[derive(Debug, Default)]
 pub struct ViEngine {
     mode: ViMode,
@@ -81,7 +107,16 @@ pub struct ViEngine {
 }
 
 impl ViEngine {
-    /// 新しい ViEngine を生成します。
+    /// ノーマルモードで新しい [`ViEngine`] を生成します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{ViEngine, ViMode};
+    ///
+    /// let engine = ViEngine::new();
+    /// assert_eq!(engine.mode(), ViMode::Normal);
+    /// ```
     pub fn new() -> Self {
         Self {
             mode: ViMode::Normal,
@@ -107,37 +142,81 @@ impl ViEngine {
         }
     }
 
-    /// 現在のViモードを取得します。
+    /// 現在の Vi 動作モード（[`ViMode`]）を取得します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{ViEngine, ViMode};
+    ///
+    /// let engine = ViEngine::new();
+    /// assert_eq!(engine.mode(), ViMode::Normal);
+    /// ```
     pub fn mode(&self) -> ViMode {
         self.mode
     }
 
-    /// Viモードを直接変更します。
+    /// Vi 動作モードを直接設定します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{ViEngine, ViMode};
+    ///
+    /// let mut engine = ViEngine::new();
+    /// engine.set_mode(ViMode::Insert);
+    /// assert_eq!(engine.mode(), ViMode::Insert);
+    /// ```
     pub fn set_mode(&mut self, mode: ViMode) {
         self.mode = mode;
     }
 
-    /// レジスタマネージャへの参照を取得します。
+    /// レジスタマネージャ（[`RegisterMgr`]）への不変参照を取得します。
     pub fn registers(&self) -> &RegisterMgr {
         &self.registers
     }
 
-    /// レジスタマネージャへの可変参照を取得します。
+    /// レジスタマネージャ（[`RegisterMgr`]）への可変参照を取得します。
     pub fn registers_mut(&mut self) -> &mut RegisterMgr {
         &mut self.registers
     }
 
-    /// パーサーの状態を取得します。
+    /// 内部のコマンドパーサー（[`CommandParser`]）への参照を取得します。
     pub fn parser(&self) -> &CommandParser {
         &self.parser
     }
 
-    /// 直前に検索された検索パターン文字列を取得します。
+    /// 直前に実行された検索パターン文字列を取得します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::ViEngine;
+    ///
+    /// let engine = ViEngine::new();
+    /// assert!(engine.last_search_pattern().is_none());
+    /// ```
     pub fn last_search_pattern(&self) -> Option<&str> {
         self.last_search_pattern.as_deref()
     }
 
-    /// 単一文字のキー入力を状態機械に供給し、確定した ViCommand があれば返します。
+    /// 単一文字のキー入力を状態機械に供給し、確定した [`ViCommand`] があれば返却します。
+    ///
+    /// モード変更コマンドが確定した場合はエンジンの内部 `mode` も自動的に更新されます。
+    ///
+    /// # Panics
+    ///
+    /// パニックは発生しません。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{Motion, ViCommand, ViEngine};
+    ///
+    /// let mut engine = ViEngine::new();
+    /// let cmd = engine.feed_char('k');
+    /// assert_eq!(cmd, Some(ViCommand::Move(Motion::Up(1))));
+    /// ```
     pub fn feed_char(&mut self, ch: char) -> Option<ViCommand> {
         let cmd = self.parser.feed_char(ch, self.mode);
 
@@ -186,7 +265,18 @@ impl ViEngine {
         cmd
     }
 
-    /// 挿入モード中にタイプされた文字を記録します（矩形一括挿入およびマクロの追跡用）。
+    /// 挿入モード中にタイプされた文字を記録します。
+    ///
+    /// 矩形ビジュアル一括挿入の適用や、キーボードマクロ記録時のキー列追跡に使用されます。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::ViEngine;
+    ///
+    /// let mut engine = ViEngine::new();
+    /// engine.record_inserted_char('a');
+    /// ```
     pub fn record_inserted_char(&mut self, ch: char) {
         if self.recording_register.is_some() {
             self.recorded_macro_keys.push(ch);
@@ -196,7 +286,24 @@ impl ViEngine {
         }
     }
 
-    /// パースされた ViCommand をバッファとカーソルに適用して実行します。
+    /// パースされた [`ViCommand`] をバッファとカーソルに適用して実行します。
+    ///
+    /// 移動、編集、Undo/Redo、exコマンドなどを実行し、画面更新要否や終了要求を含む [`ViExecutionResult`] を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::{TextBuffer, TextCursor};
+    /// use vivivi_vi::{Motion, ViCommand, ViEngine};
+    ///
+    /// let mut engine = ViEngine::new();
+    /// let mut buffer = TextBuffer::from_text("abcdef");
+    /// let mut cursor = TextCursor::new(0, 0);
+    ///
+    /// let res = engine.execute(&ViCommand::Move(Motion::Right(3)), &mut buffer, &mut cursor);
+    /// assert_eq!(cursor.pos.col, 3);
+    /// assert!(res.need_redraw);
+    /// ```
     pub fn execute(
         &mut self,
         cmd: &ViCommand,

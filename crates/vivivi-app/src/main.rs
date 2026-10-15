@@ -1,3 +1,8 @@
+//! vivivi: OpenViVi を現代的な Rust で再構築した高機能・日本語対応テキストエディタ。
+//!
+//! Vi/Vim の操作体系を基盤とし、全角文字を崩さない罫線描画、インラインCSV/TSV整列、
+//! Migemo ローマ字日本語検索、アウトライン表示、画面分割、永続Undoなどをターミナル上で提供します。
+
 mod tui;
 
 use std::env;
@@ -8,6 +13,13 @@ use vivivi_core::{CharEncoding, CursorPosition, NewlineType, TextBuffer};
 use vivivi_modes::{BoxAlignment, CsvMode, KeisenDirection, KeisenMode};
 use vivivi_vi::ViEngine;
 
+/// アプリケーションのエントリポイント。
+///
+/// コマンドライン引数をパースし、指定されたファイル（または新規バッファ）を開いて
+/// TUI セッションを開始します。`--demo` フラグが指定された場合は簡易コンソールデモを実行します。
+///
+/// # Errors
+/// ターミナルの初期化失敗やファイル読み込みエラーが発生した場合に [`anyhow::Error`] を返します。
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = env::args().collect();
 

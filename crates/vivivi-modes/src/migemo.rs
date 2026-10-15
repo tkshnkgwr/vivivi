@@ -151,6 +151,23 @@ static ROMAJI_TABLE: &[RomajiEntry] = romaji_map![
 ];
 
 /// ローマ字日本語検索（Migemo）エンジン。
+///
+/// ローマ字入力からひらがな、カタカナ、漢字を網羅した正規表現パターンを構築し、
+/// IME不要のインクリメンタル日本語検索を実現します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::migemo::MigemoEngine;
+///
+/// let mut migemo = MigemoEngine::new();
+/// migemo.add_dict_entry("にほん", "日本");
+/// let re = migemo.compile_query("nihon").unwrap();
+/// assert!(re.is_match("日本"));
+/// assert!(re.is_match("にほん"));
+/// assert!(re.is_match("ニホン"));
+/// assert!(re.is_match("nihon"));
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct MigemoEngine {
     /// SKK辞書やカスタム単語辞書（読み（ひらがな） -> 漢字候補リスト）
@@ -158,12 +175,33 @@ pub struct MigemoEngine {
 }
 
 impl MigemoEngine {
-    /// 新しい MigemoEngine を生成します。
+    /// デフォルト設定で空の辞書を持つ `MigemoEngine` を生成します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::migemo::MigemoEngine;
+    ///
+    /// let engine = MigemoEngine::new();
+    /// let pattern = engine.query_to_regex_pattern("ai");
+    /// assert!(!pattern.is_empty());
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
     /// 辞書に単語（ひらがな読み -> 漢字表記）を直接登録します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::migemo::MigemoEngine;
+    ///
+    /// let mut engine = MigemoEngine::new();
+    /// engine.add_dict_entry("けんさく", "検索");
+    /// let pattern = engine.query_to_regex_pattern("kensaku");
+    /// assert!(pattern.contains("検索"));
+    /// ```
     pub fn add_dict_entry(&mut self, yomi: &str, kanji: &str) {
         self.dict
             .entry(yomi.to_string())
@@ -174,6 +212,17 @@ impl MigemoEngine {
     /// SKK辞書形式のテキスト（またはファイル内容）をパースして登録します。
     ///
     /// 書式: `見出し /候補1/候補2;注釈/`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::migemo::MigemoEngine;
+    ///
+    /// let mut engine = MigemoEngine::new();
+    /// engine.load_skk_dict_str("とうきょう /東京/とうきょう;ひらがな/\n");
+    /// let pattern = engine.query_to_regex_pattern("toukyou");
+    /// assert!(pattern.contains("東京"));
+    /// ```
     pub fn load_skk_dict_str(&mut self, content: &str) {
         for line in content.lines() {
             let line = line.trim();
@@ -209,6 +258,17 @@ impl MigemoEngine {
 
     /// ローマ字クエリ（例: `"nihon"`, `"kensaku"`）から、ひらがな・カタカナ・漢字を統合した
     /// 検索用正規表現パターン文字列を構築します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::migemo::MigemoEngine;
+    ///
+    /// let engine = MigemoEngine::new();
+    /// let pattern = engine.query_to_regex_pattern("ka");
+    /// assert!(pattern.contains("か"));
+    /// assert!(pattern.contains("カ"));
+    /// ```
     pub fn query_to_regex_pattern(&self, romaji: &str) -> String {
         let romaji_lower = romaji.to_ascii_lowercase();
         if romaji_lower.is_empty() {
@@ -240,7 +300,21 @@ impl MigemoEngine {
         }
     }
 
-    /// ローマ字クエリからコンパイル済みの Regex を構築します。
+    /// ローマ字クエリからコンパイル済みの正規表現（[`Regex`]）を構築します。
+    ///
+    /// # Errors
+    /// 生成された正規表現パターンのコンパイルに失敗した場合に [`regex::Error`] を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::migemo::MigemoEngine;
+    ///
+    /// let engine = MigemoEngine::new();
+    /// let re = engine.compile_query("sushi").unwrap();
+    /// assert!(re.is_match("すし"));
+    /// assert!(re.is_match("スシ"));
+    /// ```
     pub fn compile_query(&self, romaji: &str) -> Result<Regex, regex::Error> {
         let pattern = self.query_to_regex_pattern(romaji);
         Regex::new(&pattern)

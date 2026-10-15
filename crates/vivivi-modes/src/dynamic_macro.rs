@@ -4,7 +4,22 @@
 //! キー入力や編集アクションの履歴から直前の繰り返し規則（XX パターン）を自動推測し、
 //! 明示的なマクロ記録なしに反復編集を自動実行します。
 
-/// ダイナミックマクロエンジン
+/// ダイナミックマクロエンジン。
+///
+/// キーストローク履歴から反復操作（増井式ダイナミックマクロ）を自動検出し、
+/// 繰り返し実行を支援します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::dynamic_macro::DynamicMacroEngine;
+///
+/// let mut engine = DynamicMacroEngine::new();
+/// for ch in "abcabc".chars() {
+///     engine.record_char(ch);
+/// }
+/// assert_eq!(engine.detect_repeat(), Some(vec!['a', 'b', 'c']));
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct DynamicMacroEngine {
     /// 編集アクション・キー操作の履歴ログ（最大 1000 件）
@@ -14,6 +29,16 @@ pub struct DynamicMacroEngine {
 }
 
 impl DynamicMacroEngine {
+    /// 新規 `DynamicMacroEngine` を生成します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::dynamic_macro::DynamicMacroEngine;
+    ///
+    /// let mut engine = DynamicMacroEngine::new();
+    /// assert_eq!(engine.detect_repeat(), None);
+    /// ```
     pub fn new() -> Self {
         Self {
             history: Vec::with_capacity(1024),
@@ -22,6 +47,15 @@ impl DynamicMacroEngine {
     }
 
     /// キー文字入力を履歴に記録します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::dynamic_macro::DynamicMacroEngine;
+    ///
+    /// let mut engine = DynamicMacroEngine::new();
+    /// engine.record_char('x');
+    /// ```
     pub fn record_char(&mut self, ch: char) {
         if self.history.len() >= 1000 {
             self.history.remove(0);
@@ -31,9 +65,20 @@ impl DynamicMacroEngine {
 
     /// 直前に記録されたキーシーケンスから、反復規則（XX パターン）を検出します。
     ///
-    /// # 動作アルゴリズム
-    /// 履歴の末尾から、長さ L（1 〜 N/2）のパターンを探し、
-    /// `history[N-L..N]` が `history[N-2L..N-L]` と一致する最長の L を検出します。
+    /// 履歴の末尾から長さ L のパターンを探し、直前とその前のシーケンスが一致する最長パターンを返します。
+    /// 新規パターンが見つからない場合は直前の検出パターンを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::dynamic_macro::DynamicMacroEngine;
+    ///
+    /// let mut engine = DynamicMacroEngine::new();
+    /// for ch in "xyxy".chars() {
+    ///     engine.record_char(ch);
+    /// }
+    /// assert_eq!(engine.detect_repeat(), Some(vec!['x', 'y']));
+    /// ```
     pub fn detect_repeat(&mut self) -> Option<Vec<char>> {
         let n = self.history.len();
         if n < 2 {
@@ -57,7 +102,18 @@ impl DynamicMacroEngine {
         self.last_detected.clone()
     }
 
-    /// 履歴をクリアします。
+    /// 履歴および直前の検出パターンをクリアします。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::dynamic_macro::DynamicMacroEngine;
+    ///
+    /// let mut engine = DynamicMacroEngine::new();
+    /// engine.record_char('a');
+    /// engine.clear();
+    /// assert_eq!(engine.detect_repeat(), None);
+    /// ```
     pub fn clear(&mut self) {
         self.history.clear();
         self.last_detected = None;

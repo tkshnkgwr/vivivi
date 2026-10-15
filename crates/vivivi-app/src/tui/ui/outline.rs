@@ -11,7 +11,14 @@ use ratatui::{
 use crate::tui::app::App;
 use vivivi_modes::OutlineKind;
 
-/// アウトラインサイドペインの描画
+/// 画面左側に表示されるアウトライン（関数・見出し・構造体階層一覧）サイドペインを描画します。
+///
+/// フォーカス状態に応じて枠線の色を強調表示し、選択中の項目をハイライトします。
+///
+/// # 引数
+/// - `frame`: Ratatui の描画フレーム
+/// - `app`: アプリケーション状態への参照
+/// - `area`: 描画領域の矩形
 pub fn render_outline(frame: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)

@@ -6,15 +6,36 @@
 use unicode_width::UnicodeWidthStr;
 
 /// フィールド区切り文字の種類。
+///
+/// カンマ（`,`）またはタブ（`\t`）に対応します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::csv::Delimiter;
+///
+/// assert_eq!(Delimiter::Comma.as_char(), ',');
+/// assert_eq!(Delimiter::Tab.as_char(), '\t');
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Delimiter {
+    /// カンマ区切り（CSV）
     #[default]
     Comma,
+    /// タブ区切り（TSV）
     Tab,
 }
 
 impl Delimiter {
-    /// 区切り文字を `char` として返します。
+    /// 区切り文字の `char` 表現を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::csv::Delimiter;
+    ///
+    /// assert_eq!(Delimiter::Comma.as_char(), ',');
+    /// ```
     pub fn as_char(&self) -> char {
         match self {
             Self::Comma => ',',
@@ -24,6 +45,22 @@ impl Delimiter {
 }
 
 /// CSV/TSVモードの動作オプション。
+///
+/// 列の最小/最大幅やクォートの透過表示などを細かく制御します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::csv::{CsvOptions, Delimiter};
+///
+/// let options = CsvOptions {
+///     delimiter: Delimiter::Tab,
+///     min_col_width: 5,
+///     ..Default::default()
+/// };
+/// assert_eq!(options.delimiter, Delimiter::Tab);
+/// assert_eq!(options.min_col_width, 5);
+/// ```
 #[derive(Debug, Clone)]
 pub struct CsvOptions {
     /// 区切り文字（カンマまたはタブ）
@@ -51,6 +88,19 @@ impl Default for CsvOptions {
 }
 
 /// インラインCSVモード管理構造体。
+///
+/// バッファ全体のテキストから各カラムの最大表示幅を自動計算し、
+/// 非アクティブ行を縦に整然と整列してフォーマット表示します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::csv::{CsvMode, CsvOptions};
+///
+/// let mut csv = CsvMode::new(CsvOptions::default());
+/// csv.calculate_widths(vec!["id,name", "1,Alice"]);
+/// assert_eq!(csv.column_widths.len(), 2);
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct CsvMode {
     /// オプション設定
@@ -60,7 +110,16 @@ pub struct CsvMode {
 }
 
 impl CsvMode {
-    /// 指定したオプションで新しい CsvMode を生成します。
+    /// 指定したオプションで新しい `CsvMode` を生成します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::csv::{CsvMode, CsvOptions};
+    ///
+    /// let mode = CsvMode::new(CsvOptions::default());
+    /// assert!(mode.column_widths.is_empty());
+    /// ```
     pub fn new(options: CsvOptions) -> Self {
         Self {
             options,
@@ -69,6 +128,20 @@ impl CsvMode {
     }
 
     /// 行イテレータを走査し、各カラムの最大表示幅（全角半角を考慮）を計算します。
+    ///
+    /// # Parameters
+    /// - `lines`: CSV/TSV テキストの行文字列イテレータ。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::csv::CsvMode;
+    ///
+    /// let mut csv = CsvMode::default();
+    /// csv.calculate_widths(vec!["a,bb", "ccc,d"]);
+    /// assert_eq!(csv.column_widths[0], 3); // "ccc" の幅3
+    /// assert_eq!(csv.column_widths[1], 3); // min_col_width = 3
+    /// ```
     pub fn calculate_widths<'a, I>(&mut self, lines: I)
     where
         I: IntoIterator<Item = &'a str>,
@@ -98,6 +171,18 @@ impl CsvMode {
     }
 
     /// 行文字列をクォートを考慮してセル配列に分割します。
+    ///
+    /// クォート（`"` または `'`）内部に含まれる区切り文字はフィールド分割として扱われません。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::csv::CsvMode;
+    ///
+    /// let cells = CsvMode::parse_csv_cells("1,\"hello, world\",ok", ',');
+    /// assert_eq!(cells.len(), 3);
+    /// assert_eq!(cells[1].content, "hello, world");
+    /// ```
     pub fn parse_csv_cells<'a>(line: &'a str, delim: char) -> Vec<CsvCell<'a>> {
         let mut cells = Vec::new();
         let mut in_quotes = false;
@@ -127,6 +212,17 @@ impl CsvMode {
     /// - `is_active_line == true`（カーソル行）: 編集の直感性を保つため生のテキストをそのまま返します。
     /// - `is_active_line == false`（非アクティブ行）:
     ///   クォートの透過（非表示）と各列のパディングを行い、縦の列が美しく整列したビューを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::csv::CsvMode;
+    ///
+    /// let mut csv = CsvMode::default();
+    /// csv.calculate_widths(vec!["1,Alice", "100,Bob"]);
+    /// let formatted = csv.format_line("1,Alice", false);
+    /// assert_eq!(formatted, "1  , Alice");
+    /// ```
     pub fn format_line(&self, line: &str, is_active_line: bool) -> String {
         if is_active_line {
             return line.to_string();
@@ -163,6 +259,16 @@ impl CsvMode {
     }
 
     /// 指定列番号のセルが生テキスト内のどの文字範囲 `[start, end)` にあるかを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::csv::CsvMode;
+    ///
+    /// let csv = CsvMode::default();
+    /// let range = csv.cell_range_in_raw_line("id,name,score", 1);
+    /// assert_eq!(range, Some((3, 7))); // "name"
+    /// ```
     pub fn cell_range_in_raw_line(&self, line: &str, target_col: usize) -> Option<(usize, usize)> {
         let delim = self.options.delimiter.as_char();
         let mut current_col = 0;
@@ -201,7 +307,17 @@ pub struct CsvCell<'a> {
 }
 
 impl<'a> CsvCell<'a> {
-    /// 生の文字列から `CsvCell` を構築します。
+    /// 生の文字列から外側のクォート有無を解析して `CsvCell` を構築します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::csv::CsvCell;
+    ///
+    /// let cell = CsvCell::from_raw("\"quoted value\"");
+    /// assert!(cell.is_quoted);
+    /// assert_eq!(cell.content, "quoted value");
+    /// ```
     pub fn from_raw(raw: &'a str) -> Self {
         let trimmed = raw.trim();
         let (content, is_quoted) =

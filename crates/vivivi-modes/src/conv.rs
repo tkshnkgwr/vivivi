@@ -2,11 +2,22 @@
 //! ViVi / OpenViVi 準拠の日本語テキスト変換機能を提供します。
 
 /// サポートする文字列変換の種別。
+///
+/// 全角/半角、ひらがな/カタカナ、大文字/小文字の相互変換ルールを指定します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::conv::{ConversionType, convert_text};
+///
+/// let katakana = convert_text("こんにちは", ConversionType::ToKatakana);
+/// assert_eq!(katakana, "コンニチハ");
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConversionType {
-    /// ASCII英数記号を全角へ変換。
+    /// ASCII英数記号・空白を全角へ変換。
     ToZenkakuAlphanumeric,
-    /// 全角英数記号を半角ASCIIへ変換。
+    /// 全角英数記号・全角空白を半角ASCIIへ変換。
     ToHankakuAlphanumeric,
     /// 全角カタカナをひらがなへ変換。
     ToHiragana,
@@ -25,6 +36,27 @@ pub enum ConversionType {
 }
 
 /// 指定した変換ルールに基づいて入力文字列を変換します。
+///
+/// 全角/半角英数、ひらがな/カタカナ（濁音・半濁音の自動合成を含む）、
+/// 大文字/小文字のケース変換などを安全に実行します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::conv::{ConversionType, convert_text};
+///
+/// // ひらがな -> カタカナ
+/// assert_eq!(convert_text("あいうえお", ConversionType::ToKatakana), "アイウエオ");
+///
+/// // 全角英数 -> 半角
+/// assert_eq!(convert_text("ＡＢＣ　１２３", ConversionType::ToHankakuAlphanumeric), "ABC 123");
+///
+/// // 半角カタカナ -> 全角カタカナ（濁点結合）
+/// assert_eq!(convert_text("ｶﾞｷﾞｸﾞ", ConversionType::ToZenkakuKatakana), "ガギグ");
+///
+/// // 大小文字反転
+/// assert_eq!(convert_text("Hello, World!", ConversionType::SwapCase), "hELLO, wORLD!");
+/// ```
 pub fn convert_text(input: &str, conv_type: ConversionType) -> String {
     match conv_type {
         ConversionType::ToZenkakuAlphanumeric => to_zenkaku_alphanumeric(input),

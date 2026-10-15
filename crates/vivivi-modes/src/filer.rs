@@ -1,45 +1,114 @@
 //! 2ペイン ディレクトリビュー（ファイラー機能）モジュール。
 //!
-//! ViVi 3 / ViVi 4 の伝統的な2ペインファイルマネージャをモデル化し、
-//! 左右画面の独立したディレクトリ閲覧、Tabキー切り替え、
+//! ViVi 3 / ViVi 4 の伝統的な2画面ファイラーをモデル化し、
+//! 左右画面の独立したディレクトリ閲覧、Tabキーによるフォーカス切り替え、
 //! 1キーでのファイル選択・コピー・移動・削除操作を提供します。
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// ファイル一覧エントリ。
+/// ファイラー一覧内の単一エントリ（ファイルまたはディレクトリ）。
+///
+/// ファイル名、絶対・相対パス、種別、サイズ、更新日時、および複数選択状態を保持します。
+///
+/// # Examples
+/// ```
+/// use std::path::PathBuf;
+/// use vivivi_modes::filer::FileEntry;
+///
+/// let entry = FileEntry {
+///     name: "sample.txt".to_string(),
+///     path: PathBuf::from("sample.txt"),
+///     is_dir: false,
+///     size: 1024,
+///     modified: None,
+///     is_selected: false,
+/// };
+/// assert_eq!(entry.name, "sample.txt");
+/// assert!(!entry.is_dir);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileEntry {
+    /// ファイルまたはディレクトリの名前
     pub name: String,
+    /// ファイルシステムのパス
     pub path: PathBuf,
+    /// ディレクトリであるかどうかのフラグ
     pub is_dir: bool,
+    /// ファイルサイズ（バイト単位。ディレクトリの場合は0）
     pub size: u64,
+    /// 最終更新日時（フォーマット済み文字列）
     pub modified: Option<String>,
+    /// スペースキー等でマーク・選択されているか
     pub is_selected: bool,
 }
 
-/// ソート基準。
+/// ファイル一覧の並び替え（ソート）順序。
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::filer::FileSortOrder;
+///
+/// let order = FileSortOrder::default();
+/// assert_eq!(order, FileSortOrder::NameAsc);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum FileSortOrder {
+    /// ファイル名 昇順（デフォルト）
     #[default]
     NameAsc,
+    /// ファイル名 降順
     NameDesc,
+    /// ファイルサイズ 昇順
     SizeAsc,
+    /// ファイルサイズ 降順
     SizeDesc,
+    /// 更新日時 昇順
     ModifiedAsc,
+    /// 更新日時 降順
     ModifiedDesc,
 }
 
-/// 単一ファイラーペイン。
+/// 単一ペインのファイラー状態（1画面分）。
+///
+/// 現在表示中のディレクトリパス、取得されたファイル一覧、
+/// 現在のカーソル位置、ソート順を管理します。
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::filer::FilerPane;
+///
+/// let pane = FilerPane::new(".");
+/// assert_eq!(pane.cursor, 0);
+/// ```
 #[derive(Debug, Clone)]
 pub struct FilerPane {
+    /// 現在表示しているディレクトリ
     pub current_dir: PathBuf,
+    /// ディレクトリ内のファイル・子ディレクトリ一覧
     pub entries: Vec<FileEntry>,
+    /// 一覧内で現在フォーカスされているカーソル行（0-based）
     pub cursor: usize,
+    /// 現在適用されているソート順
     pub sort_order: FileSortOrder,
 }
 
 impl FilerPane {
+    /// 指定されたパスをカレントディレクトリとしてファイラーペインを初期化し、一覧を読み込みます。
+    ///
+    /// # 引数
+    /// - `dir`: 表示対象のディレクトリパス
+    ///
+    /// # Panics
+    /// パニックは発生しません。ディレクトリが存在しない・読み込めない場合は空の一覧となります。
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::filer::FilerPane;
+    ///
+    /// let pane = FilerPane::new(".");
+    /// assert_eq!(pane.cursor, 0);
+    /// ```
     pub fn new<P: AsRef<Path>>(dir: P) -> Self {
         let current_dir = dir.as_ref().to_path_buf();
         let mut pane = Self {
@@ -52,7 +121,17 @@ impl FilerPane {
         pane
     }
 
-    /// 現在のディレクトリを再読み込みし、エントリ一覧を更新します。
+    /// 現在のディレクトリを再走査し、エントリ一覧とソート状態を再構築します。
+    ///
+    /// 親ディレクトリが存在する場合は先頭に `..` を配置し、それ以外はディレクトリ優先でソートされます。
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::filer::FilerPane;
+    ///
+    /// let mut pane = FilerPane::new(".");
+    /// pane.refresh();
+    /// ```
     pub fn refresh(&mut self) {
         self.entries.clear();
 
@@ -109,23 +188,69 @@ impl FilerPane {
         }
     }
 
+    /// カーソルを1行上へ移動します。先頭行にいる場合は変化しません。
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::filer::FilerPane;
+    ///
+    /// let mut pane = FilerPane::new(".");
+    /// pane.cursor = 1;
+    /// pane.cursor_up();
+    /// assert_eq!(pane.cursor, 0);
+    /// ```
     pub fn cursor_up(&mut self) {
         if self.cursor > 0 {
             self.cursor -= 1;
         }
     }
 
+    /// カーソルを1行下へ移動します。末尾行にいる場合は変化しません。
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::filer::FilerPane;
+    ///
+    /// let mut pane = FilerPane::new(".");
+    /// pane.cursor = 0;
+    /// pane.cursor_down();
+    /// ```
     pub fn cursor_down(&mut self) {
         if !self.entries.is_empty() && self.cursor + 1 < self.entries.len() {
             self.cursor += 1;
         }
     }
 
+    /// 現在カーソルが位置しているエントリを取得します。
+    ///
+    /// エントリが1件も存在しない場合は `None` を返します。
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::filer::FilerPane;
+    ///
+    /// let pane = FilerPane::new(".");
+    /// let _entry = pane.current_entry();
+    /// ```
     pub fn current_entry(&self) -> Option<&FileEntry> {
         self.entries.get(self.cursor)
     }
 
-    /// 現在行のエントリを開く／移動します（ディレクトリなら移動し true、ファイルなら false）。
+    /// 現在カーソル行のエントリを開きます。
+    ///
+    /// 対象がディレクトリの場合はそのディレクトリへ階層を移動し、エントリ一覧を更新して `Ok(None)` を返します。
+    /// 対象が通常ファイル等の場合は移動せず、そのファイルのパス `Ok(Some(PathBuf))` を返します。
+    ///
+    /// # Errors
+    /// ファイルシステムや権限エラーが発生した場合にエラー文字列を返します。
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::filer::FilerPane;
+    ///
+    /// let mut pane = FilerPane::new(".");
+    /// let _result = pane.enter();
+    /// ```
     pub fn enter(&mut self) -> Result<Option<PathBuf>, String> {
         let entry = match self.current_entry() {
             Some(e) => e.clone(),
@@ -142,7 +267,17 @@ impl FilerPane {
         }
     }
 
-    /// 親ディレクトリに移動します。
+    /// 親ディレクトリに移動し、エントリ一覧を再読み込みします。
+    ///
+    /// ルートディレクトリ等、親ディレクトリが存在しない場合は何も行いません。
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::filer::FilerPane;
+    ///
+    /// let mut pane = FilerPane::new(".");
+    /// pane.up_dir();
+    /// ```
     pub fn up_dir(&mut self) {
         if let Some(parent) = self.current_dir.parent() {
             self.current_dir = parent.to_path_buf();
@@ -151,7 +286,17 @@ impl FilerPane {
         }
     }
 
-    /// 現在行の選択状態をトグルします（Spaceキー）。
+    /// 現在カーソル行の選択状態（チェックマーク）をトグルし、カーソルを1行下へ進めます。
+    ///
+    /// 親ディレクトリ `..` は選択対象外です。
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::filer::FilerPane;
+    ///
+    /// let mut pane = FilerPane::new(".");
+    /// pane.toggle_select();
+    /// ```
     pub fn toggle_select(&mut self) {
         if let Some(entry) = self.entries.get_mut(self.cursor)
             && entry.name != ".."
@@ -161,7 +306,17 @@ impl FilerPane {
         self.cursor_down();
     }
 
-    /// 選択されているエントリ一覧（無選択の場合は現在のカーソル位置のエントリ）を取得します。
+    /// 選択マークが付いているエントリ一覧を取得します。
+    ///
+    /// 1件も明示的に選択されていない場合、現在カーソル位置のエントリ（`..` を除く）が単一要素として返されます。
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::filer::FilerPane;
+    ///
+    /// let pane = FilerPane::new(".");
+    /// let targets = pane.selected_entries();
+    /// ```
     pub fn selected_entries(&self) -> Vec<FileEntry> {
         let selected: Vec<FileEntry> = self
             .entries
@@ -180,22 +335,58 @@ impl FilerPane {
     }
 }
 
-/// 左右どちらのアクティブペインか。
+/// 左右どちらのファイラー画面が現在アクティブ（操作対象）であるかを示します。
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::filer::ActiveFilerPane;
+///
+/// let active = ActiveFilerPane::Left;
+/// assert_eq!(active, ActiveFilerPane::Left);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActiveFilerPane {
+    /// 左画面
     Left,
+    /// 右画面
     Right,
 }
 
-/// 2ペインファイラーマネージャ。
+/// 2画面（左右ペイン）ファイラーマネージャ。
+///
+/// 左右それぞれの画面で独立したディレクトリ階層を閲覧でき、
+/// Tabキーで画面を行き来しながらファイルの一括コピー・移動・削除を行えます。
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::filer::{TwoPaneFiler, ActiveFilerPane};
+///
+/// let filer = TwoPaneFiler::new(".");
+/// assert_eq!(filer.active, ActiveFilerPane::Left);
+/// ```
 #[derive(Debug, Clone)]
 pub struct TwoPaneFiler {
+    /// 左ペイン
     pub left: FilerPane,
+    /// 右ペイン
     pub right: FilerPane,
+    /// 現在フォーカスされているアクティブペイン
     pub active: ActiveFilerPane,
 }
 
 impl TwoPaneFiler {
+    /// 左右ペインを指定されたディレクトリで初期化し、左画面をアクティブとして生成します。
+    ///
+    /// # 引数
+    /// - `initial_dir`: 起動時の初期ディレクトリパス
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::filer::{TwoPaneFiler, ActiveFilerPane};
+    ///
+    /// let filer = TwoPaneFiler::new(".");
+    /// assert_eq!(filer.active, ActiveFilerPane::Left);
+    /// ```
     pub fn new<P: AsRef<Path>>(initial_dir: P) -> Self {
         let left = FilerPane::new(initial_dir.as_ref());
         let right = FilerPane::new(initial_dir.as_ref());
@@ -206,6 +397,16 @@ impl TwoPaneFiler {
         }
     }
 
+    /// 現在アクティブなペインへの不変参照を取得します。
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::filer::TwoPaneFiler;
+    ///
+    /// let filer = TwoPaneFiler::new(".");
+    /// let active = filer.active_pane();
+    /// assert_eq!(active.cursor, 0);
+    /// ```
     pub fn active_pane(&self) -> &FilerPane {
         match self.active {
             ActiveFilerPane::Left => &self.left,
@@ -213,6 +414,15 @@ impl TwoPaneFiler {
         }
     }
 
+    /// 現在アクティブなペインへの可変参照を取得します。
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::filer::TwoPaneFiler;
+    ///
+    /// let mut filer = TwoPaneFiler::new(".");
+    /// filer.active_pane_mut().cursor_down();
+    /// ```
     pub fn active_pane_mut(&mut self) -> &mut FilerPane {
         match self.active {
             ActiveFilerPane::Left => &mut self.left,
@@ -220,6 +430,16 @@ impl TwoPaneFiler {
         }
     }
 
+    /// 現在非アクティブ（反対側）のペインへの不変参照を取得します。
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::filer::TwoPaneFiler;
+    ///
+    /// let filer = TwoPaneFiler::new(".");
+    /// let other = filer.other_pane();
+    /// assert_eq!(other.cursor, 0);
+    /// ```
     pub fn other_pane(&self) -> &FilerPane {
         match self.active {
             ActiveFilerPane::Left => &self.right,
@@ -227,6 +447,15 @@ impl TwoPaneFiler {
         }
     }
 
+    /// 現在非アクティブ（反対側）のペインへの可変参照を取得します。
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::filer::TwoPaneFiler;
+    ///
+    /// let mut filer = TwoPaneFiler::new(".");
+    /// filer.other_pane_mut().cursor_down();
+    /// ```
     pub fn other_pane_mut(&mut self) -> &mut FilerPane {
         match self.active {
             ActiveFilerPane::Left => &mut self.right,
@@ -234,7 +463,17 @@ impl TwoPaneFiler {
         }
     }
 
-    /// 左右ペインのアクティブをトグルします（Tabキー）。
+    /// 左右ペインのアクティブ状態をトグル（切り替え）します（Tabキー相当）。
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::filer::{TwoPaneFiler, ActiveFilerPane};
+    ///
+    /// let mut filer = TwoPaneFiler::new(".");
+    /// assert_eq!(filer.active, ActiveFilerPane::Left);
+    /// filer.switch_pane();
+    /// assert_eq!(filer.active, ActiveFilerPane::Right);
+    /// ```
     pub fn switch_pane(&mut self) {
         self.active = match self.active {
             ActiveFilerPane::Left => ActiveFilerPane::Right,
@@ -242,7 +481,20 @@ impl TwoPaneFiler {
         };
     }
 
-    /// 選択されたファイルをもう一方のペインのディレクトリへコピーします (`c` キー)。
+    /// アクティブペインで選択されたファイルを反対側ペインのディレクトリへコピーします (`c` キー相当)。
+    ///
+    /// コピー完了後、左右両ペインの一覧を自動的にリフレッシュします。
+    ///
+    /// # Errors
+    /// ファイルの読み書き権限不足やディスク容量不足など、ファイルシステムI/Oに失敗した場合にエラー文字列を返します。
+    ///
+    /// # Examples
+    /// ```rust,no_run
+    /// use vivivi_modes::filer::TwoPaneFiler;
+    ///
+    /// let mut filer = TwoPaneFiler::new(".");
+    /// let _count = filer.copy_to_other().unwrap();
+    /// ```
     pub fn copy_to_other(&mut self) -> Result<usize, String> {
         let targets = self.active_pane().selected_entries();
         let dest_dir = self.other_pane().current_dir.clone();
@@ -264,7 +516,20 @@ impl TwoPaneFiler {
         Ok(count)
     }
 
-    /// 選択されたファイルをもう一方のペインのディレクトリへ移動します (`m` キー)。
+    /// アクティブペインで選択されたファイルを反対側ペインのディレクトリへ移動します (`m` キー相当)。
+    ///
+    /// 移動完了後、左右両ペインの一覧を自動的にリフレッシュします。
+    ///
+    /// # Errors
+    /// ファイルの移動や権限エラーなど、ファイルシステムI/Oに失敗した場合にエラー文字列を返します。
+    ///
+    /// # Examples
+    /// ```rust,no_run
+    /// use vivivi_modes::filer::TwoPaneFiler;
+    ///
+    /// let mut filer = TwoPaneFiler::new(".");
+    /// let _count = filer.move_to_other().unwrap();
+    /// ```
     pub fn move_to_other(&mut self) -> Result<usize, String> {
         let targets = self.active_pane().selected_entries();
         let dest_dir = self.other_pane().current_dir.clone();
@@ -281,7 +546,20 @@ impl TwoPaneFiler {
         Ok(count)
     }
 
-    /// 選択されたファイルを削除します (`d` キー)。
+    /// アクティブペインで選択されたファイルをファイルシステムから削除します (`d` キー相当)。
+    ///
+    /// 削除完了後、左右両ペインの一覧を自動的にリフレッシュします。
+    ///
+    /// # Errors
+    /// 削除権限不足など、ファイルシステムI/Oに失敗した場合にエラー文字列を返します。
+    ///
+    /// # Examples
+    /// ```rust,no_run
+    /// use vivivi_modes::filer::TwoPaneFiler;
+    ///
+    /// let mut filer = TwoPaneFiler::new(".");
+    /// let _count = filer.delete_selected().unwrap();
+    /// ```
     pub fn delete_selected(&mut self) -> Result<usize, String> {
         let targets = self.active_pane().selected_entries();
         let mut count = 0;

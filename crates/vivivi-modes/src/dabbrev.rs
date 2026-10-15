@@ -7,6 +7,22 @@
 use vivivi_core::TextBuffer;
 
 /// 動的補完セッションの状態。
+///
+/// カーソル位置の単語プレフィックスから探索された候補群と、現在選択中のインデックスを保持します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::TextBuffer;
+/// use vivivi_modes::dabbrev::DabbrevSession;
+///
+/// let mut buffer = TextBuffer::new();
+/// buffer.insert_text(0, "apple application app");
+/// let mut session = DabbrevSession::new();
+/// // "app" (col 21) の位置で補完開始
+/// let cand = session.start(&buffer, 0, 21);
+/// assert!(cand.is_some());
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct DabbrevSession {
     /// 補完開始時に入力されていたプレフィックス（基底文字列）
@@ -21,11 +37,30 @@ pub struct DabbrevSession {
 
 impl DabbrevSession {
     /// 新規セッションを生成します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::dabbrev::DabbrevSession;
+    ///
+    /// let session = DabbrevSession::new();
+    /// assert!(!session.is_active());
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
     /// セッションをリセットします。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::dabbrev::DabbrevSession;
+    ///
+    /// let mut session = DabbrevSession::new();
+    /// session.reset();
+    /// assert!(session.candidates.is_empty());
+    /// ```
     pub fn reset(&mut self) {
         self.prefix.clear();
         self.candidates.clear();
@@ -33,12 +68,36 @@ impl DabbrevSession {
         self.last_inserted_len = 0;
     }
 
-    /// セッションが現在アクティブ（候補巡回中）かどうか。
+    /// セッションが現在アクティブ（候補巡回中）かどうかを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::dabbrev::DabbrevSession;
+    ///
+    /// let session = DabbrevSession::new();
+    /// assert!(!session.is_active());
+    /// ```
     pub fn is_active(&self) -> bool {
         self.current_index.is_some() && !self.candidates.is_empty()
     }
 
     /// カーソル位置のプレフィックスから補完候補を探索し、セッションを開始します。
+    ///
+    /// 最初に見つかった最も近い候補文字列の参照を返します。候補が見つからない場合は `None` を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::TextBuffer;
+    /// use vivivi_modes::dabbrev::DabbrevSession;
+    ///
+    /// let mut buffer = TextBuffer::new();
+    /// buffer.insert_text(0, "variable value va");
+    /// let mut session = DabbrevSession::new();
+    /// let cand = session.start(&buffer, 0, 17);
+    /// assert_eq!(cand, Some("value"));
+    /// ```
     pub fn start(
         &mut self,
         buffer: &TextBuffer,
@@ -68,7 +127,20 @@ impl DabbrevSession {
         Some(first_candidate.as_str())
     }
 
-    /// 次の候補（より離れた前方/後方）へ進めます (Ctrl-L)。
+    /// 次の候補（より離れた前方/後方）へ進めます (`Ctrl-L`)。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::TextBuffer;
+    /// use vivivi_modes::dabbrev::DabbrevSession;
+    ///
+    /// let mut buffer = TextBuffer::new();
+    /// buffer.insert_text(0, "var1 var2 va");
+    /// let mut session = DabbrevSession::new();
+    /// session.start(&buffer, 0, 12);
+    /// assert_eq!(session.next_candidate(), Some("var1"));
+    /// ```
     pub fn next_candidate(&mut self) -> Option<&str> {
         if self.candidates.is_empty() {
             return None;
@@ -83,7 +155,21 @@ impl DabbrevSession {
         Some(cand.as_str())
     }
 
-    /// 前の候補（直前の候補）へ戻します (Ctrl-M)。
+    /// 前の候補（直前の候補）へ戻します (`Ctrl-M`)。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::TextBuffer;
+    /// use vivivi_modes::dabbrev::DabbrevSession;
+    ///
+    /// let mut buffer = TextBuffer::new();
+    /// buffer.insert_text(0, "var1 var2 va");
+    /// let mut session = DabbrevSession::new();
+    /// session.start(&buffer, 0, 12);
+    /// session.next_candidate();
+    /// assert_eq!(session.prev_candidate(), Some("var2"));
+    /// ```
     pub fn prev_candidate(&mut self) -> Option<&str> {
         if self.candidates.is_empty() {
             return None;
@@ -106,6 +192,18 @@ impl DabbrevSession {
 }
 
 /// 単語を構成する文字かどうかを判定します（英数字、アンダースコア、非ASCII文字）。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::dabbrev::is_word_char;
+///
+/// assert!(is_word_char('a'));
+/// assert!(is_word_char('_'));
+/// assert!(is_word_char('漢'));
+/// assert!(!is_word_char(' '));
+/// assert!(!is_word_char('.'));
+/// ```
 pub fn is_word_char(ch: char) -> bool {
     ch.is_alphanumeric()
         || ch == '_'
@@ -149,6 +247,18 @@ fn is_ascii_punctuation(ch: char) -> bool {
 }
 
 /// カーソル直前の単語プレフィックスを抽出します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::TextBuffer;
+/// use vivivi_modes::dabbrev::extract_word_prefix;
+///
+/// let mut buffer = TextBuffer::new();
+/// buffer.insert_text(0, "let my_var = 1;");
+/// let prefix = extract_word_prefix(&buffer, 0, 10);
+/// assert_eq!(prefix, Some("my_var".to_string()));
+/// ```
 pub fn extract_word_prefix(
     buffer: &TextBuffer,
     cursor_line: usize,
@@ -176,7 +286,20 @@ pub fn extract_word_prefix(
 }
 
 /// バッファ内をスキャンし、指定プレフィックスで始まる単語候補を探索します。
-/// カーソル位置から逆方向（手前）、次に順方向（後方）の順にスキャンして優先順位をつけます。
+///
+/// カーソル位置から手前（逆方向）、次に後方（順方向）の順にスキャンして近傍優先で並べます。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::TextBuffer;
+/// use vivivi_modes::dabbrev::find_candidates;
+///
+/// let mut buffer = TextBuffer::new();
+/// buffer.insert_text(0, "apple application app");
+/// let candidates = find_candidates(&buffer, 0, 21, "app");
+/// assert_eq!(candidates, vec!["application", "apple"]);
+/// ```
 pub fn find_candidates(
     buffer: &TextBuffer,
     cursor_line: usize,

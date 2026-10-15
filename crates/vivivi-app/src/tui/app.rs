@@ -10,7 +10,19 @@ use vivivi_modes::{
 };
 use vivivi_vi::{RegisterContent, ViEngine, ViMode};
 
-/// TUI アプリケーションの状態管理構造体。
+/// TUI アプリケーションのグローバル状態管理構造体。
+///
+/// テキストバッファ（[`TextBuffer`]）、カーソル、Viコマンド実行エンジン（[`ViEngine`]）、
+/// 画面分割ウィンドウ一覧、各種編集拡張モード（罫線、CSV、Migemo、アウトライン、補完、マクロ等）の
+/// 全状態を一元管理します。
+///
+/// # Examples
+/// ```rust,ignore
+/// use vivivi_app::tui::App;
+///
+/// let app = App::new("fn main() {}", None, Default::default(), Default::default());
+/// assert_eq!(app.buffer.line_count(), 1);
+/// ```
 pub struct App {
     /// 編集中のテキストバッファ
     pub buffer: TextBuffer,
@@ -20,13 +32,13 @@ pub struct App {
     pub vi: ViEngine,
     /// インラインCSV/TSVモード
     pub csv_mode: CsvMode,
-    /// 罫線モード
+    /// 罫線描画・編集モード
     pub keisen_mode: KeisenMode,
-    /// CSV整列表示が有効かどうか
+    /// CSV整列ビューが有効かどうか
     pub is_csv_active: bool,
-    /// 文字エンコーディング
+    /// 文字エンコーディング（UTF-8, Shift_JIS, EUC-JP等）
     pub encoding: CharEncoding,
-    /// 改行コード種別
+    /// 改行コード種別（LF, CRLF, CR）
     pub newline: NewlineType,
     /// シンタックスハイライト言語
     pub syntax_lang: SyntaxLang,
@@ -34,9 +46,9 @@ pub struct App {
     pub scroll: (usize, usize),
     /// 開いているファイルのパス
     pub file_path: Option<PathBuf>,
-    /// アプリケーション終了フラグ
+    /// アプリケーション終了フラグ（true でメインループ脱出）
     pub should_quit: bool,
-    /// 最下行に表示する一時通知メッセージ
+    /// 最下行ステータスバーに表示する一時通知メッセージ
     pub status_message: Option<String>,
 
     // --- 画面分割 (Split / Vsplit) ---
@@ -112,7 +124,24 @@ pub struct App {
 }
 
 impl App {
-    /// 新規または指定したファイル内容から App を生成します。
+    /// 新規テキストまたは指定ファイルの内容から [`App`] インスタンスを初期化・生成します。
+    ///
+    /// 新規作成ファイルの場合は拡張子に応じたテンプレートが自動探索・展開され、
+    /// 既存ファイルの場合は永続化アンドゥログ（`.undodir`）の復元と最近使ったファイル履歴の追加が行われます。
+    ///
+    /// # 引数
+    /// - `initial_text`: 起動時の初期テキストバッファ内容
+    /// - `file_path`: 開くファイルのパス（新規・無名ファイルの場合は `None`）
+    /// - `encoding`: 文字エンコーディング
+    /// - `newline`: 改行コード種別
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let app = App::new("test content", None, Default::default(), Default::default());
+    /// assert_eq!(app.buffer.line_count(), 1);
+    /// ```
     pub fn new(
         initial_text: &str,
         file_path: Option<PathBuf>,
@@ -228,17 +257,54 @@ impl App {
         }
     }
 
-    /// 現在のカーソル位置（行, 列）
+    /// アクティブウィンドウにおける現在のカーソル座標を取得します。
+    ///
+    /// # 戻り値
+    /// 行・列（0-based）を表す [`CursorPosition`]
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let app = App::new("test", None, Default::default(), Default::default());
+    /// assert_eq!(app.cursor_pos().line, 0);
+    /// ```
     pub fn cursor_pos(&self) -> CursorPosition {
         self.cursor.pos
     }
 
-    /// 現在のViモード
+    /// 現在の Vi 操作モード（ノーマル、挿入、ビジュアル等）を取得します。
+    ///
+    /// # 戻り値
+    /// 現在有効な [`ViMode`]
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    /// use vivivi_vi::ViMode;
+    ///
+    /// let app = App::new("test", None, Default::default(), Default::default());
+    /// assert_eq!(app.mode(), ViMode::Normal);
+    /// ```
     pub fn mode(&self) -> ViMode {
         self.vi.mode()
     }
 
-    /// 単一文字をViEngineに入力し、確定したコマンドを実行します。
+    /// 単一文字を Vi コマンドエンジンに投入し、確定したコマンドを実行します。
+    ///
+    /// 検索コマンドの場合はハイライト表示を更新し、印刷プレビュー等が要求された場合は
+    /// プレビュー画面を自動展開します。
+    ///
+    /// # 引数
+    /// - `ch`: 投入する入力文字
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("hello", None, Default::default(), Default::default());
+    /// app.feed_vi_char('x'); // 1文字削除
+    /// ```
     pub fn feed_vi_char(&mut self, ch: char) {
         if let Some(cmd) = self.vi.feed_char(ch) {
             match &cmd {
@@ -265,7 +331,22 @@ impl App {
         }
     }
 
-    /// ファイル保存処理 (:w 等から呼ばれる)
+    /// 現在のバッファ内容を設定されたエンコーディングおよび改行コードでファイルに保存します (`:w` 相当)。
+    ///
+    /// 既存ファイルの上書き時は世代差分バックアップ（[`vivivi_modes::DiffLog`]）および
+    /// 永続化アンドゥログ（`.undodir`）を自動更新し、変更行ガター追跡のベースラインを再設定します。
+    ///
+    /// # Errors
+    /// ファイルの書き込み権限不足やディスク容量不足など、I/O エラーが発生した場合に [`std::io::Error`] を返します。
+    /// ファイルパスが設定されていない無名バッファの場合は何もしません。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("test", None, Default::default(), Default::default());
+    /// let _ = app.save_file();
+    /// ```
     pub fn save_file(&mut self) -> Result<(), std::io::Error> {
         if let Some(path) = &self.file_path {
             let content = self.buffer.to_string();
@@ -314,7 +395,25 @@ impl App {
         }
     }
 
-    /// 指定されたパスのファイルを読み込んでバッファを切り替えます。
+    /// 指定されたパスのファイルを読み込み、現在のエディタバッファを切り替えます。
+    ///
+    /// 文字コードおよび改行コードを自動判別し、拡張子に応じたシンタックスハイライト、
+    /// CSV整列ビュー、永続Undoログ（`.undodir`）の復元、最近使ったファイル履歴の追加を行います。
+    ///
+    /// # 引数
+    /// - `path`: 開くファイルのパス
+    ///
+    /// # Errors
+    /// ファイルの読み込み権限不足など、I/O エラーが発生した場合に [`std::io::Error`] を返します。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use std::path::PathBuf;
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("", None, Default::default(), Default::default());
+    /// let _ = app.open_file(PathBuf::from("src/main.rs"));
+    /// ```
     pub fn open_file(&mut self, path: PathBuf) -> Result<(), std::io::Error> {
         let (content, enc, nl) = if path.exists() {
             let bytes = std::fs::read(&path)?;
@@ -354,7 +453,17 @@ impl App {
         Ok(())
     }
 
-    /// 現在開いているファイルのお気に入り登録／解除を切り替えます。
+    /// 現在開いているファイルのお気に入り登録／解除をトグル（切り替え）します。
+    ///
+    /// 無名バッファの場合はエラーメッセージをステータスラインに表示します。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("", None, Default::default(), Default::default());
+    /// app.toggle_favorite_current_file();
+    /// ```
     pub fn toggle_favorite_current_file(&mut self) {
         if let Some(ref path) = self.file_path {
             let is_fav = self.recent_manager.toggle_favorite(path.clone());
@@ -371,7 +480,19 @@ impl App {
         }
     }
 
-    /// 罫線枠内テキスト整列の実行
+    /// 現在カーソル行の罫線枠内テキストを指定方向（左揃え・中央揃え・右揃え）に整列します。
+    ///
+    /// # 引数
+    /// - `alignment`: 整列方向（[`BoxAlignment`]）
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    /// use vivivi_modes::BoxAlignment;
+    ///
+    /// let mut app = App::new("│ text │", None, Default::default(), Default::default());
+    /// app.align_keisen_box(BoxAlignment::Center);
+    /// ```
     pub fn align_keisen_box(&mut self, alignment: BoxAlignment) {
         let cur_line = self.cursor_pos().line;
         if KeisenMode::align_box_text(&mut self.buffer, cur_line, alignment) {
@@ -381,13 +502,40 @@ impl App {
         }
     }
 
-    /// 罫線描画・消去ステップの実行
+    /// 罫線モードで指定方向に1セル進み、罫線の描画または消去を実行します。
+    ///
+    /// # 引数
+    /// - `dir`: 描画方向（[`KeisenDirection`]）
+    /// - `is_erase`: `true` の場合、罫線を消去
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    /// use vivivi_modes::KeisenDirection;
+    ///
+    /// let mut app = App::new("", None, Default::default(), Default::default());
+    /// app.step_keisen(KeisenDirection::Right, false);
+    /// ```
     pub fn step_keisen(&mut self, dir: KeisenDirection, is_erase: bool) {
         self.keisen_mode
             .step(&mut self.buffer, &mut self.cursor.pos, dir, is_erase);
     }
 
-    /// 画面サイズに合わせてスクロール位置を調整します。
+    /// 現在の表示領域の高さ・幅に合わせてエディタ画面のスクロールオフセットを自動調整します。
+    ///
+    /// カーソルが常に可視領域内に収まるよう、垂直・水平スクロール位置をクランプします。
+    ///
+    /// # 引数
+    /// - `view_height`: 可視行数
+    /// - `view_width`: 可視カラム幅
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("test", None, Default::default(), Default::default());
+    /// app.adjust_scroll(24, 80);
+    /// ```
     pub fn adjust_scroll(&mut self, view_height: usize, view_width: usize) {
         let cur = self.cursor_pos();
 
@@ -412,7 +560,18 @@ impl App {
         }
     }
 
-    /// 半画面スクロール移動 (Ctrl-D / Ctrl-U)
+    /// 半画面分（10行）カーソルを上下にスクロール移動します (`Ctrl-D` / `Ctrl-U` 相当)。
+    ///
+    /// # 引数
+    /// - `down`: `true` で下方向、`false` で上方向
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("line1\nline2", None, Default::default(), Default::default());
+    /// app.scroll_half_page(true);
+    /// ```
     pub fn scroll_half_page(&mut self, down: bool) {
         let step = 10usize;
         let total_lines = self.buffer.line_count();
@@ -424,7 +583,18 @@ impl App {
         self.clamp_cursor();
     }
 
-    /// 1画面スクロール移動 (PageDown / PageUp, Ctrl-F / Ctrl-B)
+    /// 1画面分（20行）カーソルを上下にスクロール移動します (`Ctrl-F` / `Ctrl-B`, `PageDown` / `PageUp` 相当)。
+    ///
+    /// # 引数
+    /// - `down`: `true` で下方向、`false` で上方向
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("line1\nline2", None, Default::default(), Default::default());
+    /// app.scroll_full_page(true);
+    /// ```
     pub fn scroll_full_page(&mut self, down: bool) {
         let step = 20usize;
         let total_lines = self.buffer.line_count();
@@ -436,7 +606,19 @@ impl App {
         self.clamp_cursor();
     }
 
-    /// カーソルをカレント行の有効範囲内にクランプ
+    /// カーソルの列位置を現在行の有効な文字境界内にクランプします。
+    ///
+    /// 挿入モード時は行末文字の直後まで、ノーマルモード時は末尾文字上に制限されます。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("abc", None, Default::default(), Default::default());
+    /// app.cursor.pos.col = 100;
+    /// app.clamp_cursor();
+    /// assert!(app.cursor.pos.col < 100);
+    /// ```
     pub fn clamp_cursor(&mut self) {
         let line_len = self
             .buffer
@@ -453,7 +635,16 @@ impl App {
 
     // --- 画面分割 (Split / Vsplit) 操作 ---
 
-    /// 画面を水平分割 (:split)
+    /// 画面を上下（水平）に2分割し、新しいウィンドウを作成します (`:split` または `Ctrl-W s` 相当)。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("test", None, Default::default(), Default::default());
+    /// app.split_horizontal();
+    /// assert_eq!(app.windows.len(), 2);
+    /// ```
     pub fn split_horizontal(&mut self) {
         let cur = self.cursor.clone();
         let scroll = self.scroll;
@@ -470,7 +661,16 @@ impl App {
         ));
     }
 
-    /// 画面を垂直分割 (:vsplit)
+    /// 画面を左右（垂直）に2分割し、新しいウィンドウを作成します (`:vsplit` または `Ctrl-W v` 相当)。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("test", None, Default::default(), Default::default());
+    /// app.split_vertical();
+    /// assert_eq!(app.windows.len(), 2);
+    /// ```
     pub fn split_vertical(&mut self) {
         let cur = self.cursor.clone();
         let scroll = self.scroll;
@@ -487,7 +687,18 @@ impl App {
         ));
     }
 
-    /// 次のウィンドウへフォーカス切り替え (Ctrl-w w)
+    /// フォーカスを次のウィンドウへ巡回移動します (`Ctrl-W w` 相当)。
+    ///
+    /// 現在のウィンドウのカーソル・スクロール状態を退避し、遷移先ウィンドウの状態を復元します。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("test", None, Default::default(), Default::default());
+    /// app.split_horizontal();
+    /// app.cycle_window();
+    /// ```
     pub fn cycle_window(&mut self) {
         if self.windows.len() > 1 {
             // 現在のウィンドウ状態を退避
@@ -505,7 +716,19 @@ impl App {
         }
     }
 
-    /// 現在のウィンドウを閉じる (:close, Ctrl-w c)
+    /// 現在フォーカスされているウィンドウを閉じます (`:close` または `Ctrl-W c` 相当)。
+    ///
+    /// 最後の1ウィンドウの場合はウィンドウを閉じず、未保存変更がなければ終了フラグを立てます。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("test", None, Default::default(), Default::default());
+    /// app.split_horizontal();
+    /// app.close_window();
+    /// assert_eq!(app.windows.len(), 1);
+    /// ```
     pub fn close_window(&mut self) {
         if self.windows.len() > 1 {
             self.windows.remove(self.active_window);
@@ -522,7 +745,18 @@ impl App {
         }
     }
 
-    /// 現在のウィンドウのみを残す (:only)
+    /// 現在フォーカスされているウィンドウ以外をすべて閉じ、単一ウィンドウに統合します (`:only` または `Ctrl-W o` 相当)。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("test", None, Default::default(), Default::default());
+    /// app.split_horizontal();
+    /// app.split_vertical();
+    /// app.only_window();
+    /// assert_eq!(app.windows.len(), 1);
+    /// ```
     pub fn only_window(&mut self) {
         let cur = self.cursor.clone();
         let scroll = self.scroll;
@@ -536,7 +770,18 @@ impl App {
 
     // --- アウトライン解析操作 ---
 
-    /// アウトラインペインの表示トグル (:outline, F8)
+    /// アウトラインサイドペインの表示状態をトグル（切り替え）します (`:outline` または `F8` 相当)。
+    ///
+    /// 表示を有効化した場合はバッファ内容を自動再解析します。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("# Heading", None, Default::default(), Default::default());
+    /// app.toggle_outline();
+    /// assert!(app.show_outline);
+    /// ```
     pub fn toggle_outline(&mut self) {
         self.show_outline = !self.show_outline;
         if self.show_outline {
@@ -548,7 +793,15 @@ impl App {
         }
     }
 
-    /// アウトライン情報の再解析
+    /// 現在のバッファ内容をシンタックス言語に基づいて再解析し、アウトライン項目一覧を更新します。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("fn main() {}", None, Default::default(), Default::default());
+    /// app.refresh_outline();
+    /// ```
     pub fn refresh_outline(&mut self) {
         let lines: Vec<String> = (0..self.buffer.line_count())
             .filter_map(|i| self.buffer.line_text(i))
@@ -559,7 +812,18 @@ impl App {
         }
     }
 
-    /// 選択中のアウトライン項目へジャンプ
+    /// サイドペインで現在選択されているアウトライン項目の定義行へカーソルをジャンプさせます。
+    ///
+    /// ジャンプ完了後、アウトラインペインのフォーカスを解除してエディタバッファへ戻します。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("fn main() {}", None, Default::default(), Default::default());
+    /// app.refresh_outline();
+    /// app.jump_to_selected_outline();
+    /// ```
     pub fn jump_to_selected_outline(&mut self) {
         if let Some(item) = self.outline_items.get(self.selected_outline_idx) {
             let target_line = item
@@ -575,7 +839,22 @@ impl App {
 
     // --- 文字変換操作 ---
 
-    /// バッファ全文に対する文字変換 (:zenkaku, :hankaku, etc.)
+    /// バッファ全文に対して指定された文字種変換（全角/半角、ひらがな/カタカナ等）を実行します (`:zenkaku`, `:hankaku` 等)。
+    ///
+    /// 操作全体は単一のアンドゥブロックとして記録され、1回のアンドゥ操作で復元できます。
+    ///
+    /// # 引数
+    /// - `conv_type`: 適用する変換ルール（[`ConversionType`]）
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    /// use vivivi_modes::ConversionType;
+    ///
+    /// let mut app = App::new("hello", None, Default::default(), Default::default());
+    /// app.convert_buffer_text(ConversionType::ToUppercase);
+    /// assert_eq!(app.buffer.line_text(0).unwrap(), "HELLO");
+    /// ```
     pub fn convert_buffer_text(&mut self, conv_type: ConversionType) {
         self.buffer.open_undo_block();
         let mut count = 0;
@@ -597,7 +876,17 @@ impl App {
 
     // --- BOX選択数値集計 (:calc / :sum) ---
 
-    /// 現在のBOX選択（VisualBlock）範囲から数値を抽出し、合計・平均・標準偏差を集計します。
+    /// 現在のBOX選択（矩形選択）範囲内の数値を抽出し、合計・平均・最大・最小・標準偏差を集計します (`:calc` / `:sum`)。
+    ///
+    /// 集計結果はステータスラインに表示され、合計値（Sum）は自動的に無名レジスタ（`"`）にコピーされます。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("10\n20\n30", None, Default::default(), Default::default());
+    /// app.calculate_current_box_selection();
+    /// ```
     pub fn calculate_current_box_selection(&mut self) {
         let anchor = self.cursor.anchor.unwrap_or(self.cursor.pos);
         let pos = self.cursor.pos;
@@ -625,7 +914,22 @@ impl App {
 
     // --- 動的補完 (dabbrev / Ctrl-L, Ctrl-M) ---
 
-    /// 動的補完を実行します。
+    /// 動的単語補完（dabbrev）を実行します (`Ctrl-L` で次候補、`Ctrl-M` で前候補)。
+    ///
+    /// 初回呼び出し時はカーソル直前の単語プレフィックスからバッファ全体を走査して候補一覧を生成し、
+    /// 2回目以降は補完文字列を循環的に差し替えます。
+    ///
+    /// # 引数
+    /// - `is_forward`: `true` で次の候補へ進む、`false` で前の候補へ戻る
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("function_apple function_ap", None, Default::default(), Default::default());
+    /// app.cursor.pos.col = 26;
+    /// app.trigger_dabbrev(true);
+    /// ```
     pub fn trigger_dabbrev(&mut self, is_forward: bool) {
         let cur = self.cursor.pos;
         if !self.dabbrev.is_active() {
@@ -681,7 +985,21 @@ impl App {
 
     // --- クリップボード履歴 (cbHist) 操作 ---
 
-    /// クリップボード履歴から指定アイテムをカーソル位置にペーストします。
+    /// クリップボード履歴ダイアログから指定インデックスのテキストをカーソル位置に貼り付けます。
+    ///
+    /// 文字単位、行単位、ブロック単位（矩形）のレジスタ種別に応じた適切なペースト処理を行い、
+    /// モーダルダイアログを自動的に閉じます。
+    ///
+    /// # 引数
+    /// - `index`: クリップボード履歴リスト内のインデックス（0-based）
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("", None, Default::default(), Default::default());
+    /// app.paste_clipboard_item(0);
+    /// ```
     pub fn paste_clipboard_item(&mut self, index: usize) {
         if let Some(item) = self.vi.registers().history().get(index).cloned() {
             let pos = self.buffer.cursor_to_position(self.cursor.pos);
@@ -715,7 +1033,20 @@ impl App {
 
     // --- ローマ字日本語検索 (Migemo / g/) ---
 
-    /// ローマ字クエリによる日本語インクリメンタル検索を実行します。
+    /// ローマ字クエリを日本語正規表現パターンにコンパイルし、インクリメンタル検索を実行します (`g/` 相当)。
+    ///
+    /// マッチ箇所が存在する場合はカーソルを移動させ、全画面検索ハイライトを自動有効化します。
+    ///
+    /// # 引数
+    /// - `romaji`: 入力されたローマ字文字列（例: `"kensaku"`）
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("日本語の検索テスト", None, Default::default(), Default::default());
+    /// app.execute_migemo_search("kensaku");
+    /// ```
     pub fn execute_migemo_search(&mut self, romaji: &str) {
         match self.migemo.compile_query(romaji) {
             Ok(regex) => {
@@ -748,7 +1079,19 @@ impl App {
         }
     }
 
-    /// Migemo検索結果の次／前の一致位置へジャンプします (n / N)。
+    /// Migemo 検索結果の次の一致箇所（または前の一致箇所）へカーソルをジャンプさせます (`n` / `N` 相当)。
+    ///
+    /// # 引数
+    /// - `is_forward`: `true` で正方向（次の一致）、`false` で逆方向（前の一致）
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("検索 検索", None, Default::default(), Default::default());
+    /// app.execute_migemo_search("kensaku");
+    /// app.jump_next_migemo(true);
+    /// ```
     pub fn jump_next_migemo(&mut self, is_forward: bool) {
         let regex = match &self.migemo_last_regex {
             Some(r) => r.clone(),
@@ -796,7 +1139,18 @@ impl App {
         }
     }
 
-    /// 現在アクティブな検索正規表現を取得します（Migemo検索または通常検索パターン）。
+    /// 現在有効な検索正規表現オブジェクトを取得します。
+    ///
+    /// Migemo検索の正規表現が優先され、存在しない場合は通常のVi検索パターンが使用されます。
+    /// `:nohlsearch` 等でハイライトが非表示化されている場合は `None` を返します。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let app = App::new("test", None, Default::default(), Default::default());
+    /// assert!(app.active_search_regex().is_none());
+    /// ```
     pub fn active_search_regex(&self) -> Option<regex::Regex> {
         if !self.is_search_highlight_visible {
             return None;
@@ -814,14 +1168,40 @@ impl App {
         None
     }
 
-    /// 検索ハイライトを一時的に非表示にします (:noh / :nohlsearch)。
+    /// 画面上の検索マッチハイライト表示を一時的に消去します (`:noh` / `:nohlsearch` 相当)。
+    ///
+    /// 次に検索を実行するか `n` / `N` を押すと自動的にハイライトが再開されます。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("test", None, Default::default(), Default::default());
+    /// app.clear_search_highlight();
+    /// assert!(!app.is_search_highlight_visible);
+    /// ```
     pub fn clear_search_highlight(&mut self) {
         self.is_search_highlight_visible = false;
     }
 
     // --- ヘルプビューア (:help / F1) ---
 
-    /// ヘルプドキュメントを開きます。
+    /// ヘルプドキュメント画面をモーダルビューとして開きます (`:help` または `F1` 相当)。
+    ///
+    /// 指定されたトピック名（例: `"keisen"`, `"csv"`）に対応する Markdown ヘルプを探索・ロードします。
+    /// トピックが省略された場合は総合インデックス（`index.md`）を表示します。
+    ///
+    /// # 引数
+    /// - `topic`: 閲覧したいヘルプトピック名（オプション）
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("", None, Default::default(), Default::default());
+    /// app.open_help(Some("keisen"));
+    /// assert!(app.show_help);
+    /// ```
     pub fn open_help(&mut self, topic: Option<&str>) {
         let topic_name = topic.unwrap_or("index").trim();
         let file_name = if topic_name.ends_with(".md") {
@@ -863,7 +1243,21 @@ impl App {
 
     // --- 編集支援: 対象行範囲取得 ---
 
-    /// ビジュアル選択範囲またはバッファ全体の行インデックス範囲 (start_line, end_line) を取得します。
+    /// ビジュアル選択範囲またはバッファ全体の対象行インデックス範囲 `(start_line, end_line)` を取得します。
+    ///
+    /// ビジュアルモード中の場合はアンカー位置と現在カーソル位置から選択範囲の開始行・終了行を算出し、
+    /// それ以外の場合はバッファの先頭行（0）から末尾行までの全行範囲を返します。
+    ///
+    /// # 戻り値
+    /// `(開始行, 終了行)` （0-based、inclusive）
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let app = App::new("line 1\nline 2", None, Default::default(), Default::default());
+    /// assert_eq!(app.get_target_line_range(), (0, 1));
+    /// ```
     pub fn get_target_line_range(&self) -> (usize, usize) {
         if self.vi.mode().is_visual()
             && let Some(anchor) = self.cursor.anchor
@@ -878,7 +1272,21 @@ impl App {
 
     // --- テキストアライン (:align <target>) ---
 
-    /// 指定した区切り文字列の位置で対象行範囲のテキストを垂直整列します。
+    /// 指定した区切り文字列の位置で対象行範囲のテキストを垂直整列します (`:align <target>` 相当)。
+    ///
+    /// 選択範囲内の各行で最初に出現する `target` 文字列の位置を揃えるよう空白を挿入し、
+    /// 実行後はノーマルモードへ戻ります。操作全体は単一のアンドゥブロックとして記録されます。
+    ///
+    /// # 引数
+    /// - `target`: 整列基準となる区切り文字列（例: `"="`, `":"`, `","`）
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("a = 1\nbbb = 2", None, Default::default(), Default::default());
+    /// app.align_selection_or_buffer("=");
+    /// ```
     pub fn align_selection_or_buffer(&mut self, target: &str) {
         if target.is_empty() || self.buffer.line_count() == 0 {
             return;
@@ -920,7 +1328,21 @@ impl App {
 
     // --- リナンバ (:renumber [start] [step]) ---
 
-    /// 対象行範囲の箇条書き・リスト連番を再付番します。
+    /// 対象行範囲の箇条書き・リスト連番を自動検出し、連番を再計算・更新します (`:renumber` 相当)。
+    ///
+    /// `1.`, `2)`, `[3]` などの連番パターンを検出し、開始番号 `start` と増分 `step` に応じて連番を振り直します。
+    ///
+    /// # 引数
+    /// - `start`: 開始番号
+    /// - `step`: 加算ステップ数
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("1. first\n1. second", None, Default::default(), Default::default());
+    /// app.renumber_selection_or_buffer(1, 1);
+    /// ```
     pub fn renumber_selection_or_buffer(&mut self, start: usize, step: usize) {
         if self.buffer.line_count() == 0 {
             return;
@@ -963,7 +1385,24 @@ impl App {
 
     // --- 行頭行末一括挿入 (:insbegend, :insbeg, :insend) ---
 
-    /// 対象行範囲の行頭および行末に文字列を一括挿入します。
+    /// 対象行範囲の行頭および行末に文字列を一括挿入します (`:insbegend` 相当)。
+    ///
+    /// インデント維持フラグ（`keep_indent`）や空行スキップフラグ（`skip_empty`）をサポートし、
+    /// コメントアウトやマークダウン箇条書き化などを高速に行えます。
+    ///
+    /// # 引数
+    /// - `beg`: 行頭に挿入する文字列
+    /// - `end`: 行末に挿入する文字列
+    /// - `keep_indent`: `true` の場合、既存インデントの直後に `beg` を挿入
+    /// - `skip_empty`: `true` の場合、空行をスキップ
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("item 1\nitem 2", None, Default::default(), Default::default());
+    /// app.insert_beg_end_in_range("- ", "", true, true);
+    /// ```
     pub fn insert_beg_end_in_range(
         &mut self,
         beg: &str,
@@ -1012,7 +1451,16 @@ impl App {
 
     // --- 静的略語展開 (abbrev / Ctrl-;) ---
 
-    /// カーソル直前の単語を検出し、略語辞書から定型コード・スニペットを展開します。
+    /// カーソル直前の単語を検出し、略語辞書から定型コード・スニペットを展開します (`Ctrl-;` 相当)。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("fnm", None, Default::default(), Default::default());
+    /// app.cursor.pos.col = 3;
+    /// app.trigger_abbrev_expansion();
+    /// ```
     pub fn trigger_abbrev_expansion(&mut self) {
         let cur_line_idx = self.cursor.pos.line;
         let line_text = match self.buffer.line_text(cur_line_idx) {
@@ -1068,7 +1516,16 @@ impl App {
 
     // --- Zen-Coding (Emmet) 展開 (Ctrl-,) ---
 
-    /// カーソル直前の短縮記法（ul>li*3 等）を検出し、HTMLタグ構造へ展開します。
+    /// カーソル直前の短縮記法（`ul>li*3` 等）を検出し、HTMLタグ構造へ展開します (`Ctrl-,` 相当)。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("div>p", None, Default::default(), Default::default());
+    /// app.cursor.pos.col = 5;
+    /// app.trigger_zen_coding();
+    /// ```
     pub fn trigger_zen_coding(&mut self) {
         let cur_line_idx = self.cursor.pos.line;
         let line_text = match self.buffer.line_text(cur_line_idx) {
@@ -1122,7 +1579,15 @@ impl App {
 
     // --- ダイナミックマクロ (Dynamic Macro / Alt-M) ---
 
-    /// 直前の編集履歴から反復規則を検出し、マクロを自動実行します。
+    /// 直前の入力・編集履歴から増井式反復規則を検出し、マクロを自動補完・実行します (`Alt-M` 相当)。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("", None, Default::default(), Default::default());
+    /// app.trigger_dynamic_macro();
+    /// ```
     pub fn trigger_dynamic_macro(&mut self) {
         if let Some(chars) = self.dynamic_macro.detect_repeat() {
             let seq_str: String = chars.iter().collect();
@@ -1147,7 +1612,15 @@ impl App {
 
     // --- 字句編集予測 (LexEdit / Ctrl-J) ---
 
-    /// カーソル位置の単語に対して過去の置換履歴から次の編集を予測し適用します。
+    /// カーソル位置の単語に対して過去の置換履歴から次の編集パターンを予測し適用します (`Ctrl-J` 相当)。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("old_fn", None, Default::default(), Default::default());
+    /// app.trigger_lex_edit();
+    /// ```
     pub fn trigger_lex_edit(&mut self) {
         let cur_line_idx = self.cursor.pos.line;
         let line_text = match self.buffer.line_text(cur_line_idx) {
@@ -1198,7 +1671,18 @@ impl App {
 
     // --- キーボードマクロ (Ctrl-Alt-R / Ctrl-Alt-P) ---
 
-    /// キーボードマクロの記録開始／停止をトグルします。
+    /// キーボードマクロの記録開始／停止をトグル（切り替え）します (`F9` または `Ctrl+Alt+R` 相当)。
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use vivivi_app::tui::App;
+    ///
+    /// let mut app = App::new("", None, Default::default(), Default::default());
+    /// app.toggle_macro_recording(); // 記録開始
+    /// assert!(app.is_recording_macro);
+    /// app.toggle_macro_recording(); // 記録終了
+    /// assert!(!app.is_recording_macro);
+    /// ```
     pub fn toggle_macro_recording(&mut self) {
         if self.is_recording_macro {
             self.is_recording_macro = false;
@@ -1214,7 +1698,17 @@ impl App {
     }
 }
 
-/// 最近使ったファイル永続化パスの取得 (%USERPROFILE%/.vivivi/recent.txt または ~/.vivivi/recent.txt)
+/// 最近使ったファイルおよびお気に入りの永続化保存ファイルパスを取得します。
+///
+/// Windows では `%USERPROFILE%/.vivivi/recent.txt`、Linux/macOS では `~/.vivivi/recent.txt` を返します。
+///
+/// # Examples
+/// ```rust,ignore
+/// use vivivi_app::tui::app::get_recent_file_path;
+///
+/// let path = get_recent_file_path();
+/// assert!(path.ends_with("recent.txt"));
+/// ```
 pub fn get_recent_file_path() -> PathBuf {
     if let Ok(userprofile) = std::env::var("USERPROFILE") {
         PathBuf::from(userprofile)

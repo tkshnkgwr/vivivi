@@ -20,7 +20,23 @@ use super::app::App;
 use super::window::SplitAxis;
 use vivivi_vi::ViMode;
 
-/// TUI の画面描画エントリーポイント。
+/// ターミナル画面全体の描画を実行するメインディスパッチ関数。
+///
+/// 画面全体をエディタ領域、アウトラインサイドペイン、ステータスライン/コマンドラインに分割し、
+/// 複数ウィンドウ分割（水平・垂直）や各種モーダルダイアログ（クリップボード履歴、最近使ったファイル、ヘルプ、印刷プレビュー）を重ねてレンダリングします。
+/// また、アクティブウィンドウ内のカーソル座標に基づいてターミナルの物理カーソル位置を設定します。
+///
+/// # 引数
+/// - `frame`: Ratatui の描画フレーム
+/// - `app`: アプリケーション状態への可変参照
+///
+/// # Examples
+/// ```rust,ignore
+/// // Ratatui の terminal.draw 内から呼び出されます
+/// terminal.draw(|frame| {
+///     vivivi_app::tui::ui::render(frame, &mut app);
+/// })?;
+/// ```
 pub fn render(frame: &mut Frame, app: &mut App) {
     let size = frame.area();
 

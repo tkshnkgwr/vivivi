@@ -13,7 +13,14 @@ use ratatui::{
 
 use crate::tui::app::App;
 
-/// ヘルプ画面を描画します。
+/// Markdown 形式のヘルプドキュメント画面をモーダルビューとして描画します。
+///
+/// 見出し、箇条書き、コードブロックを簡易シンタックス色付けしてスクロール表示します。
+///
+/// # 引数
+/// - `frame`: Ratatui の描画フレーム
+/// - `app`: アプリケーション状態への参照
+/// - `area`: 親画面全体の描画領域
 pub fn render_help_view(frame: &mut Frame, app: &App, area: Rect) {
     let popup_area = centered_rect(85, 85, area);
 

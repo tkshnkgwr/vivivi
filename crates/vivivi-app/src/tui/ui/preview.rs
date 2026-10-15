@@ -12,7 +12,12 @@ use ratatui::{
 
 use crate::tui::app::App;
 
-/// 印刷プレビュー画面を描画します。
+/// 印刷プレビュー（ヘッダー・フッター・行番号・ページ区切り付き）画面をモーダルビューとして描画します。
+///
+/// # 引数
+/// - `frame`: Ratatui の描画フレーム
+/// - `app`: アプリケーション状態への参照
+/// - `area`: 親画面全体の描画領域
 pub fn render_preview_view(frame: &mut Frame, app: &App, area: Rect) {
     let popup_area = centered_rect(90, 90, area);
 

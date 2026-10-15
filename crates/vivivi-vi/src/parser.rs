@@ -6,7 +6,18 @@
 use crate::command::{Motion, Operator, ViCommand, WordSearchKind};
 use crate::mode::ViMode;
 
-/// パーサーの内部状態。
+/// パーサーの内部状態を表す列挙体。
+///
+/// レジスタ指定、オペレータ待ち、多打鍵プレフィックス、コマンドライン入力中などの各フェーズを表現します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_vi::{CommandParser, ParserState};
+///
+/// let parser = CommandParser::new();
+/// assert_eq!(parser.state(), &ParserState::Idle);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParserState {
     /// 通常のキー待ち受け
@@ -49,7 +60,17 @@ pub enum ParserState {
     CommandLine { prefix: char, buffer: String },
 }
 
-/// Vi キー入力パーサー。
+/// 多段階の Vi キー入力を解析して [`ViCommand`] を生成する状態機械パーサー。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_vi::{CommandParser, Motion, ViCommand, ViMode};
+///
+/// let mut parser = CommandParser::new();
+/// let cmd = parser.feed_char('j', ViMode::Normal);
+/// assert_eq!(cmd, Some(ViCommand::Move(Motion::Down(1))));
+/// ```
 #[derive(Debug, Clone)]
 pub struct CommandParser {
     state: ParserState,
@@ -73,33 +94,87 @@ impl Default for CommandParser {
 }
 
 impl CommandParser {
+    /// 初期状態（[`ParserState::Idle`]）で新しい [`CommandParser`] を生成します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::CommandParser;
+    ///
+    /// let parser = CommandParser::new();
+    /// assert!(!parser.is_in_command_line());
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// パーサーの状態をリセットします。
+    /// パーサーの状態、カウントバッファ、レジスタ選択をすべてリセットします。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{CommandParser, ParserState, ViMode};
+    ///
+    /// let mut parser = CommandParser::new();
+    /// parser.feed_char('d', ViMode::Normal);
+    /// assert!(matches!(parser.state(), ParserState::WaitingForMotion { .. }));
+    ///
+    /// parser.reset();
+    /// assert_eq!(parser.state(), &ParserState::Idle);
+    /// ```
     pub fn reset(&mut self) {
         self.state = ParserState::Idle;
         self.count_buffer = None;
         self.selected_register = None;
     }
 
-    /// パーサーの現在の内部状態を取得します。
+    /// パーサーの現在の内部状態への参照を取得します。
     pub fn state(&self) -> &ParserState {
         &self.state
     }
 
-    /// マクロ記録用のレジスタ入力待ち (`q` 押下直後) かどうかを取得します。
+    /// マクロ記録用のレジスタ入力待ち (`q` 押下直後) かどうかを判定します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{CommandParser, ViMode};
+    ///
+    /// let mut parser = CommandParser::new();
+    /// parser.feed_char('q', ViMode::Normal);
+    /// assert!(parser.is_waiting_for_macro_record());
+    /// ```
     pub fn is_waiting_for_macro_record(&self) -> bool {
         matches!(self.state, ParserState::WaitingForMacroRecord)
     }
 
-    /// 現在コマンドライン入力中かどうかを取得します。
+    /// 現在コマンドラインまたは検索入力中（`:`, `/`, `?`）かどうかを判定します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{CommandParser, ViMode};
+    ///
+    /// let mut parser = CommandParser::new();
+    /// parser.feed_char(':', ViMode::Normal);
+    /// assert!(parser.is_in_command_line());
+    /// ```
     pub fn is_in_command_line(&self) -> bool {
         matches!(self.state, ParserState::CommandLine { .. })
     }
 
-    /// 現在のコマンドライン入力バッファを取得します。
+    /// 現在のコマンドライン入力プレフィックス（`:`, `/`, `?`）と入力中文字列を取得します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{CommandParser, ViMode};
+    ///
+    /// let mut parser = CommandParser::new();
+    /// parser.feed_char(':', ViMode::Normal);
+    /// parser.feed_char('w', ViMode::CommandLine);
+    /// assert_eq!(parser.command_line_buffer(), Some((&':', "w")));
+    /// ```
     pub fn command_line_buffer(&self) -> Option<(&char, &str)> {
         match &self.state {
             ParserState::CommandLine { prefix, buffer } => Some((prefix, buffer.as_str())),
@@ -108,6 +183,21 @@ impl CommandParser {
     }
 
     /// 1文字のキー入力を処理し、コマンドが確定した場合は `Some(ViCommand)` を返します。
+    ///
+    /// カウント数値の入力や多打鍵コマンド（例: `gg`, `dw`）の入力途中では内部状態を更新して `None` を返します。
+    ///
+    /// # Panics
+    ///
+    /// パニックは発生しません。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{CommandParser, Motion, ViCommand, ViMode};
+    ///
+    /// let mut parser = CommandParser::new();
+    /// assert_eq!(parser.feed_char('l', ViMode::Normal), Some(ViCommand::Move(Motion::Right(1))));
+    /// ```
     pub fn feed_char(&mut self, ch: char, mode: ViMode) -> Option<ViCommand> {
         // コマンドラインモードまたは検索入力中の処理
         if let ParserState::CommandLine {
@@ -687,95 +777,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_count_and_motion() {
+    fn test_internal_parser_state_transitions() {
         let mut parser = CommandParser::new();
+        assert_eq!(parser.state, ParserState::Idle);
 
-        // 3j -> Move(Down(3))
-        assert_eq!(parser.feed_char('3', ViMode::Normal), None);
-        assert_eq!(
-            parser.feed_char('j', ViMode::Normal),
-            Some(ViCommand::Move(Motion::Down(3)))
-        );
+        // '2' を入力 -> カウントバッファに蓄積
+        parser.feed_char('2', ViMode::Normal);
+        assert_eq!(parser.count_buffer, Some(2));
 
-        // 12w -> Move(NextWord(12))
-        assert_eq!(parser.feed_char('1', ViMode::Normal), None);
-        assert_eq!(parser.feed_char('2', ViMode::Normal), None);
-        assert_eq!(
-            parser.feed_char('w', ViMode::Normal),
-            Some(ViCommand::Move(Motion::NextWord(12)))
-        );
-    }
+        // '"' を入力 -> レジスタプレフィックス待機状態へ遷移
+        parser.feed_char('"', ViMode::Normal);
+        assert_eq!(parser.state, ParserState::WaitingForRegister);
 
-    #[test]
-    fn test_operator_and_motion() {
-        let mut parser = CommandParser::new();
-
-        // dw -> Operate(Delete, NextWord(1))
-        assert_eq!(parser.feed_char('d', ViMode::Normal), None);
-        assert_eq!(
-            parser.feed_char('w', ViMode::Normal),
-            Some(ViCommand::Operate {
-                op: Operator::Delete,
-                motion: Motion::NextWord(1),
-                register: None,
-            })
-        );
-
-        // dd -> OperateLine(Delete, 1)
-        assert_eq!(parser.feed_char('d', ViMode::Normal), None);
-        assert_eq!(
-            parser.feed_char('d', ViMode::Normal),
-            Some(ViCommand::OperateLine {
-                op: Operator::Delete,
-                count: 1,
-                register: None,
-            })
-        );
-    }
-
-    #[test]
-    fn test_register_and_command() {
-        let mut parser = CommandParser::new();
-
-        // "a yy -> OperateLine(Yank, 1, Some('a'))
-        assert_eq!(parser.feed_char('"', ViMode::Normal), None);
-        assert_eq!(parser.feed_char('a', ViMode::Normal), None);
-        assert_eq!(parser.feed_char('y', ViMode::Normal), None);
-        assert_eq!(
-            parser.feed_char('y', ViMode::Normal),
-            Some(ViCommand::OperateLine {
-                op: Operator::Yank,
-                count: 1,
-                register: Some('a'),
-            })
-        );
-    }
-
-    #[test]
-    fn test_command_line_parsing() {
-        let mut parser = CommandParser::new();
-
-        // :w<Enter> -> ExCommand("w")
-        assert_eq!(
-            parser.feed_char(':', ViMode::Normal),
-            Some(ViCommand::EnterMode(ViMode::CommandLine))
-        );
-        assert_eq!(parser.feed_char('w', ViMode::CommandLine), None);
-        assert_eq!(
-            parser.feed_char('\n', ViMode::CommandLine),
-            Some(ViCommand::ExCommand("w".to_string()))
-        );
-
-        // /hello<Enter> -> SearchForward("hello")
-        assert_eq!(
-            parser.feed_char('/', ViMode::Normal),
-            Some(ViCommand::EnterMode(ViMode::CommandLine))
-        );
-        assert_eq!(parser.feed_char('h', ViMode::CommandLine), None);
-        assert_eq!(parser.feed_char('i', ViMode::CommandLine), None);
-        assert_eq!(
-            parser.feed_char('\n', ViMode::CommandLine),
-            Some(ViCommand::SearchForward("hi".to_string()))
-        );
+        // 'a' を入力 -> selected_register に設定され Idle 状態へ
+        parser.feed_char('a', ViMode::Normal);
+        assert_eq!(parser.selected_register, Some('a'));
+        assert_eq!(parser.state, ParserState::Idle);
     }
 }

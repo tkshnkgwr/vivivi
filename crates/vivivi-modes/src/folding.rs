@@ -4,7 +4,24 @@
 //! 行の折り畳み範囲検出、折り畳み/展開状態管理、
 //! および表示行マッピング・プレビュー文字列生成を提供します。
 
-/// 折り畳み範囲。
+/// コードの折り畳み範囲。
+///
+/// 開始行・終了行（1-indexed）、ネストレベル、開閉状態を保持します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::folding::FoldRange;
+///
+/// let fold = FoldRange {
+///     start_line: 1,
+///     end_line: 10,
+///     level: 1,
+///     is_open: true,
+/// };
+/// assert!(fold.contains(5));
+/// assert!(!fold.hides(5)); // 開いているため非表示ではない
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FoldRange {
     /// 開始行（1-indexed, 折り畳み時もプレビュー行として表示される行）
@@ -19,29 +36,99 @@ pub struct FoldRange {
 
 impl FoldRange {
     /// 指定行がこの折り畳み範囲内に含まれているかを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::folding::FoldRange;
+    ///
+    /// let fold = FoldRange {
+    ///     start_line: 5,
+    ///     end_line: 15,
+    ///     level: 1,
+    ///     is_open: false,
+    /// };
+    /// assert!(fold.contains(10));
+    /// assert!(!fold.contains(4));
+    /// ```
     pub fn contains(&self, line: usize) -> bool {
         line >= self.start_line && line <= self.end_line
     }
 
     /// 折り畳まれた結果、隠される行（開始行以外の行）かを判定します。
+    ///
+    /// 開始行自身は折り畳みプレースホルダー行として表示されるため、隠されません。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::folding::FoldRange;
+    ///
+    /// let fold = FoldRange {
+    ///     start_line: 5,
+    ///     end_line: 10,
+    ///     level: 1,
+    ///     is_open: false,
+    /// };
+    /// assert!(!fold.hides(5)); // 開始行は表示される
+    /// assert!(fold.hides(6));  // 内部行は隠される
+    /// ```
     pub fn hides(&self, line: usize) -> bool {
         !self.is_open && line > self.start_line && line <= self.end_line
     }
 }
 
 /// 折り畳みマネージャ本体。
+///
+/// インデント階層からの折り畳み範囲自動計算や、
+/// 各行の開閉操作（`za`, `zc`, `zo`, `zM`, `zR`）を管理します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::folding::FoldManager;
+///
+/// let mut fm = FoldManager::new();
+/// fm.compute_indent_folds("fn f() {\n    let a = 1;\n}\n", 4);
+/// assert_eq!(fm.folds.len(), 1);
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct FoldManager {
+    /// 登録されている折り畳み範囲リスト
     pub folds: Vec<FoldRange>,
 }
 
 impl FoldManager {
-    /// 新しい `FoldManager` を生成します。
+    /// 空の折り畳みリストを持つ `FoldManager` を生成します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::folding::FoldManager;
+    ///
+    /// let fm = FoldManager::new();
+    /// assert!(fm.folds.is_empty());
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
     /// インデント階層に基づいてテキストから折り畳みブロックを自動検出します。
+    ///
+    /// # Parameters
+    /// - `text`: 解析対象のソースコード文字列。
+    /// - `tab_width`: タブ文字を半角スペース何個分として換算するか。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::folding::FoldManager;
+    ///
+    /// let mut fm = FoldManager::new();
+    /// fm.compute_indent_folds("fn a() {\n    let x = 1;\n}\n", 4);
+    /// assert_eq!(fm.folds.len(), 1);
+    /// assert_eq!(fm.folds[0].start_line, 1);
+    /// ```
     pub fn compute_indent_folds(&mut self, text: &str, tab_width: usize) {
         self.folds.clear();
         let lines: Vec<&str> = text.lines().collect();
@@ -121,7 +208,21 @@ impl FoldManager {
         self.folds.sort_by_key(|f| (f.start_line, f.level));
     }
 
-    /// カーソル行を含む最も内側の折り畳みをトグルします (`za`)。
+    /// カーソル行を含む最も内側の折り畳みを開閉トグルします (`za`)。
+    ///
+    /// # Returns
+    /// 折り畳み範囲が存在してトグルされた場合は `true`、見つからなかった場合は `false` を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::folding::FoldManager;
+    ///
+    /// let mut fm = FoldManager::new();
+    /// fm.compute_indent_folds("fn a() {\n    let x = 1;\n}\n", 4);
+    /// assert!(fm.toggle_fold(2));
+    /// assert!(!fm.folds[0].is_open);
+    /// ```
     pub fn toggle_fold(&mut self, line: usize) -> bool {
         if let Some(fold) = self.folds.iter_mut().rev().find(|f| f.contains(line)) {
             fold.is_open = !fold.is_open;
@@ -132,6 +233,17 @@ impl FoldManager {
     }
 
     /// カーソル行を含む最も内側の折り畳みを閉じます (`zc`)。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::folding::FoldManager;
+    ///
+    /// let mut fm = FoldManager::new();
+    /// fm.compute_indent_folds("fn a() {\n    let x = 1;\n}\n", 4);
+    /// assert!(fm.close_fold(2));
+    /// assert!(!fm.folds[0].is_open);
+    /// ```
     pub fn close_fold(&mut self, line: usize) -> bool {
         if let Some(fold) = self.folds.iter_mut().rev().find(|f| f.contains(line)) {
             fold.is_open = false;
@@ -142,6 +254,18 @@ impl FoldManager {
     }
 
     /// カーソル行を含む最も内側の折り畳みを開きます (`zo`)。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::folding::FoldManager;
+    ///
+    /// let mut fm = FoldManager::new();
+    /// fm.compute_indent_folds("fn a() {\n    let x = 1;\n}\n", 4);
+    /// fm.close_fold(2);
+    /// assert!(fm.open_fold(2));
+    /// assert!(fm.folds[0].is_open);
+    /// ```
     pub fn open_fold(&mut self, line: usize) -> bool {
         if let Some(fold) = self.folds.iter_mut().rev().find(|f| f.contains(line)) {
             fold.is_open = true;
@@ -152,6 +276,17 @@ impl FoldManager {
     }
 
     /// すべての折り畳みを閉じます (`zM`)。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::folding::FoldManager;
+    ///
+    /// let mut fm = FoldManager::new();
+    /// fm.compute_indent_folds("fn a() {\n    1;\n}\nfn b() {\n    2;\n}\n", 4);
+    /// fm.close_all();
+    /// assert!(fm.folds.iter().all(|f| !f.is_open));
+    /// ```
     pub fn close_all(&mut self) {
         for f in &mut self.folds {
             f.is_open = false;
@@ -159,6 +294,18 @@ impl FoldManager {
     }
 
     /// すべての折り畳みを開きます (`zR`)。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::folding::FoldManager;
+    ///
+    /// let mut fm = FoldManager::new();
+    /// fm.compute_indent_folds("fn a() {\n    1;\n}\n", 4);
+    /// fm.close_all();
+    /// fm.open_all();
+    /// assert!(fm.folds.iter().all(|f| f.is_open));
+    /// ```
     pub fn open_all(&mut self) {
         for f in &mut self.folds {
             f.is_open = true;
@@ -166,6 +313,16 @@ impl FoldManager {
     }
 
     /// 指定した深さレベル以上の折り畳みを閉じます (`z<lvl>`)。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::folding::FoldManager;
+    ///
+    /// let mut fm = FoldManager::new();
+    /// fm.compute_indent_folds("fn a() {\n    1;\n}\n", 4);
+    /// fm.close_to_level(1);
+    /// ```
     pub fn close_to_level(&mut self, level: usize) {
         for f in &mut self.folds {
             f.is_open = f.level < level;
@@ -173,11 +330,36 @@ impl FoldManager {
     }
 
     /// 指定行が他の折り畳みによって非表示（隠蔽）されているかを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::folding::FoldManager;
+    ///
+    /// let mut fm = FoldManager::new();
+    /// fm.compute_indent_folds("fn a() {\n    let x = 1;\n}\n", 4);
+    /// fm.close_fold(1);
+    /// assert!(fm.is_line_hidden(2));
+    /// assert!(!fm.is_line_hidden(1)); // 開始行は表示される
+    /// ```
     pub fn is_line_hidden(&self, line: usize) -> bool {
         self.folds.iter().any(|f| f.hides(line))
     }
 
     /// 指定行が閉じられた折り畳みの開始行である場合、プレースホルダー文字列を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::folding::FoldManager;
+    ///
+    /// let mut fm = FoldManager::new();
+    /// fm.compute_indent_folds("fn a() {\n    let x = 1;\n}\n", 4);
+    /// fm.close_fold(1);
+    /// let placeholder = fm.get_fold_placeholder(1, "fn a() {").unwrap();
+    /// assert!(placeholder.contains("+---"));
+    /// assert!(placeholder.contains("fn a() {"));
+    /// ```
     pub fn get_fold_placeholder(&self, line: usize, first_line_text: &str) -> Option<String> {
         let fold = self
             .folds

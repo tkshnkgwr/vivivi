@@ -5,12 +5,25 @@
 
 /// 行頭および行末に文字列を一括挿入します。
 ///
-/// # 引数
-/// - `lines`: 対象行のスライス
-/// - `beg_str`: 行頭に挿入する文字列（不要なら空文字 `""`）
-/// - `end_str`: 行末に挿入する文字列（不要なら空文字 `""`）
-/// - `keep_indent`: `true` の場合、行頭の空白（インデント）の直後に `beg_str` を挿入します。
+/// 複数行に対する一括コメントアウト（`// `）や、HTMLタグ（`<li>` ... `</li>`）での囲み処理などを高速に行います。
+///
+/// # Parameters
+/// - `lines`: 対象行のスライス。
+/// - `beg_str`: 行頭に挿入する文字列（不要なら空文字 `""`）。
+/// - `end_str`: 行末に挿入する文字列（不要なら空文字 `""`）。
+/// - `keep_indent`: `true` の場合、既存のインデント空白の直後に行頭文字列を挿入します。
 /// - `skip_empty`: `true` の場合、空行（空白のみの行）はスキップして何も挿入しません。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::line_edit::insert_beg_end_lines;
+///
+/// let lines = vec!["apple", "banana"];
+/// let tagged = insert_beg_end_lines(&lines, "<li>", "</li>", false, false);
+/// assert_eq!(tagged[0], "<li>apple</li>");
+/// assert_eq!(tagged[1], "<li>banana</li>");
+/// ```
 pub fn insert_beg_end_lines(
     lines: &[&str],
     beg_str: &str,

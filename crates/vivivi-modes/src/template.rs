@@ -7,16 +7,42 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// テンプレート展開結果。
+/// テンプレートマクロ展開結果。
+///
+/// プレースホルダー置換後のテキストと、`%Cursor%` マーカーで指定された初期キャレット位置を保持します。
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::template::TemplateResult;
+///
+/// let res = TemplateResult {
+///     text: "fn main() {}\n".to_string(),
+///     cursor_pos: 10,
+/// };
+/// assert_eq!(res.cursor_pos, 10);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TemplateResult {
-    /// 展開後のテキスト
+    /// マクロ展開後の完成テキスト
     pub text: String,
     /// `%Cursor%` が指定されていた場合の初期カーソルオフセット（文字位置）
     pub cursor_pos: usize,
 }
 
-/// テンプレートマネージャ。
+/// 拡張子別テンプレートを管理・展開するマネージャ。
+///
+/// メモリ内に登録されたカスタムテンプレート文字列や、ファイルシステム上の
+/// `.template.<ext>` ファイルからテンプレートを読み込み、マクロ置換を行います。
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::template::TemplateManager;
+///
+/// let mut mgr = TemplateManager::new();
+/// mgr.register_template("rs", "// %FileName%\n");
+/// let res = mgr.load_and_expand("test.rs", "2026-10-15", "10:00").unwrap();
+/// assert_eq!(res.text, "// test.rs\n");
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct TemplateManager {
     /// メモリ上に保持するビルトインまたは登録済みテンプレートマップ（拡張子 -> テンプレート内容）
@@ -24,12 +50,34 @@ pub struct TemplateManager {
 }
 
 impl TemplateManager {
-    /// 新しい `TemplateManager` を生成します。
+    /// 空のテンプレートマネージャを生成します。
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::template::TemplateManager;
+    ///
+    /// let mgr = TemplateManager::new();
+    /// assert!(mgr.load_and_expand("sample.unknown", "2026-10-15", "10:00").is_none());
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// メモリ内カスタムテンプレートを登録します。
+    /// 指定した拡張子に対するメモリ内カスタムテンプレート文字列を登録します。
+    ///
+    /// 拡張子文字列の先頭のドット `.` は自動的に無視され、大文字小文字は区別されません。
+    ///
+    /// # 引数
+    /// - `ext`: 拡張子（例: `"rs"`, `".cpp"`）
+    /// - `content`: テンプレート本文文字列
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::template::TemplateManager;
+    ///
+    /// let mut mgr = TemplateManager::new();
+    /// mgr.register_template(".py", "#!/usr/bin/env python3\n# %FileName%\n");
+    /// ```
     pub fn register_template(&mut self, ext: &str, content: &str) {
         self.custom_templates.insert(
             ext.trim_start_matches('.').to_lowercase(),
@@ -37,7 +85,26 @@ impl TemplateManager {
         );
     }
 
-    /// 対象ファイルパスに対応するテンプレートファイルを探索します。
+    /// 対象ファイルパスに対応するテンプレートファイルをファイルシステムから探索します。
+    ///
+    /// 以下の順序で候補ファイルを検索します：
+    /// 1. 同一ディレクトリ内の `.template.<ext>`
+    /// 2. ユーザーホームディレクトリ配下の `~/.vivivi/templates/.template.<ext>`
+    /// 3. ユーザーホームディレクトリ配下の `~/.vivivi/templates/template.<ext>`
+    ///
+    /// # 引数
+    /// - `file_path`: 作成対象の新規ファイルパス
+    ///
+    /// # 戻り値
+    /// 発見されたテンプレートファイルのパス。見つからない場合は `None`
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::template::TemplateManager;
+    ///
+    /// let template_path = TemplateManager::find_template_file("nonexistent/dummy_file.unknown");
+    /// assert!(template_path.is_none());
+    /// ```
     pub fn find_template_file<P: AsRef<Path>>(file_path: P) -> Option<PathBuf> {
         let p = file_path.as_ref();
         let ext = p.extension()?.to_str()?.to_lowercase();
@@ -67,7 +134,34 @@ impl TemplateManager {
         None
     }
 
-    /// ファイルパスと現在時刻からマクロ変数を構築し、テンプレートテキストを展開します。
+    /// ファイルパスおよび日付・時刻情報に基づき、テンプレート文字列内のマクロを展開します。
+    ///
+    /// 対応しているマクロ一覧：
+    /// - `%FileName%`: ファイル名（例: `main.rs`）
+    /// - `%FileBase%`: 拡張子を除いたファイル名（例: `main`）
+    /// - `%Ext%`: 拡張子（例: `rs`）
+    /// - `%Date%`: 指定された日付文字列
+    /// - `%Time%`: 指定された時刻文字列
+    /// - `%UserName%`, `%Author%`: 環境変数 `USERNAME` または `USER` の値
+    /// - `%Guard%`: C/C++インクルードガード用文字列（例: `FOO_H_`）
+    /// - `%Cursor%`: 展開後の初期カーソル位置を指定し、テキスト中からは削除
+    ///
+    /// # 引数
+    /// - `file_path`: 新規ファイルのパス
+    /// - `template_raw`: 展開前のテンプレート生文字列
+    /// - `date_str`: 置換用日付文字列
+    /// - `time_str`: 置換用時刻文字列
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::template::TemplateManager;
+    ///
+    /// let mgr = TemplateManager::new();
+    /// let raw = "/* File: %FileName% */\nfn main() { %Cursor% }";
+    /// let res = mgr.expand_template("src/main.rs", raw, "2026-10-15", "10:00:00");
+    /// assert!(res.text.starts_with("/* File: main.rs */"));
+    /// assert!(!res.text.contains("%Cursor%"));
+    /// ```
     pub fn expand_template<P: AsRef<Path>>(
         &self,
         file_path: P,
@@ -112,7 +206,26 @@ impl TemplateManager {
         }
     }
 
-    /// 新規ファイル向けにテンプレートを取得・展開します。
+    /// 新規ファイル向けに最適なテンプレートを取得し、マクロを展開した結果を返します。
+    ///
+    /// まずファイルシステム上のテンプレートを探索し、存在しなければ
+    /// メモリ内に登録されたカスタムテンプレートを使用します。
+    /// いずれも存在しない場合は `None` を返します。
+    ///
+    /// # 引数
+    /// - `file_path`: 新規ファイルのパス
+    /// - `date_str`: 置換用日付文字列
+    /// - `time_str`: 置換用時刻文字列
+    ///
+    /// # Examples
+    /// ```
+    /// use vivivi_modes::template::TemplateManager;
+    ///
+    /// let mut mgr = TemplateManager::new();
+    /// mgr.register_template("md", "# %FileBase%\n\nDate: %Date%\n");
+    /// let res = mgr.load_and_expand("docs/intro.md", "2026-10-15", "10:00").unwrap();
+    /// assert_eq!(res.text, "# intro\n\nDate: 2026-10-15\n");
+    /// ```
     pub fn load_and_expand<P: AsRef<Path>>(
         &self,
         file_path: P,

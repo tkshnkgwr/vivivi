@@ -7,15 +7,36 @@
 use regex::{Captures, RegexBuilder};
 use std::collections::HashMap;
 
-/// 式評価時の値の型。
+/// 式評価時の値の型（数値または文字列）。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::expr_subst::ExprValue;
+///
+/// let num = ExprValue::Number(42.0);
+/// assert_eq!(num.as_number(), Some(42.0));
+/// assert_eq!(num.to_display_string(), "42");
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExprValue {
+    /// 浮動小数点数値
     Number(f64),
+    /// 文字列
     String(String),
 }
 
 impl ExprValue {
-    /// 数値としての値を取得（文字列の場合はパースを試みる）。
+    /// 数値としての値を取得します。文字列値の場合は数値へのパースを試みます。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::expr_subst::ExprValue;
+    ///
+    /// assert_eq!(ExprValue::String("123".into()).as_number(), Some(123.0));
+    /// assert_eq!(ExprValue::String("abc".into()).as_number(), None);
+    /// ```
     pub fn as_number(&self) -> Option<f64> {
         match self {
             ExprValue::Number(n) => Some(*n),
@@ -23,7 +44,18 @@ impl ExprValue {
         }
     }
 
-    /// 表示用の文字列表現を取得。
+    /// 表示用の文字列表現を取得します。
+    ///
+    /// 整数値の場合は小数点なし（例: `"42"`）、小数の場合はそのまま出力します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::expr_subst::ExprValue;
+    ///
+    /// assert_eq!(ExprValue::Number(10.0).to_display_string(), "10");
+    /// assert_eq!(ExprValue::Number(3.14).to_display_string(), "3.14");
+    /// ```
     pub fn to_display_string(&self) -> String {
         match self {
             ExprValue::Number(n) => {
@@ -42,21 +74,65 @@ impl ExprValue {
     }
 }
 
-/// 式評価の実行コンテキスト。
+/// 式評価の実行コンテキスト（変数マップ）。
+///
+/// 正規表現キャプチャグループ（`$0`, `$1`）やループカウンタ（`$i`, `$n`）の値を保持します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::expr_subst::{ExprContext, ExprValue};
+///
+/// let mut ctx = ExprContext::new();
+/// ctx.set_var("i", ExprValue::Number(1.0));
+/// assert_eq!(ctx.get_var("i"), Some(&ExprValue::Number(1.0)));
+/// ```
 #[derive(Debug, Default)]
 pub struct ExprContext {
+    /// 登録変数マップ
     pub variables: HashMap<String, ExprValue>,
 }
 
 impl ExprContext {
+    /// 空のコンテキストを生成します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::expr_subst::ExprContext;
+    ///
+    /// let ctx = ExprContext::new();
+    /// assert!(ctx.variables.is_empty());
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// 変数を登録または上書きします。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::expr_subst::{ExprContext, ExprValue};
+    ///
+    /// let mut ctx = ExprContext::new();
+    /// ctx.set_var("x", ExprValue::Number(100.0));
+    /// assert_eq!(ctx.get_var("x"), Some(&ExprValue::Number(100.0)));
+    /// ```
     pub fn set_var(&mut self, name: &str, value: ExprValue) {
         self.variables.insert(name.to_string(), value);
     }
 
+    /// 変数値を取得します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::expr_subst::ExprContext;
+    ///
+    /// let ctx = ExprContext::new();
+    /// assert_eq!(ctx.get_var("unknown"), None);
+    /// ```
     pub fn get_var(&self, name: &str) -> Option<&ExprValue> {
         self.variables.get(name)
     }
@@ -201,6 +277,19 @@ impl<'a> Lexer<'a> {
 }
 
 /// 再帰下降構文解析器による式評価器。
+///
+/// 四則演算、文字列結合、変数参照、代入式を字句解析・構文解析して評価します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::expr_subst::{ExprContext, ExprParser, ExprValue};
+///
+/// let mut ctx = ExprContext::new();
+/// let mut parser = ExprParser::new("1 + 2 * 3", &mut ctx).unwrap();
+/// let val = parser.parse_expression().unwrap();
+/// assert_eq!(val, ExprValue::Number(7.0));
+/// ```
 pub struct ExprParser<'a> {
     tokens: Vec<Token>,
     pos: usize,
@@ -208,6 +297,20 @@ pub struct ExprParser<'a> {
 }
 
 impl<'a> ExprParser<'a> {
+    /// 式文字列とコンテキストからパーサーを初期化します。
+    ///
+    /// # Errors
+    /// トークン分割（字句解析）に失敗した場合にエラーメッセージを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::expr_subst::{ExprContext, ExprParser};
+    ///
+    /// let mut ctx = ExprContext::new();
+    /// let parser = ExprParser::new("10 + 20", &mut ctx);
+    /// assert!(parser.is_ok());
+    /// ```
     pub fn new(input: &'a str, context: &'a mut ExprContext) -> Result<Self, String> {
         let mut lexer = Lexer::new(input);
         let mut tokens = Vec::new();
@@ -237,7 +340,20 @@ impl<'a> ExprParser<'a> {
         &self.tokens[self.pos - 1]
     }
 
-    /// 式の評価開始。
+    /// 式を評価して結果値（[`ExprValue`]）を返します。
+    ///
+    /// # Errors
+    /// 構文エラーやゼロ除算、未定義変数の参照が発生した場合にエラーメッセージを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::expr_subst::{ExprContext, ExprParser, ExprValue};
+    ///
+    /// let mut ctx = ExprContext::new();
+    /// let mut parser = ExprParser::new("(5 - 2) * 4", &mut ctx).unwrap();
+    /// assert_eq!(parser.parse_expression().unwrap(), ExprValue::Number(12.0));
+    /// ```
     pub fn parse_expression(&mut self) -> Result<ExprValue, String> {
         self.parse_assignment()
     }
@@ -397,18 +513,34 @@ impl<'a> ExprParser<'a> {
     }
 }
 
-/// 式置換を実行するメイン関数。
+/// 正規表現マッチ箇所に対して数式・文字列評価式を適用して一括置換します。
+///
+/// マッチしたキャプチャグループ（`$0`, `$1`, ...）や組み込み変数（`$i`, `$n`, `$line`）を
+/// 計算式内で参照し、動的に算出した値に置換します。
 ///
 /// # 引数
-/// - `text`: 対象文字列（単一行またはバッファ全体）
-/// - `pattern`: 検索正規表現パターン
-/// - `expr_template`: 評価対象の式テンプレート
-/// - `is_all`: 全置換フラグ (`g`)
-/// - `ignore_case`: 大文字小文字同一視フラグ (`i`)
-/// - `start_line`: 行番号の開始オフセット (1-based)
+/// - `text`: 対象文字列（単一行または複数行バッファ全体）
+/// - `pattern`: 検索正規表現パターン文字列
+/// - `expr_template`: 各マッチに対して評価する式（例: `"$0 * 10"` や `"$1 + \": \" + ($line * 2)"`）
+/// - `is_all`: `true` の場合、マッチした全箇所を置換（`g` フラグ相当）。`false` の場合は最初の一致のみ置換
+/// - `ignore_case`: `true` の場合、英大文字・小文字を同一視（`i` フラグ相当）
+/// - `start_line`: 行番号変数の基準となる開始行番号（1-based）
 ///
-/// # 戻り値
-/// `(置換後テキスト, 置換件数)`
+/// # Errors
+/// - 正規表現 `pattern` の構文が不正な場合にエラー文字列を返します。
+/// - `expr_template` の字句解析または構文解析・型評価に失敗した場合にエラー文字列を返します。
+/// - 未定義の変数を参照した場合にエラー文字列を返します。
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::expr_subst::execute_expr_substitute;
+///
+/// let input = "item_1, item_2, item_3";
+/// // 各数値を 10 倍に置換
+/// let (result, count) = execute_expr_substitute(input, r"\d+", "$0 * 10", true, false, 1).unwrap();
+/// assert_eq!(result, "item_10, item_20, item_30");
+/// assert_eq!(count, 3);
+/// ```
 pub fn execute_expr_substitute(
     text: &str,
     pattern: &str,

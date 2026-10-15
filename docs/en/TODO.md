@@ -225,3 +225,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - Validate and ensure compatibility for terminal TUI keybindings and future GUI under macOS.
 - [ ] **[Platform Expansion] Linux Support (Low priority)**
   - Validate and ensure compatibility for terminal TUI and future GUI under Linux (X11/Wayland).
+- [ ] **[Packaging & Distribution] Windows Package Managers Support (Scoop / Winget) (Medium priority)**
+  - **Scoop**: Create custom bucket (`scoop-bucket`) and `vivivi.json` manifest for portable, non-admin CLI/TUI distribution.
+  - **Winget**: Submit package manifest to `microsoft/winget-pkgs` using `wingetcreate` for Windows 11 default package manager integration.
+  - Establish release automation workflow tied to GitHub Releases (portable zip).

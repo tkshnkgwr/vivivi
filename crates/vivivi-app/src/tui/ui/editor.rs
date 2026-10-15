@@ -11,7 +11,17 @@ use ratatui::{
 use crate::tui::app::App;
 use vivivi_vi::ViMode;
 
-/// 個別エディタウィンドウの描画（単一または分割枠線付き）
+/// 個別のエディタウィンドウ枠線および内部バッファを描画します。
+///
+/// 画面分割時はウィンドウ番号とアクティブ状態（黄色強調枠線）を表示し、
+/// 単一ウィンドウ時は枠線なしで全画面描画します。
+///
+/// # 引数
+/// - `frame`: Ratatui の描画フレーム
+/// - `app`: アプリケーション状態への参照
+/// - `area`: 描画領域の矩形
+/// - `win_idx`: ウィンドウインデックス（0-based）
+/// - `is_active`: 現在フォーカスがあるウィンドウかどうか
 pub fn render_window(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, is_active: bool) {
     if app.windows.len() > 1 {
         let title = if is_active {
@@ -38,7 +48,14 @@ pub fn render_window(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
     }
 }
 
-/// エディタバッファ（行番号＋テキスト）の描画
+/// エディタ本体（変更追跡ガター、行番号、シンタックスハイライト、選択範囲反転、不可視文字）を描画します。
+///
+/// スクロールオフセットを考慮して画面可視範囲内の行のみをフォーマット・レンダリングします。
+///
+/// # 引数
+/// - `frame`: Ratatui の描画フレーム
+/// - `app`: アプリケーション状態への参照
+/// - `area`: 描画対象領域の矩形
 pub fn render_editor(frame: &mut Frame, app: &App, area: Rect) {
     let cur = app.cursor_pos();
     let total_lines = app.buffer.line_count();

@@ -26,6 +26,17 @@ pub const KT_RIGHT_THICK: u8 = 0x02;
 pub const KT_RIGHT_THIN: u8 = 0x01;
 
 /// 罫線の線種（細線 / 太線）。
+///
+/// 細線（Thin: `─`, `│`, `┌` など）と太線（Thick: `━`, `┃`, `┏` など）を切り替えます。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::keisen::KeisenType;
+///
+/// let default_type = KeisenType::default();
+/// assert_eq!(default_type, KeisenType::Thin);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum KeisenType {
     #[default]
@@ -33,7 +44,16 @@ pub enum KeisenType {
     Thick,
 }
 
-/// 罫線を引く方向。
+/// 罫線を引く、または探索する4方向。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::keisen::KeisenDirection;
+///
+/// assert_eq!(KeisenDirection::Up.opposite(), KeisenDirection::Down);
+/// assert_eq!(KeisenDirection::Left.opposite(), KeisenDirection::Right);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeisenDirection {
     Up,
@@ -115,6 +135,20 @@ pub const KEISEN_TABLE: [u8; (KT_CODE_END - KT_CODE_BEG + 1) as usize] = {
 };
 
 /// 文字から対応する罫線接続ビットマスクを取得します。
+///
+/// 与えられた文字が Unicode 罫線ブロック（U+2500〜U+254B）に含まれ、
+/// かつ静的テーブルに登録されている場合に、上下左右の接続状態を示す8ビットマスクを返します。
+/// 罫線文字でない場合は `None` を返します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::keisen::{char_to_keisen_state, KT_LEFT_THIN, KT_RIGHT_THIN};
+///
+/// let state = char_to_keisen_state('─').unwrap();
+/// assert_eq!(state, KT_LEFT_THIN | KT_RIGHT_THIN);
+/// assert_eq!(char_to_keisen_state('A'), None);
+/// ```
 pub fn char_to_keisen_state(ch: char) -> Option<u8> {
     let code = ch as u32;
     if (KT_CODE_BEG..=KT_CODE_END).contains(&code) {
@@ -127,17 +161,46 @@ pub fn char_to_keisen_state(ch: char) -> Option<u8> {
     None
 }
 
-/// 文字が垂直方向の罫線接続を持つか判定します。
+/// 文字が垂直方向（上または下）の罫線接続を持つか判定します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::keisen::is_vertical_keisen;
+///
+/// assert!(is_vertical_keisen('│'));
+/// assert!(is_vertical_keisen('┌'));
+/// assert!(!is_vertical_keisen('─'));
+/// ```
 pub fn is_vertical_keisen(ch: char) -> bool {
     char_to_keisen_state(ch).is_some_and(|s| s & (KT_UP_MASK | KT_DOWN_MASK) != 0)
 }
 
-/// 文字が水平方向の罫線接続を持つか判定します。
+/// 文字が水平方向（左または右）の罫線接続を持つか判定します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::keisen::is_horizontal_keisen;
+///
+/// assert!(is_horizontal_keisen('─'));
+/// assert!(is_horizontal_keisen('┌'));
+/// assert!(!is_horizontal_keisen('│'));
+/// ```
 pub fn is_horizontal_keisen(ch: char) -> bool {
     char_to_keisen_state(ch).is_some_and(|s| s & (KT_LEFT_MASK | KT_RIGHT_MASK) != 0)
 }
 
 /// 指定されたビットマスク状態に合致する Unicode 罫線文字を検索して返します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::keisen::{state_to_keisen_char, KT_DOWN_THIN, KT_RIGHT_THIN};
+///
+/// let ch = state_to_keisen_char(KT_DOWN_THIN | KT_RIGHT_THIN);
+/// assert_eq!(ch, Some('┌'));
+/// ```
 pub fn state_to_keisen_char(state: u8) -> Option<char> {
     for (i, &s) in KEISEN_TABLE.iter().enumerate() {
         if s == state && s != 0 {
@@ -148,7 +211,15 @@ pub fn state_to_keisen_char(state: u8) -> Option<char> {
 }
 
 impl KeisenDirection {
-    /// 方向に対応するビットマスクを返します。
+    /// 方向に対応するビットマスク（2ビット分）を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::keisen::{KeisenDirection, KT_UP_MASK};
+    ///
+    /// assert_eq!(KeisenDirection::Up.mask(), KT_UP_MASK);
+    /// ```
     pub fn mask(&self) -> u8 {
         match self {
             Self::Up => KT_UP_MASK,
@@ -158,7 +229,16 @@ impl KeisenDirection {
         }
     }
 
-    /// 線種に応じたビットフラグを返します。
+    /// 線種に応じたビットフラグ（細線または太線）を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::keisen::{KeisenDirection, KeisenType, KT_UP_THIN, KT_UP_THICK};
+    ///
+    /// assert_eq!(KeisenDirection::Up.flag(KeisenType::Thin), KT_UP_THIN);
+    /// assert_eq!(KeisenDirection::Up.flag(KeisenType::Thick), KT_UP_THICK);
+    /// ```
     pub fn flag(&self, keisen_type: KeisenType) -> u8 {
         match (self, keisen_type) {
             (Self::Up, KeisenType::Thin) => KT_UP_THIN,
@@ -172,7 +252,15 @@ impl KeisenDirection {
         }
     }
 
-    /// 逆方向を返します。
+    /// 180度逆方向を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::keisen::KeisenDirection;
+    ///
+    /// assert_eq!(KeisenDirection::Left.opposite(), KeisenDirection::Right);
+    /// ```
     pub fn opposite(&self) -> Self {
         match self {
             Self::Up => Self::Down,
@@ -183,6 +271,14 @@ impl KeisenDirection {
     }
 
     /// 同一軸（水平: 左右、垂直: 上下）の両方向マスクを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::keisen::{KeisenDirection, KT_LEFT_MASK, KT_RIGHT_MASK};
+    ///
+    /// assert_eq!(KeisenDirection::Left.axis_mask(), KT_LEFT_MASK | KT_RIGHT_MASK);
+    /// ```
     pub fn axis_mask(&self) -> u8 {
         match self {
             Self::Left | Self::Right => KT_LEFT_MASK | KT_RIGHT_MASK,
@@ -190,7 +286,17 @@ impl KeisenDirection {
         }
     }
 
-    /// 直角方向のマスクを返します。
+    /// 直角交差方向のマスクを返します。
+    ///
+    /// 水平方向なら上下、垂直方向なら左右のマスクを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::keisen::{KeisenDirection, KT_UP_MASK, KT_DOWN_MASK};
+    ///
+    /// assert_eq!(KeisenDirection::Left.perp_mask(), KT_UP_MASK | KT_DOWN_MASK);
+    /// ```
     pub fn perp_mask(&self) -> u8 {
         match self {
             Self::Left | Self::Right => KT_UP_MASK | KT_DOWN_MASK,
@@ -199,16 +305,41 @@ impl KeisenDirection {
     }
 
     /// 線種に応じた同一軸両方向フラグを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::keisen::{KeisenDirection, KeisenType, KT_LEFT_THIN, KT_RIGHT_THIN};
+    ///
+    /// assert_eq!(
+    ///     KeisenDirection::Left.axis_flags(KeisenType::Thin),
+    ///     KT_LEFT_THIN | KT_RIGHT_THIN
+    /// );
+    /// ```
     pub fn axis_flags(&self, keisen_type: KeisenType) -> u8 {
         self.flag(keisen_type) | self.opposite().flag(keisen_type)
     }
 }
 
 /// 罫線枠内の文字列揃え方式。
+///
+/// 罫線で囲まれたセル内の文字列を左寄せ、中央揃え、右寄せに再配置する際に指定します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::keisen::BoxAlignment;
+///
+/// let align = BoxAlignment::Center;
+/// assert_eq!(align, BoxAlignment::Center);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoxAlignment {
+    /// 左揃え
     Left,
+    /// 中央揃え
     Center,
+    /// 右揃え
     Right,
 }
 
@@ -216,6 +347,24 @@ use unicode_width::UnicodeWidthStr;
 use vivivi_core::{CursorPosition, TextBuffer};
 
 /// 罫線モード状態管理構造体。
+///
+/// カーソル移動に伴う罫線の動的接続（太線/細線対応）、枠線保護編集、
+/// 枠内文字列の自動アライメント機能を提供します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::{CursorPosition, TextBuffer};
+/// use vivivi_modes::keisen::{KeisenDirection, KeisenMode, KeisenType};
+///
+/// let mut buffer = TextBuffer::new();
+/// let mut cursor = CursorPosition::new(0, 0);
+/// let mode = KeisenMode::new();
+///
+/// // 右方向へ罫線を1ステップ描画
+/// mode.step(&mut buffer, &mut cursor, KeisenDirection::Right, false);
+/// assert_eq!(cursor.col, 1);
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct KeisenMode {
     /// 罫線描画モードが有効かどうか (Shift-F5 等でトグル)
@@ -225,19 +374,62 @@ pub struct KeisenMode {
 }
 
 impl KeisenMode {
-    /// デフォルト設定で罫線モードを生成します。
+    /// デフォルト設定（無効状態・細線）で罫線モードを生成します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::keisen::{KeisenMode, KeisenType};
+    ///
+    /// let mode = KeisenMode::new();
+    /// assert!(!mode.is_active);
+    /// assert_eq!(mode.keisen_type, KeisenType::Thin);
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// 罫線描画モードの ON/OFF をトグルします。
+    /// 罫線描画モードの有効/無効をトグル反転します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::keisen::KeisenMode;
+    ///
+    /// let mut mode = KeisenMode::new();
+    /// mode.toggle();
+    /// assert!(mode.is_active);
+    /// mode.toggle();
+    /// assert!(!mode.is_active);
+    /// ```
     pub fn toggle(&mut self) {
         self.is_active = !self.is_active;
     }
 
     /// 罫線の描画または消去を1ステップ実行し、カーソルを移動します。
     ///
-    /// OpenViVi の `drawKeisenLeft/Right/Up/Down` 準拠のロジックです。
+    /// 現在のカーソルセルと移動先セルの接続ビットマスクを更新し、
+    /// 適切なUnicode罫線文字へ置き換えます。必要に応じて末尾空白や空行を自動拡張します。
+    ///
+    /// # Parameters
+    /// - `buffer`: 編集対象のテキストバッファ。
+    /// - `cursor`: 現在のカーソル座標（操作後に進行方向へ1ステップ更新されます）。
+    /// - `dir`: 描画・消去の進行方向。
+    /// - `is_erase`: `true` の場合は罫線消去、`false` の場合は描画。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::{CursorPosition, TextBuffer};
+    /// use vivivi_modes::keisen::{KeisenDirection, KeisenMode};
+    ///
+    /// let mut buffer = TextBuffer::new();
+    /// let mut cursor = CursorPosition::new(0, 0);
+    /// let mode = KeisenMode::new();
+    ///
+    /// mode.step(&mut buffer, &mut cursor, KeisenDirection::Down, false);
+    /// assert_eq!(cursor.line, 1);
+    /// ```
     pub fn step(
         &self,
         buffer: &mut TextBuffer,
@@ -338,6 +530,22 @@ impl KeisenMode {
     }
 
     /// 指定位置の隣接4セルから、こちら側に向かって接続している方向ビットマスクを取得します。
+    ///
+    /// 周囲のセル（上・下・左・右）が現在位置に対して接続を持つ罫線文字であるかを検査し、
+    /// 現在セルが接続すべき方向のビットフラグを合成して返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::{CursorPosition, TextBuffer};
+    /// use vivivi_modes::keisen::{KeisenMode, KeisenType};
+    ///
+    /// let mut buffer = TextBuffer::new();
+    /// buffer.insert_text(0, "│\n \n");
+    /// // 2行目の位置 (1, 0) から見て上の行 (0, 0) に垂直罫線がある
+    /// let mask = KeisenMode::neighbor_connections(&buffer, CursorPosition::new(1, 0), KeisenType::Thin);
+    /// assert_ne!(mask, 0);
+    /// ```
     pub fn neighbor_connections(
         buffer: &TextBuffer,
         pos: CursorPosition,
@@ -377,6 +585,20 @@ impl KeisenMode {
     }
 
     /// 指定セルの罫線状態ビットマスクを取得します（範囲外や空白なら 0）。
+    ///
+    /// 行番号や列番号が存在しない範囲を指している場合、またはセルが罫線文字ではない場合は `0` を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::TextBuffer;
+    /// use vivivi_modes::keisen::{KeisenMode, KT_LEFT_THIN, KT_RIGHT_THIN};
+    ///
+    /// let mut buffer = TextBuffer::new();
+    /// buffer.insert_text(0, "─");
+    /// let state = KeisenMode::get_cell_keisen_state(&buffer, 0, 0);
+    /// assert_eq!(state, KT_LEFT_THIN | KT_RIGHT_THIN);
+    /// ```
     pub fn get_cell_keisen_state(buffer: &TextBuffer, line: usize, col: usize) -> u8 {
         if line >= buffer.line_count() {
             return 0;
@@ -439,6 +661,21 @@ impl KeisenMode {
     ///
     /// 行内の左右の縦罫線（または行頭・行末）に挟まれたテキスト区間を検出し、
     /// 幅に合わせて前後の空白を再配置します。
+    ///
+    /// # Returns
+    /// 整列処理が実行された場合は `true`、縦罫線が2本未満など整列対象が存在しない場合は `false` を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::TextBuffer;
+    /// use vivivi_modes::keisen::{BoxAlignment, KeisenMode};
+    ///
+    /// let mut buffer = TextBuffer::new();
+    /// buffer.insert_text(0, "│ hello   │");
+    /// KeisenMode::align_box_text(&mut buffer, 0, BoxAlignment::Right);
+    /// assert_eq!(buffer.get_line(0).unwrap(), "│    hello│");
+    /// ```
     pub fn align_box_text(
         buffer: &mut TextBuffer,
         line_idx: usize,
@@ -515,6 +752,20 @@ impl KeisenMode {
     }
 
     /// カーソル位置を囲む左右の縦罫線のカラム位置（左罫線, 右罫線）を探索します。
+    ///
+    /// 左右に縦罫線が存在し、カーソルがその内部にある場合に `Some((左列, 右列))` を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::{CursorPosition, TextBuffer};
+    /// use vivivi_modes::keisen::KeisenMode;
+    ///
+    /// let mut buffer = TextBuffer::new();
+    /// buffer.insert_text(0, "│ test │");
+    /// let cols = KeisenMode::find_enclosing_box_cols(&buffer, CursorPosition::new(0, 3));
+    /// assert_eq!(cols, Some((0, 7)));
+    /// ```
     pub fn find_enclosing_box_cols(
         buffer: &TextBuffer,
         pos: CursorPosition,
@@ -553,7 +804,24 @@ impl KeisenMode {
     /// 罫線枠保護モードでの文字挿入。
     ///
     /// 枠線内にカーソルがある場合、カーソルから右枠線までの間にある末尾の空白文字を削ることで、
-    /// 外側の枠線位置を保ったまま文字を挿入します。空白の余白がない場合は挿入を拒否（false）します。
+    /// 外側の枠線位置を保ったまま文字を挿入します。空白の余白がない場合は枠の崩れを防ぐため挿入を拒否（`false`）します。
+    /// 枠外の場合は通常の文字挿入を行います。
+    ///
+    /// # Returns
+    /// 挿入に成功した場合は `true`、枠内に余白がなく拒否された場合は `false` を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::{CursorPosition, TextBuffer};
+    /// use vivivi_modes::keisen::KeisenMode;
+    ///
+    /// let mut buffer = TextBuffer::new();
+    /// buffer.insert_text(0, "│ a   │");
+    /// let mut cursor = CursorPosition::new(0, 3);
+    /// assert!(KeisenMode::insert_char_protected(&mut buffer, &mut cursor, 'b'));
+    /// assert_eq!(buffer.get_line(0).unwrap(), "│ ab  │");
+    /// ```
     pub fn insert_char_protected(
         buffer: &mut TextBuffer,
         cursor: &mut CursorPosition,
@@ -608,7 +876,23 @@ impl KeisenMode {
     /// 罫線枠保護モードでの文字削除（BackSpaceまたはDelete）。
     ///
     /// 枠線内にカーソルがある場合、文字を削除した分だけ右枠線の直前に半角スペースを補填し、
-    /// 外側の枠線位置をキープします。
+    /// 外側の枠線位置を保ちます。枠線の文字自体は誤消去されないよう保護されます。
+    ///
+    /// # Returns
+    /// 削除に成功した場合は `true`、枠線自体の削除試行など無効な操作の場合は `false` を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::{CursorPosition, TextBuffer};
+    /// use vivivi_modes::keisen::KeisenMode;
+    ///
+    /// let mut buffer = TextBuffer::new();
+    /// buffer.insert_text(0, "│ a b │");
+    /// let mut cursor = CursorPosition::new(0, 5); // 'b' の直後
+    /// assert!(KeisenMode::delete_char_protected(&mut buffer, &mut cursor, true));
+    /// assert_eq!(buffer.get_line(0).unwrap(), "│ a   │");
+    /// ```
     pub fn delete_char_protected(
         buffer: &mut TextBuffer,
         cursor: &mut CursorPosition,

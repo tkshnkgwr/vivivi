@@ -6,7 +6,18 @@
 
 use encoding_rs::{EUC_JP, SHIFT_JIS, UTF_8, UTF_16BE, UTF_16LE};
 
-/// ファイルの文字エンコーディング種別。
+/// テキストファイルの文字エンコーディング種別。
+///
+/// UTF-8（BOM有無）、Shift_JIS（CP932互換）、EUC-JP、UTF-16（LE/BE）をサポートします。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::CharEncoding;
+///
+/// let enc = CharEncoding::Utf8;
+/// assert_eq!(enc.name(), "UTF-8");
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CharEncoding {
     #[default]
@@ -19,7 +30,16 @@ pub enum CharEncoding {
 }
 
 impl CharEncoding {
-    /// 表示用・UI用の名称を返します。
+    /// ステータスライン等で表示するためのエンコーディング表示名を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::CharEncoding;
+    ///
+    /// assert_eq!(CharEncoding::ShiftJis.name(), "Shift_JIS");
+    /// assert_eq!(CharEncoding::Utf8Bom.name(), "UTF-8 (BOM)");
+    /// ```
     pub fn name(&self) -> &'static str {
         match self {
             Self::Utf8 => "UTF-8",
@@ -32,7 +52,19 @@ impl CharEncoding {
     }
 }
 
-/// ファイルの改行コード種別。
+/// テキストファイルの改行コード種別。
+///
+/// LF（Unix/macOS）、CRLF（Windows）、CR（旧Mac）を区別します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::NewlineType;
+///
+/// let nl = NewlineType::Crlf;
+/// assert_eq!(nl.as_str(), "\r\n");
+/// assert_eq!(nl.name(), "CRLF");
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NewlineType {
     #[default]
@@ -42,7 +74,16 @@ pub enum NewlineType {
 }
 
 impl NewlineType {
-    /// 文字列としての改行記号を返します。
+    /// 文字列としての改行記号（`\n`, `\r\n`, `\r`）を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::NewlineType;
+    ///
+    /// assert_eq!(NewlineType::Lf.as_str(), "\n");
+    /// assert_eq!(NewlineType::Crlf.as_str(), "\r\n");
+    /// ```
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Lf => "\n",
@@ -51,7 +92,16 @@ impl NewlineType {
         }
     }
 
-    /// 表示用・UI用の名称を返します。
+    /// ステータスライン等で表示するための改行コード表示名を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::NewlineType;
+    ///
+    /// assert_eq!(NewlineType::Lf.name(), "LF");
+    /// assert_eq!(NewlineType::Crlf.name(), "CRLF");
+    /// ```
     pub fn name(&self) -> &'static str {
         match self {
             Self::Lf => "LF",
@@ -62,6 +112,20 @@ impl NewlineType {
 }
 
 /// 生バイト列から文字コードを自動判別します。
+///
+/// BOM の有無を最優先で確認し、続いて UTF-8 検証、日本語特有の Shift_JIS / EUC-JP バイト列パターンのスコアリングを行って推定します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::{CharEncoding, detect_encoding};
+///
+/// let (enc, _) = detect_encoding(b"Hello, World!");
+/// assert_eq!(enc, CharEncoding::Utf8);
+///
+/// let (bom_enc, _) = detect_encoding(&[0xef, 0xbb, 0xbf, b'A']);
+/// assert_eq!(bom_enc, CharEncoding::Utf8Bom);
+/// ```
 pub fn detect_encoding(bytes: &[u8]) -> (CharEncoding, &'static encoding_rs::Encoding) {
     if bytes.is_empty() {
         return (CharEncoding::Utf8, UTF_8);
@@ -125,6 +189,17 @@ pub fn detect_encoding(bytes: &[u8]) -> (CharEncoding, &'static encoding_rs::Enc
 }
 
 /// テキストから改行コードを自動判別します。
+///
+/// CRLF、LF、CR の出現頻度を走査し、最多のものを返します。同数または改行が存在しない場合は LF をデフォルトとします。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::{NewlineType, detect_newline};
+///
+/// assert_eq!(detect_newline(b"line1\r\nline2\r\n"), NewlineType::Crlf);
+/// assert_eq!(detect_newline(b"line1\nline2\n"), NewlineType::Lf);
+/// ```
 pub fn detect_newline(bytes: &[u8]) -> NewlineType {
     let mut crlf_count = 0usize;
     let mut lf_count = 0usize;
@@ -157,6 +232,21 @@ pub fn detect_newline(bytes: &[u8]) -> NewlineType {
 
 /// 生バイト列から指定/自動判別されたエンコーディングで文字列へデコードし、
 /// バッファ内部用に改行を `\n` に正規化します。
+///
+/// UTF-8 BOM や UTF-16 の BOM は自動的に除去され、判別された [`CharEncoding`] および
+/// [`NewlineType`] とともに返されます。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::{CharEncoding, NewlineType, decode_bytes};
+///
+/// let input = b"Hello\r\nWorld";
+/// let (text, enc, nl) = decode_bytes(input);
+/// assert_eq!(text, "Hello\nWorld");
+/// assert_eq!(enc, CharEncoding::Utf8);
+/// assert_eq!(nl, NewlineType::Crlf);
+/// ```
 pub fn decode_bytes(bytes: &[u8]) -> (String, CharEncoding, NewlineType) {
     let (encoding, enc_type) = detect_encoding(bytes);
     let newline = detect_newline(bytes);
@@ -177,6 +267,17 @@ pub fn decode_bytes(bytes: &[u8]) -> (String, CharEncoding, NewlineType) {
 }
 
 /// バッファ内の正規化テキスト（改行 `\n`）を指定の文字コードと改行コードでバイト列にエンコードします。
+///
+/// 目的の改行形式への置換、BOM の付与、指定エンコーディングへの変換を一括して実行します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::{CharEncoding, NewlineType, encode_text};
+///
+/// let bytes = encode_text("A\nB", CharEncoding::Utf8, NewlineType::Crlf);
+/// assert_eq!(bytes, b"A\r\nB");
+/// ```
 pub fn encode_text(text: &str, encoding: CharEncoding, newline: NewlineType) -> Vec<u8> {
     // 1. 改行コードを目的の形式に置換
     let target_newline_text = match newline {
@@ -220,44 +321,4 @@ pub fn encode_text(text: &str, encoding: CharEncoding, newline: NewlineType) -> 
     }
 
     output
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_utf8_bom_detection_and_decoding() {
-        let mut raw = vec![0xef, 0xbb, 0xbf];
-        raw.extend_from_slice("こんにちは\r\n世界".as_bytes());
-
-        let (text, enc, nl) = decode_bytes(&raw);
-        assert_eq!(enc, CharEncoding::Utf8Bom);
-        assert_eq!(nl, NewlineType::Crlf);
-        assert_eq!(text, "こんにちは\n世界");
-
-        let re_encoded = encode_text(&text, enc, nl);
-        assert_eq!(re_encoded, raw);
-    }
-
-    #[test]
-    fn test_sjis_detection_and_encoding() {
-        // "こんにちは\n" を Shift_JIS でエンコード
-        let (sjis_bytes, _, _) = SHIFT_JIS.encode("テスト文書\r\n二行目");
-        let (text, enc, nl) = decode_bytes(&sjis_bytes);
-
-        assert_eq!(enc, CharEncoding::ShiftJis);
-        assert_eq!(nl, NewlineType::Crlf);
-        assert_eq!(text, "テスト文書\n二行目");
-
-        let encoded = encode_text(&text, enc, nl);
-        assert_eq!(encoded, sjis_bytes.as_ref());
-    }
-
-    #[test]
-    fn test_newline_variations() {
-        assert_eq!(detect_newline(b"a\r\nb\r\n"), NewlineType::Crlf);
-        assert_eq!(detect_newline(b"a\nb\n"), NewlineType::Lf);
-        assert_eq!(detect_newline(b"a\rb\r"), NewlineType::Cr);
-    }
 }

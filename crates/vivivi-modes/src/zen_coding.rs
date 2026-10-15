@@ -6,17 +6,44 @@
 /// 自立閉じタグ（Void Elements）一覧
 const VOID_TAGS: &[&str] = &["br", "hr", "img", "input", "meta", "link"];
 
-/// Zen-Coding の構文木ノード
+/// Zen-Coding の構文木ノード。
+///
+/// タグ名、ID、クラス名リスト、繰り返し回数、子要素リストを保持します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::zen_coding::ZenElement;
+///
+/// let el = ZenElement::new("div".to_string());
+/// assert_eq!(el.tag, "div");
+/// assert_eq!(el.count, 1);
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ZenElement {
+    /// タグ名（例: `"div"`, `"span"`, `"li"`）
     pub tag: String,
+    /// ID 属性（`#` で指定）
     pub id: Option<String>,
+    /// クラス名リスト（`.` で指定）
     pub classes: Vec<String>,
+    /// 繰り返し展開数（`*N` で指定）
     pub count: usize,
+    /// 子要素リスト（`>` で指定）
     pub children: Vec<ZenElement>,
 }
 
 impl ZenElement {
+    /// デフォルト設定で指定タグ名の `ZenElement` を生成します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::zen_coding::ZenElement;
+    ///
+    /// let el = ZenElement::new("p".to_string());
+    /// assert_eq!(el.tag, "p");
+    /// ```
     pub fn new(tag: String) -> Self {
         Self {
             tag,
@@ -27,7 +54,21 @@ impl ZenElement {
         }
     }
 
-    /// ノードおよび子要素を HTML 文字列にレンダリングします。
+    /// ノードおよび子要素を HTML 文字列に再帰的にレンダリングします。
+    ///
+    /// # Parameters
+    /// - `indent_level`: インデントの深さ。
+    /// - `indent_str`: 1階層あたりのインデント文字列（例: `"  "`）。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::zen_coding::ZenElement;
+    ///
+    /// let el = ZenElement::new("span".to_string());
+    /// let html = el.render(0, "  ");
+    /// assert_eq!(html.trim(), "<span></span>");
+    /// ```
     pub fn render(&self, indent_level: usize, indent_str: &str) -> String {
         let mut rendered = String::new();
 
@@ -73,13 +114,22 @@ impl ZenElement {
     }
 }
 
-/// Zen-Coding 短縮文字列をパースして正規の HTML 文字列を展開します。
+/// Zen-Coding 短縮文字列をパースして正規の HTML 文字列へ展開します。
 ///
-/// # 引数
-/// - `input`: 短縮文字列（例: `"div#header.main"`, `"ul>li*3"`, `"h1+p"`）
+/// ID記号（`#`）、クラス記号（`.`）、子要素階層（`>`）、同階層要素（`+`）、
+/// 繰り返し（`*N`）に対応します。入力が空または構文不正の場合は `None` を返します。
 ///
-/// # 戻り値
-/// 展開された HTML 文字列。末尾の余計な改行はトリムされます。
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::zen_coding::expand_zen_coding;
+///
+/// let html = expand_zen_coding("div#main.container").unwrap();
+/// assert_eq!(html, "<div id=\"main\" class=\"container\"></div>");
+///
+/// let list = expand_zen_coding("ul>li*2").unwrap();
+/// assert_eq!(list, "<ul>\n  <li></li>\n  <li></li>\n</ul>");
+/// ```
 pub fn expand_zen_coding(input: &str) -> Option<String> {
     let trimmed = input.trim();
     if trimmed.is_empty() {

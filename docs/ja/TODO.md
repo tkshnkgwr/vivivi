@@ -223,3 +223,7 @@
   - macOS環境でのターミナルTUI・キーバインドおよび将来的GUIの動作検証と互換性確保
 - [ ] **【プラットフォーム展開】 Linux 対応（優先度：低）**
   - Linux（X11/Wayland）環境でのターミナルTUIおよび将来的GUIの動作検証と互換性確保
+- [ ] **【パッケージ配布】 Windowsパッケージマネージャー対応 (Scoop / Winget)（優先度：中）**
+  - **Scoop**: 自作バケット (`scoop-bucket`) の作成と `vivivi.json` マニフェスト配置（管理者権限不要、CLI/TUIユーザー向け即日導入）
+  - **Winget**: `wingetcreate` を用いた `microsoft/winget-pkgs` へのマニフェスト登録・PR送信（Windows 11 標準パッケージマネージャー対応）
+  - GitHub Releases（v0.1.0等のポータブルzip配布）と連携した自動化・更新手順の確立

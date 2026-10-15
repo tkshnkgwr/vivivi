@@ -24,8 +24,9 @@ description: >-
 # 1. 高速構文・型チェック
 cargo check --all-targets
 
-# 2. 単体テスト実行（全テスト通過を確認）
-cargo test
+# 2. テスト実行（内部単体テスト・公開API統合テスト(tests/)・Doc-testの全通過を確認）
+cargo test --all-targets
+cargo test --doc
 
 # 3. Clippy 静的リント解析（警告ゼロを担保）
 cargo clippy --all-targets -- -D warnings

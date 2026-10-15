@@ -5,6 +5,20 @@
 //! 合計、平均、標準偏差、最小値、最大値を高速計算します。
 
 /// BOX選択範囲の数値計算結果。
+///
+/// 抽出された有効な数値の件数、合計、平均、標準偏差、最小値、最大値を保持します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::calc::calculate_box_lines;
+///
+/// let lines = vec!["10".to_string(), "20".to_string(), "30".to_string()];
+/// let result = calculate_box_lines(&lines).unwrap();
+/// assert_eq!(result.count, 3);
+/// assert_eq!(result.sum, 60.0);
+/// assert_eq!(result.average, 20.0);
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoxCalculationResult {
     /// 抽出された有効な数値の個数
@@ -22,7 +36,21 @@ pub struct BoxCalculationResult {
 }
 
 impl BoxCalculationResult {
-    /// ステータスバーやダイアログ用のフォーマット済みサマリー文字列を返します。
+    /// ステータスバーやダイアログ用のフォーマット済みサマリー文字列を生成します。
+    ///
+    /// 整数値は小数点なし、小数は第2位まで整形して出力します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::calc::calculate_box_lines;
+    ///
+    /// let lines = vec!["10".to_string(), "20".to_string()];
+    /// let result = calculate_box_lines(&lines).unwrap();
+    /// let summary = result.formatted_summary();
+    /// assert!(summary.contains("合計: 30"));
+    /// assert!(summary.contains("平均: 15"));
+    /// ```
     pub fn formatted_summary(&self) -> String {
         // 整数値かどうか判定して表示桁を最適化
         let fmt_num = |val: f64| -> String {
@@ -47,7 +75,21 @@ impl BoxCalculationResult {
 
 use vivivi_core::TextBuffer;
 
-/// 矩形行スライスから数値を抽出し、計算を実行します。
+/// 矩形行スライスから数値を抽出し、統計計算を実行します。
+///
+/// カンマ区切り（`1,234.50` など）は自動的に除去されて数値として解釈されます。
+/// 有効な数値が1つも存在しない場合は `None` を返します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::calc::calculate_box_lines;
+///
+/// let lines = vec![" 1,000 ".to_string(), " 2,500 ".to_string()];
+/// let result = calculate_box_lines(&lines).unwrap();
+/// assert_eq!(result.sum, 3500.0);
+/// assert_eq!(result.count, 2);
+/// ```
 pub fn calculate_box_lines(lines: &[String]) -> Option<BoxCalculationResult> {
     let mut numbers = Vec::new();
     for line in lines {
@@ -98,7 +140,21 @@ pub fn calculate_box_lines(lines: &[String]) -> Option<BoxCalculationResult> {
     })
 }
 
-/// 指定したバッファと矩形範囲（行・カラム）から数値を集計します。
+/// 指定したバッファと矩形選択範囲（行・カラム）から数値を集計します。
+///
+/// バッファの指定矩形範囲をスライスとして切り出し、[`calculate_box_lines`] で集計します。
+/// 範囲内に数値が存在しない場合は `None` を返します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::TextBuffer;
+/// use vivivi_modes::calc::calculate_box_selection;
+///
+/// let buffer = TextBuffer::from_text("item:  100\nitem:  200\n");
+/// let result = calculate_box_selection(&buffer, 0, 1, 6, 10).unwrap();
+/// assert_eq!(result.sum, 300.0);
+/// ```
 pub fn calculate_box_selection(
     buffer: &TextBuffer,
     min_line: usize,

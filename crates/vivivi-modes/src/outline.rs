@@ -4,6 +4,17 @@
 use crate::syntax::SyntaxLang;
 
 /// アウトライン項目の種別。
+///
+/// 見出しレベルやシンボル（関数、構造体、クラス等）を分類します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::outline::OutlineKind;
+///
+/// let heading = OutlineKind::Heading(1);
+/// assert_eq!(heading, OutlineKind::Heading(1));
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutlineKind {
     /// Markdown 見出し（レベル 1..=6）。
@@ -27,6 +38,23 @@ pub enum OutlineKind {
 }
 
 /// 解析されたアウトライン項目（シンボルまたは見出し）。
+///
+/// ソースコードまたはドキュメント内における行番号、階層インデントレベル、
+/// タイトル文字列、シンボル種別を保持します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::outline::{OutlineItem, OutlineKind};
+///
+/// let item = OutlineItem {
+///     line_idx: 0,
+///     level: 0,
+///     title: "Introduction".to_string(),
+///     kind: OutlineKind::Heading(1),
+/// };
+/// assert_eq!(item.title, "Introduction");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OutlineItem {
     /// バッファ内の0始まりの行番号。
@@ -39,7 +67,29 @@ pub struct OutlineItem {
     pub kind: OutlineKind,
 }
 
-/// ドキュメントの各行を言語仕様に従ってアウトライン階層へ解析します。
+/// ドキュメントの各行を指定された構文言語に従ってアウトライン階層へ解析します。
+///
+/// Markdownの見出し構造（`#` 〜 `######`）、Rustの `fn`, `struct`, `impl`、
+/// Pythonの `def`, `class` など、言語仕様に応じたシンボルツリーを生成します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::outline::{parse_outline, OutlineKind};
+/// use vivivi_modes::syntax::SyntaxLang;
+///
+/// let doc = vec![
+///     "# Main Section".to_string(),
+///     "Some body text".to_string(),
+///     "## Subsection".to_string(),
+/// ];
+/// let items = parse_outline(&doc, SyntaxLang::Markdown);
+/// assert_eq!(items.len(), 2);
+/// assert_eq!(items[0].title, "Main Section");
+/// assert_eq!(items[0].kind, OutlineKind::Heading(1));
+/// assert_eq!(items[1].title, "Subsection");
+/// assert_eq!(items[1].kind, OutlineKind::Heading(2));
+/// ```
 pub fn parse_outline(lines: &[String], lang: SyntaxLang) -> Vec<OutlineItem> {
     match lang {
         SyntaxLang::Markdown => parse_markdown_outline(lines),

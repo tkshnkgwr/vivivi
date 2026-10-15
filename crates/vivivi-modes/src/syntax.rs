@@ -7,25 +7,58 @@
 use std::path::Path;
 
 /// シンタックスハイライト対応言語。
+///
+/// ファイル拡張子に応じた自動判別をサポートします。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::syntax::SyntaxLang;
+///
+/// let lang = SyntaxLang::from_path("src/main.rs");
+/// assert_eq!(lang, SyntaxLang::Rust);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SyntaxLang {
+    /// プレーンテキスト（ハイライトなし）
     #[default]
     PlainText,
+    /// Rust
     Rust,
+    /// C / C++
     Cpp,
+    /// Python
     Python,
+    /// JavaScript / TypeScript
     JavaScript,
+    /// JSON
     Json,
+    /// Markdown
     Markdown,
+    /// SQL
     Sql,
+    /// PL/SQL
     PlSql,
+    /// Java
     Java,
+    /// HTML
     Html,
+    /// Bash / Shell
     Bash,
 }
 
 impl SyntaxLang {
     /// ファイルパスの拡張子から対応言語を自動判別します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::syntax::SyntaxLang;
+    ///
+    /// assert_eq!(SyntaxLang::from_path("index.html"), SyntaxLang::Html);
+    /// assert_eq!(SyntaxLang::from_path("script.py"), SyntaxLang::Python);
+    /// assert_eq!(SyntaxLang::from_path("unknown.xyz"), SyntaxLang::PlainText);
+    /// ```
     pub fn from_path<P: AsRef<Path>>(path: P) -> Self {
         let ext = path
             .as_ref()
@@ -52,6 +85,17 @@ impl SyntaxLang {
 }
 
 /// 構文トークン種別。
+///
+/// 予約語、型名、リテラル、コメント、記号、通常テキストを分類します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::syntax::TokenType;
+///
+/// let kw = TokenType::Keyword;
+/// assert_eq!(kw, TokenType::Keyword);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenType {
     /// 予約語・キーワード (`fn`, `let`, `if`, `def`, `class`, etc.)
@@ -71,13 +115,41 @@ pub enum TokenType {
 }
 
 /// ハイライト描画用の単一トークン。
+///
+/// トークンの文字列スライスと構文種別を保持します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::syntax::{SyntaxToken, TokenType};
+///
+/// let token = SyntaxToken {
+///     text: "fn".to_string(),
+///     token_type: TokenType::Keyword,
+/// };
+/// assert_eq!(token.token_type, TokenType::Keyword);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyntaxToken {
+    /// トークン文字列
     pub text: String,
+    /// トークン種別
     pub token_type: TokenType,
 }
 
 /// 行単位で構文を解析し、トークンのシーケンスを返します。
+///
+/// 言語規則に基づき、キーワードや文字列、コメント等を順次切り出して [`SyntaxToken`] の列を生成します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::syntax::{tokenize_line, SyntaxLang, TokenType};
+///
+/// let tokens = tokenize_line("let x = 42;", SyntaxLang::Rust);
+/// assert!(tokens.iter().any(|t| t.text == "let" && t.token_type == TokenType::Keyword));
+/// assert!(tokens.iter().any(|t| t.text == "42" && t.token_type == TokenType::Number));
+/// ```
 pub fn tokenize_line(line: &str, lang: SyntaxLang) -> Vec<SyntaxToken> {
     if lang == SyntaxLang::PlainText || line.is_empty() {
         return vec![SyntaxToken {

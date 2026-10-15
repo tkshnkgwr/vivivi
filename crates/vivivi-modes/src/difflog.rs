@@ -11,6 +11,22 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 /// 1世代分の DiffLog エントリ。
+///
+/// 世代番号、記録日時、コメント、および Unified Diff パッチ文字列を保持します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::difflog::DiffLogEntry;
+///
+/// let entry = DiffLogEntry {
+///     generation: 1,
+///     timestamp: "2026-01-01 12:00:00".to_string(),
+///     comment: "Initial revision".to_string(),
+///     patch: String::new(),
+/// };
+/// assert_eq!(entry.generation, 1);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiffLogEntry {
     /// 世代番号（1から始まる連番）
@@ -24,27 +40,76 @@ pub struct DiffLogEntry {
 }
 
 /// 世代バックアップログの管理構造体。
+///
+/// 各世代の差分パッチを累積管理し、任意世代の復元や行ごとの更新世代（blame）判定を提供します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::difflog::DiffLog;
+///
+/// let log = DiffLog::new();
+/// assert!(log.entries.is_empty());
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct DiffLog {
+    /// 世代エントリリスト
     pub entries: Vec<DiffLogEntry>,
 }
 
 /// 行ごとの最終更新世代情報（簡易blame）。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::difflog::BlameInfo;
+///
+/// let blame = BlameInfo {
+///     lineno: 1,
+///     generation: 2,
+///     timestamp: "2026-01-01 12:30:00".to_string(),
+///     text: "let a = 1;".to_string(),
+/// };
+/// assert_eq!(blame.generation, 2);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlameInfo {
+    /// 1-indexed の行番号
     pub lineno: usize,
+    /// 最終更新世代番号
     pub generation: usize,
+    /// 最終更新日時
     pub timestamp: String,
+    /// 行文字列
     pub text: String,
 }
 
 impl DiffLog {
-    /// 新しい空の DiffLog を生成します。
+    /// 新しい空の `DiffLog` を生成します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::difflog::DiffLog;
+    ///
+    /// let log = DiffLog::new();
+    /// assert_eq!(log.entries.len(), 0);
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// 対象ファイルパスから対応する `.difflog` のパスを取得します。
+    /// 対象ファイルパスから対応する隠し世代ログファイル（`.<filename>.difflog`）のパスを算出します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::path::Path;
+    /// use vivivi_modes::difflog::DiffLog;
+    ///
+    /// let path = DiffLog::difflog_path("src/main.rs");
+    /// assert_eq!(path.file_name().unwrap(), ".main.rs.difflog");
+    /// ```
     pub fn difflog_path<P: AsRef<Path>>(file_path: P) -> PathBuf {
         let p = file_path.as_ref();
         let file_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("untitled");
@@ -55,7 +120,20 @@ impl DiffLog {
         }
     }
 
-    /// ファイル保存時に新世代の差分を `.difflog` に追記します。
+    /// ファイル保存時に新旧テキストの差分を算出し、`.difflog` ファイルに新世代として追記します。
+    ///
+    /// 差分が全く存在しない場合は追記せず `Ok(None)` を返します。
+    ///
+    /// # Errors
+    /// ファイルの読み書きに失敗した場合にエラーメッセージを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use vivivi_modes::difflog::DiffLog;
+    ///
+    /// let generation = DiffLog::record_generation("test.txt", "old", "new", "2026-01-01", "save").unwrap();
+    /// ```
     pub fn record_generation<P: AsRef<Path>>(
         file_path: P,
         old_text: &str,
@@ -86,7 +164,18 @@ impl DiffLog {
         Ok(Some(next_gen))
     }
 
-    /// `.difflog` ファイルを読み込みます。
+    /// `.difflog` ファイルを読み込み、`DiffLog` 構造体として復元します。ファイルが存在しない場合は空のログを返します。
+    ///
+    /// # Errors
+    /// ファイルの読み込みに失敗した場合、またはフォーマットが不正な場合にエラーメッセージを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use vivivi_modes::difflog::DiffLog;
+    ///
+    /// let log = DiffLog::load_from_file(".main.rs.difflog").unwrap();
+    /// ```
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self, String> {
         let path = path.as_ref();
         if !path.exists() {
@@ -101,7 +190,19 @@ impl DiffLog {
         Self::parse(&content)
     }
 
-    /// `.difflog` ファイルに保存します。
+    /// `.difflog` ファイルに現在の世代履歴を保存（シリアライズ）します。
+    ///
+    /// # Errors
+    /// ファイル書き込みに失敗した場合にエラーメッセージを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use vivivi_modes::difflog::DiffLog;
+    ///
+    /// let log = DiffLog::new();
+    /// log.save_to_file(".main.rs.difflog").unwrap();
+    /// ```
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
         let serialized = self.serialize();
         if let Some(parent) = path.as_ref().parent() {
@@ -118,7 +219,17 @@ impl DiffLog {
         Ok(())
     }
 
-    /// DiffLog をテキスト形式にシリアライズします。
+    /// DiffLog をテキスト形式（`VIVIVI_DIFFLOG_V1`）にシリアライズします。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::difflog::DiffLog;
+    ///
+    /// let log = DiffLog::new();
+    /// let text = log.serialize();
+    /// assert!(text.starts_with("VIVIVI_DIFFLOG_V1\n"));
+    /// ```
     pub fn serialize(&self) -> String {
         let mut out = String::new();
         out.push_str("VIVIVI_DIFFLOG_V1\n");
@@ -135,7 +246,19 @@ impl DiffLog {
         out
     }
 
-    /// テキストから DiffLog を解析・復元します。
+    /// シリアライズされたテキストから `DiffLog` を解析・復元します。
+    ///
+    /// # Errors
+    /// ヘッダーが `VIVIVI_DIFFLOG_V1` で始まらないなど、フォーマットが不正な場合にエラーメッセージを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::difflog::DiffLog;
+    ///
+    /// let parsed = DiffLog::parse("VIVIVI_DIFFLOG_V1\n").unwrap();
+    /// assert!(parsed.entries.is_empty());
+    /// ```
     pub fn parse(content: &str) -> Result<Self, String> {
         let lines: Vec<&str> = content.lines().collect();
         if lines.is_empty() || lines[0].trim() != "VIVIVI_DIFFLOG_V1" {
@@ -180,6 +303,33 @@ impl DiffLog {
     }
 
     /// 初版のテキスト `initial_text` から指定世代 `target_gen` の内容を復元します。
+    ///
+    /// 第1世代から `target_gen` までの差分パッチを順次適用してテキストを再構築します。
+    ///
+    /// # Errors
+    /// パッチの適用に失敗した場合にエラーメッセージを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::difflog::{DiffLog, DiffLogEntry};
+    /// use vivivi_modes::diff::create_unified_diff;
+    ///
+    /// let v1 = "a\nb\n";
+    /// let v2 = "a\nB\n";
+    /// let patch = create_unified_diff(v1, v2, "v1", "v2");
+    ///
+    /// let mut log = DiffLog::new();
+    /// log.entries.push(DiffLogEntry {
+    ///     generation: 1,
+    ///     timestamp: "2026-01-01".into(),
+    ///     comment: "update".into(),
+    ///     patch,
+    /// });
+    ///
+    /// let restored = log.restore_from_initial(v1, 1).unwrap();
+    /// assert_eq!(restored, v2);
+    /// ```
     pub fn restore_from_initial(
         &self,
         initial_text: &str,
@@ -195,7 +345,18 @@ impl DiffLog {
         Ok(current)
     }
 
-    /// 現在のテキストと DiffLog 履歴から、行ごとの最終更新世代（簡易blame）を計算します。
+    /// 現在のテキストと DiffLog 履歴から、行ごとの最終更新世代（簡易blame）を算出します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::difflog::DiffLog;
+    ///
+    /// let log = DiffLog::new();
+    /// let blames = log.compute_blame("line 1\nline 2\n");
+    /// assert_eq!(blames.len(), 2);
+    /// assert_eq!(blames[0].lineno, 1);
+    /// ```
     pub fn compute_blame(&self, current_text: &str) -> Vec<BlameInfo> {
         let lines: Vec<&str> = current_text.lines().collect();
         let latest_gen = self.entries.last().map(|e| e.generation).unwrap_or(1);

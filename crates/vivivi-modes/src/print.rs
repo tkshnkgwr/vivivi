@@ -2,27 +2,43 @@
 //!
 //! ViVi 3 / ViVi 4 の印刷プレビュー・PDF印刷機能に基づき、
 //! ページ分割（用紙サイズ・行数・桁数）、行番号、ヘッダー/フッター付与、
-//! Markdown整形プレビュー、および自己完結型の PDF 1.4 出力エンジンを提供します。
+//! プレビュー整形、および自己完結型の PDF 1.4 出力エンジンを提供します。
 
 use std::fs;
 use std::path::Path;
 
 /// 印刷・ページ分割設定。
+///
+/// 用紙ごとの行数・桁数の上限、行番号の有無、およびヘッダー・フッターの書式を保持します。
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::print::PrintSettings;
+///
+/// let settings = PrintSettings::default();
+/// assert_eq!(settings.lines_per_page, 60);
+/// assert!(settings.show_line_numbers);
+/// ```
 #[derive(Debug, Clone)]
 pub struct PrintSettings {
     /// 1ページあたりの行数（ヘッダー・フッターを含む、A4縦の標準約60行）
     pub lines_per_page: usize,
     /// 1行あたりの最大文字数（折り返し幅）
     pub columns_per_line: usize,
-    /// 行番号を表示するか
+    /// 行番号を表示するかどうかのフラグ
     pub show_line_numbers: bool,
-    /// ヘッダー文字列（例: "%FileName% - %Date%"）
+    /// ヘッダー文字列テンプレート（例: `"%FileName%  [%Date%]"`）
     pub header_format: String,
-    /// フッター文字列（例: "- %Page% / %Total% -"）
+    /// フッター文字列テンプレート（例: `"- %Page% / %Total% -"`）
     pub footer_format: String,
 }
 
 impl Default for PrintSettings {
+    /// A4縦向き印刷を想定した標準設定を生成します。
+    ///
+    /// - 1ページあたり60行、1行あたり80桁
+    /// - 行番号表示有効
+    /// - ファイル名と日付を含むヘッダー、ページ番号を含むフッター
     fn default() -> Self {
         Self {
             lines_per_page: 60,
@@ -34,14 +50,53 @@ impl Default for PrintSettings {
     }
 }
 
-/// ページデータ。
+/// 分割された1ページ分の印刷データ。
+///
+/// ヘッダー、本文行、余白パディング、およびフッターを含む全行が格納されます。
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::print::PrintPage;
+///
+/// let page = PrintPage {
+///     page_number: 1,
+///     lines: vec!["Header".to_string(), "Line 1".to_string(), "Footer".to_string()],
+/// };
+/// assert_eq!(page.page_number, 1);
+/// assert_eq!(page.lines.len(), 3);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrintPage {
+    /// ページ番号（1-based）
     pub page_number: usize,
+    /// ページを構成する行テキスト一覧（ヘッダー・本文・フッター含む）
     pub lines: Vec<String>,
 }
 
-/// テキストをページ分割し、ヘッダー・フッター・行番号付きのプレビューページ一覧を生成します。
+/// 指定テキストを設定に基づいてページ分割し、ヘッダー・フッター・行番号付きのページ一覧を生成します。
+///
+/// 桁数を超える長い行は自動的に折り返され、行番号は継続行としてインデント整列されます。
+/// ヘッダー内の `%FileName%`, `%Date%` や、フッター内の `%Page%`, `%Total%` プレースホルダーは自動置換されます。
+///
+/// # 引数
+/// - `text`: 印刷対象のテキスト文字列
+/// - `file_name`: ヘッダー等に表示するファイル名
+/// - `date_str`: ヘッダー等に表示する日付文字列
+/// - `settings`: ページ分割・フォーマット設定への参照
+///
+/// # 戻り値
+/// 分割された各ページデータ（[`PrintPage`]）のベクタ
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::print::{paginate_text, PrintSettings};
+///
+/// let text = "First line\nSecond line";
+/// let settings = PrintSettings::default();
+/// let pages = paginate_text(text, "sample.rs", "2026-10-15", &settings);
+/// assert_eq!(pages.len(), 1);
+/// assert_eq!(pages[0].page_number, 1);
+/// ```
 pub fn paginate_text(
     text: &str,
     file_name: &str,
@@ -171,7 +226,20 @@ fn center_text(s: &str, width: usize) -> String {
     format!("{}{}", " ".repeat(pad), s)
 }
 
-/// ページ一覧を単一のプレビューテキスト文字列に結合します。
+/// ページ一覧をエディタ上で閲覧可能な単一のプレビューテキスト文字列に結合します。
+///
+/// 各ページの境界には `===== PAGE X =====` のような区切り線が挿入されます。
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::print::{paginate_text, format_preview_text, PrintSettings};
+///
+/// let settings = PrintSettings::default();
+/// let pages = paginate_text("Hello World", "test.txt", "2026-10-15", &settings);
+/// let preview = format_preview_text(&pages);
+/// assert!(preview.contains("===== PAGE 1 ====="));
+/// assert!(preview.contains("Hello World"));
+/// ```
 pub fn format_preview_text(pages: &[PrintPage]) -> String {
     let mut out = String::new();
     for p in pages {
@@ -185,8 +253,26 @@ pub fn format_preview_text(pages: &[PrintPage]) -> String {
     out
 }
 
-/// 自己完結型 PDF 1.4 生成エンジン。
-/// 外部クレートに依存せず、A4用紙サイズ（595.28 x 841.89 pt）の標準PDFバイナリを生成します。
+/// ページデータを自己完結型 PDF 1.4 ファイルとして出力・保存します。
+///
+/// 外部Cライブラリや重厚なクレートに依存せず、A4用紙サイズ（595.28 x 841.89 pt）の
+/// 標準PDFバイナリ（Courier等幅フォント使用）を直接エンコードして書き出します。
+///
+/// # 引数
+/// - `pages`: 出力対象のページデータ一覧
+/// - `output_path`: 出力先PDFファイルのパス
+///
+/// # Errors
+/// 出力先ディレクトリの作成失敗やファイル書き込み権限不足など、I/Oエラーが発生した場合にエラー文字列を返します。
+///
+/// # Examples
+/// ```rust,no_run
+/// use vivivi_modes::print::{paginate_text, export_to_pdf, PrintSettings};
+///
+/// let settings = PrintSettings::default();
+/// let pages = paginate_text("Code content", "main.rs", "2026-10-15", &settings);
+/// export_to_pdf(&pages, "output.pdf").unwrap();
+/// ```
 pub fn export_to_pdf<P: AsRef<Path>>(pages: &[PrintPage], output_path: P) -> Result<(), String> {
     let mut pdf = Vec::new();
     let mut offsets = Vec::new();

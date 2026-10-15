@@ -5,7 +5,18 @@
 
 use std::collections::HashMap;
 
-/// 略語マネージャ
+/// 略語マネージャ。
+///
+/// 事前登録された略語キーやカスタム辞書から、定型スニペットを展開します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_modes::abbrev::AbbrevManager;
+///
+/// let mgr = AbbrevManager::new();
+/// assert!(mgr.expand("fn").is_some());
+/// ```
 #[derive(Debug, Clone)]
 pub struct AbbrevManager {
     /// 略語キー -> 展開文字列のマップ
@@ -20,6 +31,15 @@ impl Default for AbbrevManager {
 
 impl AbbrevManager {
     /// デフォルトの主要言語スニペットを備えた `AbbrevManager` を生成します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::abbrev::AbbrevManager;
+    ///
+    /// let mgr = AbbrevManager::new();
+    /// assert!(!mgr.is_empty());
+    /// ```
     pub fn new() -> Self {
         let mut mgr = Self {
             table: HashMap::new(),
@@ -57,17 +77,48 @@ impl AbbrevManager {
         self.register("date", "%DATE%");
     }
 
-    /// 略語を登録します。
+    /// 略語キーと展開先文字列を登録します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::abbrev::AbbrevManager;
+    ///
+    /// let mut mgr = AbbrevManager::new();
+    /// mgr.register("cls", "pub struct MyClass;");
+    /// assert_eq!(mgr.expand("cls"), Some("pub struct MyClass;"));
+    /// ```
     pub fn register(&mut self, key: &str, expansion: &str) {
         self.table.insert(key.to_string(), expansion.to_string());
     }
 
-    /// 略語キーに対応する展開文字列を取得します。
+    /// 略語キーに対応する展開文字列を取得します。登録されていない場合は `None` を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::abbrev::AbbrevManager;
+    ///
+    /// let mgr = AbbrevManager::new();
+    /// assert_eq!(mgr.expand("p"), Some("println!(\"{}\", );"));
+    /// assert_eq!(mgr.expand("not_exist"), None);
+    /// ```
     pub fn expand(&self, key: &str) -> Option<&str> {
         self.table.get(key).map(|s| s.as_str())
     }
 
-    /// テキスト行から略語辞書定義（"key = value" または "key: value"）をパースして追加読み込みします。
+    /// テキスト行から略語辞書定義（`key = value` または `key: value`）をパースして追加読み込みします。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::abbrev::AbbrevManager;
+    ///
+    /// let mut mgr = AbbrevManager::new();
+    /// mgr.load_dict_text("hw = Hello, World!\nbye: Goodbye!");
+    /// assert_eq!(mgr.expand("hw"), Some("Hello, World!"));
+    /// assert_eq!(mgr.expand("bye"), Some("Goodbye!"));
+    /// ```
     pub fn load_dict_text(&mut self, text: &str) {
         for line in text.lines() {
             let trimmed = line.trim();
@@ -84,11 +135,29 @@ impl AbbrevManager {
     }
 
     /// 登録済みの略語数を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::abbrev::AbbrevManager;
+    ///
+    /// let mgr = AbbrevManager::new();
+    /// assert!(mgr.len() > 0);
+    /// ```
     pub fn len(&self) -> usize {
         self.table.len()
     }
 
-    /// 略語が空かどうかを返します。
+    /// 略語が1件も登録されていないかを返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::abbrev::AbbrevManager;
+    ///
+    /// let mgr = AbbrevManager::new();
+    /// assert!(!mgr.is_empty());
+    /// ```
     pub fn is_empty(&self) -> bool {
         self.table.is_empty()
     }
