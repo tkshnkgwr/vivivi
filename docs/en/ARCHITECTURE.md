@@ -74,14 +74,19 @@ Houses editing assistance modes and Phase 4.5 tooling engines.
 - `filer.rs`: Dual-pane directory browser with 1-key file copy, move, and delete operations.
 - `project.rs`: Multi-file workspace management and batch `tags` generation.
 - `print.rs`: A4 pagination, line numbering, header/footer formatting, and standalone zero-dependency PDF 1.4 direct export.
-- `keisen.rs`, `csv.rs`, `expr_subst.rs`, `fftt.rs`, `conv.rs`, `align.rs`, `renumber.rs`, `dabbrev.rs`, `abbrev.rs`, `dmacro.rs`, `lexedit.rs`, `zen.rs`, `migemo.rs`, `calc.rs`, `syntax.rs`, `outline.rs`.
+- `migemo.rs`: Standalone Romaji Japanese search engine with embedded SKK dictionary (`BUILTIN_SKK_ENTRIES`) and external dictionary loading.
+- `keisen.rs`: Geometric corner-joining algorithm, protected typing, and Normal mode `x`/`X` deletion border preservation.
+- `outline.rs`: Markdown headers and multi-language symbol tree extraction engine.
+- `csv.rs`, `expr_subst.rs`, `fftt.rs`, `conv.rs`, `align.rs`, `renumber.rs`, `dabbrev.rs`, `abbrev.rs`, `dmacro.rs`, `lexedit.rs`, `zen.rs`, `calc.rs`, `syntax.rs`.
 
 ### 4.4 `vivivi-app`
 Provides terminal frontend rendering and application lifecycle orchestration.
 - `tui/app.rs`: Application state, file save DiffLog/Persistent Undo hooks, file open template/Persistent Undo restoration hooks.
-- `tui/event.rs`: Key event dispatch and preview mode navigation.
-- `tui/window.rs`: Split window management (`:split`, `:vsplit`, `Ctrl-w`).
+- `tui/event.rs`: Key event dispatch, double-Esc detection, Migemo/outline/preview mode navigation.
+- `tui/window.rs`: Vim-compatible nested split tree management (`WindowTreeNode`), independent scroll and cursor state, geometric focus navigation.
 - `tui/ui/`: Modular UI widgets (`editor.rs`, `outline.rs`, `status.rs`, `help.rs`, `preview.rs`).
+  - `editor.rs`: Visual Column based horizontal scroll tracking and safe character clipping.
+  - `outline.rs`: Left side-pane symbol tree and active item highlight.
   - `preview.rs`: Full-screen modal print preview renderer.
 
 ---

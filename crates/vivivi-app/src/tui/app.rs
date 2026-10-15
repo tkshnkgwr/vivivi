@@ -398,15 +398,15 @@ impl App {
     /// let _ = app.save_file();
     /// ```
     pub fn save_file(&mut self) -> Result<(), std::io::Error> {
-        if let Some(path) = &self.file_path {
+        if let Some(path) = self.file_path.clone() {
             let content = self.buffer.to_string();
 
             // 既存ファイルとの差分を DiffLog に記録
             if path.exists()
-                && let Ok(old_content) = std::fs::read_to_string(path)
+                && let Ok(old_content) = std::fs::read_to_string(&path)
             {
                 let _ = vivivi_modes::DiffLog::record_generation(
-                    path,
+                    &path,
                     &old_content,
                     &content,
                     "2026-10-14 14:00:00",
@@ -415,7 +415,7 @@ impl App {
             }
 
             let bytes = vivivi_core::encode_text(&content, self.encoding, self.newline);
-            std::fs::write(path, bytes)?;
+            std::fs::write(&path, bytes)?;
             self.buffer.on_saved();
 
             // 変更行ガター追跡の保存状態を更新
@@ -430,7 +430,10 @@ impl App {
             let _ = self.recent_manager.save_to_file(&recent_file_path);
 
             // 永続Undoを保存
-            let _ = self.buffer.save_undofile(path);
+            let _ = self.buffer.save_undofile(&path);
+
+            self.syntax_lang = SyntaxLang::from_path(&path);
+            self.refresh_outline();
 
             self.status_message = Some(format!(
                 "\"{path:?}\" 書込完了 [{}/{}] (DiffLog & Undo永続化)",
@@ -1002,6 +1005,13 @@ impl App {
         let lines: Vec<String> = (0..self.buffer.line_count())
             .filter_map(|i| self.buffer.line_text(i))
             .collect();
+        // 無名バッファ等でPlainTextの場合、内容から言語を自動検出してsyntax_langも同期
+        if self.file_path.is_none()
+            && self.syntax_lang == SyntaxLang::PlainText
+            && let Some(detected) = vivivi_modes::detect_language_from_content(&lines)
+        {
+            self.syntax_lang = detected;
+        }
         self.outline_items = parse_outline(&lines, self.syntax_lang);
         if self.selected_outline_idx >= self.outline_items.len() {
             self.selected_outline_idx = 0;
@@ -2717,6 +2727,66 @@ mod tests {
         // 2. "sekai" で "世界" にマッチすること
         app.execute_migemo_search("sekai");
         assert_eq!(app.cursor.pos.col, 15); // "世界" の開始位置
+
+        // 3. "kakko" で "（" や "括弧" にマッチすること
+        let mut app2 = App::new(
+            "テキスト（重要）および矢印→はこちら",
+            None,
+            CharEncoding::Utf8,
+            NewlineType::Lf,
+        );
+        app2.execute_migemo_search("kakko");
+        assert_eq!(app2.cursor.pos.col, 4); // "（" の開始位置
+
+        // 4. "yajirushi" で "矢印" や "→" にマッチすること
+        app2.execute_migemo_search("yajirushi");
+        assert_eq!(app2.cursor.pos.col, 11); // "矢印" の開始位置
+    }
+
+    #[test]
+    fn test_insert_key_mode_toggle() {
+        let mut app = App::new("hello", None, CharEncoding::Utf8, NewlineType::Lf);
+        assert_eq!(app.mode(), ViMode::Normal);
+
+        // 1. Normalモードで Insertキーを押す -> Insertモードへ突入
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Insert,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.mode(), ViMode::Insert);
+
+        // 2. Insertモードで Insertキーを押す -> Replaceモードへ切り替え
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Insert,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.mode(), ViMode::Replace);
+
+        // 3. Replaceモードで Insertキーを押す -> Insertモードへ復帰
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Insert,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.mode(), ViMode::Insert);
+
+        // 4. Escキーで Normalモードへ復帰
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Esc,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.mode(), ViMode::Normal);
     }
 
     fn vi_cmd_bang(vi: &mut ViEngine) -> Option<vivivi_vi::ViCommand> {

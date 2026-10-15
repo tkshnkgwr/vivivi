@@ -209,12 +209,22 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 
 #### 4.7 Immediate Feedback Issues
 - [x] **Fix keisen protected edit when inserting Japanese / full-width characters**
-  - In keisen protected edit mode, inserting a 2-column wide Japanese/full-width character should consume 2 trailing spaces (or 1 full-width space) to prevent pushing the right box border.
+  - In keisen protected edit mode, inserting a 2-column wide Japanese/full-width character consumes 2 trailing spaces (or 1 full-width space) to prevent pushing the right box border.
+- [x] **Keisen protected edit for Normal mode `x` / `X` deletion**
+  - Extended protected editing to Normal mode single-character deletions (`x` and `X`), automatically padding spaces before the right border to maintain box geometry without corruption.
 - [x] **Clear search highlights on double Esc keypress instead of single Esc**
-  - Change search highlight clearance (`hlsearch` off) from single `Esc` to double `Esc` (rapid double-press within ~400ms), reserving single `Esc` for regular command cancellation.
+  - Changed search highlight clearance (`hlsearch` off) from single `Esc` to double `Esc` (rapid double-press within ~400ms), reserving single `Esc` for regular command cancellation.
 - [x] **Nested Window Layout Tree & Vim-compatible Directional Navigation**
-  - Upgraded flat split axis into hierarchical `WindowTreeNode` (Window Layout Tree). Splitting vertically inside the lower pane of a horizontal split now keeps the top pane intact while dividing only the bottom pane into left and right, matching Vim's behavior.
+  - Upgraded flat split axis into hierarchical `WindowTreeNode` (Window Layout Tree). Splitting vertically inside the lower pane of a horizontal split keeps the top pane intact while dividing only the bottom pane into left and right, matching Vim's behavior.
   - Added spatial geometric focus navigation via `Ctrl-W h/j/k/l` (Left/Down/Up/Right) based on actual screen coordinates.
+- [x] **Eliminate synchronized scrolling across split windows (Independent Scroll & Cursor)**
+  - Each split window now retains its own independent scroll offsets (vertical & horizontal) and cursor coordinates, completely preventing unwanted sync scrolling and allowing simultaneous parallel viewing of separate sections.
+- [x] **Outline navigation & help key unification**
+  - Unified toggle shortcuts on both `F2` and `F8`. Focus automatically transfers to the outline tree upon opening (`j`/`k` to select, `Enter` to jump). Pressing `Tab` or `Esc` seamlessly switches focus back to the editor buffer.
+- [x] **Horizontal scrolling for lines exceeding 80 columns**
+  - Replaced character-count scrolling with true Visual Column display-width tracking (`UnicodeWidthChar`). Multi-byte East Asian characters and tabs smoothly follow cursor and `$` motions without clipping artifacts or line corruption.
+- [x] **Romaji search (Migemo) Kanji matching with embedded SKK dictionary**
+  - Embedded standard SKK dictionary entries (`BUILTIN_SKK_ENTRIES`) directly into the binary for zero-configuration, instant offline Kanji matching. Added `:migemo <query>` ex command and automatic viewport scroll tracking to matched occurrences.
 
 #### 4.8 ViVi / OpenViVi Advanced Editing Power Tools & Hardening (Phase 4.8)
 - [ ] **[Common (ViVi / OpenViVi)] Multi-Tab Buffer Management (Tab Bar UI)**

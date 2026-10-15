@@ -89,6 +89,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     - Multi-file project workspace handling and batch `tags` file generation (`:maketags`).
   - **Print Preview & Direct PDF Export Engine (`print.rs`)**:
     - Standard A4 pagination with line numbers, header, and footer, preview formatting, and zero-dependency standalone PDF 1.4 direct export (`export_to_pdf`).
+  - **Built-in SKK Dictionary for Romaji Japanese Search (Migemo / `migemo.rs`)**:
+    - Embedded static SKK dictionary `BUILTIN_SKK_ENTRIES` covering essential high-frequency Japanese vocabulary (search, Japan, Tokyo, world, settings, file, save, quit, delete, move, edit, function, variable, confirm, split, sage, boss, etc.) so that Kanji matching works out-of-the-box without external dictionary files.
+  - **Keisen Box Protection for vi `x` / `X` Character Deletions (`keisen.rs`)**:
+    - Automatically pad with spaces when deleting characters via `x` or `X` in Normal mode when Keisen protection is enabled, preserving geometric box layout.
 - **`vivivi-app`**:
   - Implemented full-screen Terminal UI (TUI) frontend powered by `ratatui` (v0.29) and `crossterm` (v0.28).
   - Terminal lifecycle management with Alternate Screen, Raw mode, and panic recovery hooks.
@@ -152,7 +156,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     - Added search highlight clearance via `:noh`, `:nohl`, `:nohlsearch`, `:set nohls`, `:set hls`, and Normal mode `Esc` key (`clear_search_highlight`).
   - **Keisen Mode Key Modifier Guard (Fixing Bare Arrow Drawing Bug)**:
     - Guaranteed that box drawing and erasing only occur when `Ctrl`/`Alt` or `Shift` modifier keys are pressed, allowing plain arrow keys and `h`/`j`/`k`/`l` to move the cursor normally even when Keisen mode is active.
-  - Expanded unit and integration test suite (all 139 tests passing, 0 clippy warnings, fmt check passed).
+  - **Vim-Compatible Window Tree Hierarchy (`window.rs`, `app.rs`)**:
+    - Replaced flat window collection with a recursive binary tree (`WindowTreeNode::Leaf`, `WindowTreeNode::Split`).
+    - After `:split` horizontally, executing `:vsplit` inside the lower window only splits that child pane rather than rearranging the entire viewport into 3 columns.
+    - Geometric neighbor navigation (`navigate_window`) supporting `Ctrl-W h / j / k / l` and arrow keys based on bounding box geometry.
+    - Independent scroll offsets and buffer tracking per window.
+  - **Display Column (Visual Column) Based Horizontal Scrolling (`editor.rs`, `app.rs`)**:
+    - Overhauled horizontal scrolling and character clipping for long lines (>80 columns) to measure actual rendered visual width (handling 2-column East Asian characters and tabs) rather than raw character counts. The viewport smoothly tracks the cursor up to end-of-line (`$`) and synchronizes the hardware cursor position.
+  - **Outline Navigation Polish & Shortcut Unification (`outline.rs`, `event.rs`)**:
+    - Supported both `F2` (OpenViVi convention) and `F8` (modern convention) for toggling the outline pane.
+    - Automatically shift focus to the outline pane upon opening.
+    - Convenient switching between editor and outline panes via `Tab` / `Esc`.
+  - **Migemo Search Commands & Synchronized Viewport Jump (`event.rs`, `app.rs`)**:
+    - Added `:migemo <query>` / `:m <query>` command-line interface.
+    - Seamlessly scroll and position window cursor upon landing on search match locations.
+  - **Comprehensive Manual Testing Guide (`docs/en/MANUAL_TEST_GUIDE.md`, `docs/ja/MANUAL_TEST_GUIDE.md`)**:
+    - Structured step-by-step verification procedures covering window splitting, keisen protection, outline navigation, horizontal scrolling, Migemo, and encodings.
+  - **Multi-Level Outline Parsing & Content-Based Language Detection (`vivivi-modes/outline.rs`)**:
+    - Added `detect_language_from_content` to auto-detect file language from leading content lines when the buffer is unnamed or classified as `PlainText`.
+    - Implemented full multi-level Markdown heading extraction (H1 through H6) with nested visual indentation.
+    - Added transparent modifier parsing for Rust symbols (`pub(crate) fn`, `const fn`, `unsafe fn`, `pub type`, `macro_rules!`, etc.) to comprehensively list all symbols.
+  - **Automatic Vertical Scrolling in Outline Pane (`ui/outline.rs`)**:
+    - Synchronized vertical scroll offset with the active cursor selection, ensuring selected items remain in viewport view even in large files.
+  - **Vim-Compatible `Insert` Key Mode Switching & Toggle (`event.rs`)**:
+    - Pressing `Insert` in Normal mode enters Insert mode (equivalent to `i`).
+    - Pressing `Insert` in Insert mode switches to Replace mode.
+    - Pressing `Insert` in Replace mode returns to Insert mode, providing seamless Vim-compatible toggle behavior.
+  - **Language Synchronization on File Save & Manual Filetype Switching (`app.rs`, `event.rs`)**:
+    - Automatically update buffer syntax highlighting and outline language upon saving with `:w <path>`.
+    - Implemented dynamic filetype switching commands (`:set ft=<lang>` / `:set filetype=<lang>`).
+  - **Migemo Clean MIT Built-in Dictionary & Punctuation/Symbols (`migemo.rs`)**:
+    - Prioritized licensing safety by replacing built-in data with a cleanly authored, 100% MIT-compliant embedded dictionary (`builtin_mit_dict.txt`).
+    - Supported bracket query (`kakko`) matching Kanji (`括弧`) as well as all bracket symbols (`「` `」` `(` `)` `（` `）` `【` `】` `『` `』` `[` `]` `［` `］` `{` `}` `｛` `｝` `〈` `〉`, etc.).
+    - Supported arrow query (`yajirushi`) matching Kanji (`矢印`) and direction symbols (`→` `←` `↑` `↓` `⇒` `⇔` `->` `=>` `<-`).
+    - Added comprehensive editor vocabulary for circles (`maru`), dots (`ten`), wave dashes (`kara`/`nami`), and directions (`migi`/`hidari`/`ue`/`shita`).
+    - Added dynamic prefix match expansion for romaji queries with 2+ syllables, enhancing incremental typing experience.
+    - Added automatic discovery and transparent multi-encoding loading for external dictionaries (`%USERPROFILE%\.vivivi\SKK-JISYO.*` and current working directory).
+    - Added comprehensive Acknowledgments section in `README.md` and `README_JA.md` honoring the SKK Project, Migemo creator, and openViVi.
+  - **Comprehensive Help & Documentation Overhaul (`doc/help/`, `docs/`)**:
+    - Synchronized and updated built-in help files (`basic.md`, `index.md`, `keisen.md`, `migemo.md`, `outline.md`, `split.md`) and all design specifications across Japanese and English docs with latest capabilities.
+  - Expanded unit and integration test suite (over 550 tests passing, 0 clippy warnings, fmt check passed).
 
 ### Changed / Refactored
 - **Code Modularization & Source Decomposition Refactoring**:
@@ -160,4 +203,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - Decomposed `vivivi-app`'s `tui/ui.rs` (514 lines) into structured modules under `ui/` (`editor.rs`, `outline.rs`, `status.rs`, `mod.rs`), improving extensibility for future Grep panes and DIFF views.
   - Extracted editor window state (`SplitAxis`, `EditorWindow`) from `app.rs` into `tui/window.rs`.
   - All source files across the entire workspace now strictly remain well under 500 lines, dramatically improving readability and maintainability.
+- **Window Hierarchy Tree Structure & Test Optimization**:
+  - Restructured window management into a recursive tree (`WindowTreeNode`) and integrated geometric proximity navigation.
+  - Expanded and optimized test suites (all 208 tests pass, doctest parsing optimized, 0 clippy warnings, clean formatting).
 

@@ -68,7 +68,7 @@ pub use keisen::{BoxAlignment, KeisenDirection, KeisenMode, KeisenType};
 pub use lex_edit::{LexEditEngine, WordEditRecord};
 pub use line_edit::insert_beg_end_lines;
 pub use migemo::MigemoEngine;
-pub use outline::{OutlineItem, OutlineKind, parse_outline};
+pub use outline::{OutlineItem, OutlineKind, detect_language_from_content, parse_outline};
 pub use print::{PrintPage, PrintSettings, export_to_pdf, format_preview_text, paginate_text};
 pub use project::ProjectManager;
 pub use recent::RecentManager;

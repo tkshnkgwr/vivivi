@@ -143,3 +143,23 @@ Copyright (c) 2026 tkshnkgwr
 Portions of the vi command engine and specifications are adapted from openViVi:
 https://github.com/vivisuke/openViVi (MIT License)
 ```
+
+---
+
+## 🙏 謝辞・クレジット (Acknowledgments)
+
+本プロジェクトの各種機能は、長年にわたり無償で知見やデータを公開・維持し続けてくださっているオープンソースコミュニティの多大な労力と成果に深く支えられています。ここに心より感謝の意を表します。
+
+### 1. SKKプロジェクト (SKK Development Team)
+- **概要**: Emacs発祥の日本語入力システム「SKK」およびその辞書システム。
+- **謝意**: 創始者である佐藤雅彦氏をはじめ、歴代の開発者および辞書メンテナーの皆様に深く感謝いたします。30年以上にわたる膨大な労力と情熱によって無償で公開・保守され続けているSKK辞書のデータと設計思想は、日本のオープンソース文化における計り知れない至宝です。`vivivi` のローマ字日本語検索における辞書読み込みエンジンは、SKKプロジェクトが築き上げた辞書フォーマットの恩恵を全面的に受けています。
+- **外部辞書のライセンスについて**: ユーザーが任意で配置・利用できる公式外部SKK辞書ファイル群（`SKK-JISYO.L` 等）は、GNU General Public License (GPL) に基づいて公開されています。`vivivi` はこれら外部辞書を独立したデータファイルとして透過的に読み込みます。
+
+### 2. Migemo (ローマ字日本語インクリメンタル検索)
+- **考案者**: 高林 哲 (Satoru Takabayashi) 氏
+- **謝意**: 「IMEをONにすることなく、アルファベット入力のまま日本語テキストを高速インクリメンタル検索する」という革新的かつ素晴らしい着想とアルゴリズムを考案・公開された高林氏に心より敬意と感謝を表します。
+
+### 3. openViVi
+- **作者**: vivisuke 氏 ([https://github.com/vivisuke/openViVi](https://github.com/vivisuke/openViVi))
+- **謝意**: Windows環境で長年愛されてきた名作エディタ「ViVi」の精神とアーキテクチャをオープンソースとして公開・共有してくださった vivisuke 氏に深く感謝いたします。
+

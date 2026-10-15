@@ -6,9 +6,9 @@ This document records the unit test and static analysis results for the `vivivi`
 
 ## 1. Overall Summary
 
-- **Execution Date**: 2026-10-14
+- **Execution Date**: 2026-10-15
 - **Rust Version**: rustc 1.96.1 / Cargo 1.96.1 (2024 edition)
-- **Overall Result**: **All Tests Passed (119 passed, 0 failed) / Clippy 0 Warnings / rustfmt Passed**
+- **Overall Result**: **All Tests Passed (556 passed, 0 failed) / Clippy 0 Warnings / rustfmt Passed**
 
 ---
 
@@ -16,11 +16,11 @@ This document records the unit test and static analysis results for the `vivivi`
 
 | Crate Name     |  Tests  | Passed  | Failed | Status  | Verified Features                                                                                                                                                                                                              |
 | :------------- | :-----: | :-----: | :----: | :-----: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vivivi-core`  |   15    |   15    |   0    | ✅ PASS | GapBuffer operations/slides, Undo blocks & auto-merge, persistent undo (undofile serialization), charset/newline auto-detection, matching bracket search                                                                       |
-| `vivivi-vi`    |   23    |   23    |   0    | ✅ PASS | Cursor motions, operators, visual block, register history, macros, ex substitution, expr subst, fFtT, word search, #+/#-, marks, tags                                                                                          |
-| `vivivi-modes` |   66    |   66    |   0    | ✅ PASS | CSV, keisen, char conv, box math, align, renumber, expr subst, fFtT, macros, migemo, DIFF, DiffLog, template, ToDo, folding, grep, filer, project, PDF, syntax highlighting (11 languages: Rust/C++/Py/JS/JSON/MD/SQL/PL-SQL/Java/HTML/Bash) |
-| `vivivi-app`   |   15    |   15    |   0    | ✅ PASS | Window splits, outline jumping, text conversion, help viewer, align, renumber, line edit, macros, expr subst, custom vi, tool integration (DiffLog/undofile/template/preview)                                                  |
-| **Total**      | **119** | **119** | **0**  | ✅ PASS | **All Items Passed (119 passed, 0 failed)**                                                                                                                                                                                    |
+| `vivivi-core`  |   27    |   27    |   0    | ✅ PASS | GapBuffer operations/slides, Undo blocks & auto-merge, persistent undo (undofile serialization), charset/newline auto-detection, matching bracket search                                                                       |
+| `vivivi-vi`    |   123   |   123   |   0    | ✅ PASS | Cursor motions, operators, visual block, register history, macros, ex substitution, expr subst, fFtT, word search, #+/#-, marks, tags, doctests                                                                                |
+| `vivivi-modes` |   303   |   303   |   0    | ✅ PASS | CSV, keisen corner-joining, char conv, box math, align, expr subst, builtin SKK Migemo, DIFF, DiffLog, template, ToDo, folding, grep, filer, project, PDF, syntax highlighting (all 11 languages), doctests                    |
+| `vivivi-app`   |   103   |   103   |   0    | ✅ PASS | Binary nested split tree (WindowTreeNode), geometric focus navigation, independent scrolling, Visual Column horizontal scroll tracking, outline navigation, invisible chars, gutter highlights, tool integration              |
+| **Total**      | **556** | **556** | **0**  | ✅ PASS | **All Items Passed (556 passed, 0 failed)**                                                                                                                                                                                    |
 
 ---
 

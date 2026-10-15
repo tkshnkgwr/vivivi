@@ -72,6 +72,13 @@ pub fn render_outline(frame: &mut Frame, app: &App, area: Rect) {
         )));
     }
 
-    let paragraph = Paragraph::new(lines).block(block);
+    let inner_height = area.height.saturating_sub(2) as usize;
+    let scroll_y = if inner_height > 0 && app.selected_outline_idx >= inner_height {
+        (app.selected_outline_idx - inner_height + 1) as u16
+    } else {
+        0
+    };
+
+    let paragraph = Paragraph::new(lines).block(block).scroll((scroll_y, 0));
     frame.render_widget(paragraph, area);
 }

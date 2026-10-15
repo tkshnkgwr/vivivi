@@ -17,6 +17,9 @@ This document provides a comprehensive operational guide for `vivivi`, covering 
 > [!NOTE]
 > **Dynamic Terminal Cursor Synchronization**: Following Vim/Gvim tradition, the native terminal cursor shape automatically changes (Block, Bar, or Underline) based on the active editing mode. It reliably resets to your terminal's default shape upon exit or abnormal termination.
 
+> [!TIP]
+> **Horizontal Scrolling for Long Lines**: For lines exceeding screen width (e.g. > 80 columns), the viewport automatically and smoothly scrolls horizontally as the cursor moves or jumps to line ends (`$`). It computes true visual widths (Visual Column via `UnicodeWidthChar`) for multi-byte characters and tabs, clipping text cleanly without visual artifacts.
+
 ---
 
 ## 2. Advanced Modes & Navigation
@@ -32,27 +35,35 @@ This document provides a comprehensive operational guide for `vivivi`, covering 
   - Drawing downwards past the buffer end automatically expands lines with newlines and padding.
 - **Erase Borders**: `Shift + Arrow keys` (re-evaluates and repairs adjacent junctions).
 - **Normal Cursor Navigation**: When Keisen mode is active, bare arrow keys and `h`/`j`/`k`/`l` move the cursor normally without drawing.
-- **Protected Edit**: Typing inside boxes automatically contracts trailing spaces to preserve the right border. Backspacing expands spaces to maintain box dimensions.
+- **Protected Edit & Deletion**:
+  - Typing inside boxes automatically contracts trailing spaces to preserve the right border (accounting for 1-column ASCII and 2-column wide characters).
+  - Deleting text inside boxes—via `Backspace`/`Delete` in Insert mode or `x`/`X` in Normal mode—automatically inserts space before the right border to maintain dimensions.
 - **Box Text Alignment**: `:align left`, `:align center`, `:align right`.
 
-### (3) Multi-Window Splits
+### (3) Multi-Window Splits (Nested Tree)
 - **Horizontal Split**: `Ctrl-w s` or `:split` (`:sp`)
 - **Vertical Split**: `Ctrl-w v` or `:vsplit` (`:vs`)
-- **Cycle Focus**: `Ctrl-w w` (or `Ctrl-w` followed by `h`/`j`/`k`/`l`)
-- **Close Window**: `Ctrl-w c` or `:close`
+- **Vim-Compatible Nested Tree**: Window layouts are managed via a binary tree (`WindowTreeNode`). Splitting vertically after a horizontal split only divides the active pane rather than turning the whole screen into 3 columns.
+- **Independent Scrolling & Cursor**: Each pane maintains its own independent scroll offsets (vertical & horizontal) and cursor coordinates without unwanted sync.
+- **Geometric Focus Navigation**: Move focus via `Ctrl-w h/j/k/l` (Left, Down, Up, Right) based on true screen coordinates, or `Ctrl-w w` to cycle.
+- **Close Window**: `Ctrl-w c` or `:close` (`:q`)
 - **Maximize Active Window**: `Ctrl-w o` or `:only`
 
-### (4) Symbol Outline Pane (`F8`, `:outline`)
-- Press `F8` or run `:outline` to toggle a 30-column code outline tree on the left pane.
+### (4) Symbol Outline Pane (`F2`, `F8`, `:outline`)
+- Press `F2`, `F8`, or run `:outline` to toggle a 30-column code outline tree on the left pane.
+- Focus automatically moves to the outline tree upon opening. Navigate with `j`/`k` and press `Enter` to jump immediately to the target line in the editor.
+- Press `Tab` or `Esc` to return focus smoothly to the editor while keeping the outline pane open.
 - Extracts Markdown headers (`#`), Rust symbols (`fn`, `struct`, `impl`), C/C++, and Python functions.
-- Navigate with `j`/`k` and press `Enter` to jump directly to the declaration line.
 
 ### (5) Search, Highlighting (`hlsearch`) & Romaji Search (Migemo / `g/`)
-- **Romaji Search (Migemo)**: In Normal mode, type `g/` followed by Romanized text (e.g. `g/kensaku`) to search directly for Japanese Kanji/Kana matches without toggling your IME.
+- **Romaji Search (Migemo)**:
+  - In Normal mode, type `g/` (or run `:migemo <query>`) followed by Romanized text (e.g. `g/kensaku`) to search directly for Japanese Kanji/Kana matches without toggling your IME.
+  - **Built-in SKK Dictionary**: Standard common Japanese vocabulary is embedded in the binary; works out of the box with zero external configuration.
+  - The viewport automatically scrolls to bring matched lines into view.
 - **Standard Search**: `/pattern` (forward), `?pattern` (backward), `*`/`#` (exact word match under cursor).
 - **Accurate Head Landing**: Cursor always positions precisely on the very first character of the matched token.
 - **Real-Time Highlighting (`hlsearch`)**: All in-viewport match occurrences are highlighted in bold black on yellow-orange.
-- **Clearing Highlights**: Run `:noh`, `:nohl`, `:nohlsearch`, or press `Esc` in Normal mode to dismiss highlights.
+- **Clearing Highlights**: Run `:noh`, `:nohl`, `:nohlsearch`, or double-press `Esc` (`Esc` twice in quick succession) in Normal mode to dismiss highlights.
 - Navigate matches with `n` and `N`.
 
 ### (6) Clipboard History Dialog (`F6`, `:cbhist`)

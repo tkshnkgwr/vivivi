@@ -74,14 +74,19 @@ ViVi特有のキラー編集支援機能およびツール機能エンジン群�
 - `filer.rs`: 左右独立2ペイン型ディレクトリビュー、ファイル操作（コピー・移動・削除）。
 - `project.rs`: 複数ファイルプロジェクト管理、一括tagsファイル生成。
 - `print.rs`: A4標準改ページ・行番号・ヘッダー・フッター整形、外部依存ゼロのPDF 1.4直接出力。
-- `keisen.rs`, `csv.rs`, `expr_subst.rs`, `fftt.rs`, `conv.rs`, `align.rs`, `renumber.rs`, `dabbrev.rs`, `abbrev.rs`, `dmacro.rs`, `lexedit.rs`, `zen.rs`, `migemo.rs`, `calc.rs`, `syntax.rs`, `outline.rs`。
+- `migemo.rs`: 内蔵SKK辞書（`BUILTIN_SKK_ENTRIES`）および外部SKK辞書読込に対応したスタンドアロンローマ字日本語検索エンジン。
+- `keisen.rs`: 幾何学的角結合アルゴリズム、文字入力およびノーマルモード `x`/`X` 削除時の枠線保護・空白自動伸縮。
+- `outline.rs`: Markdown見出しおよび主要言語シンボルツリー抽出エンジン。
+- `csv.rs`, `expr_subst.rs`, `fftt.rs`, `conv.rs`, `align.rs`, `renumber.rs`, `dabbrev.rs`, `abbrev.rs`, `dmacro.rs`, `lexedit.rs`, `zen.rs`, `calc.rs`, `syntax.rs`。
 
 ### 4.4 `vivivi-app`
 Ratatui/Crosstermを用いた端末フロントエンドおよびアプリケーションライフサイクル管理を担当します。
 - `tui/app.rs`: アプリケーション状態、ファイル保存時DiffLog/永続Undoフック、ファイルオープン時テンプレート/永続Undo復元フック。
-- `tui/event.rs`: キーイベントディスパッチ、プレビューモード操作。
-- `tui/window.rs`: 画面分割（`:split`, `:vsplit`, `Ctrl-w`）ウィンドウ状態管理。
+- `tui/event.rs`: キーイベントディスパッチ、ダブルEsc検出、Migemo/アウトライン/プレビューモード操作。
+- `tui/window.rs`: `WindowTreeNode`（二分木）によるVim互換階層分割ツリー管理、独立スクロール・独立カーソル管理、幾何学的配置に基づくフォーカス移動。
 - `tui/ui/`: UIコンポーネント描画（`editor.rs`, `outline.rs`, `status.rs`, `help.rs`, `preview.rs`）。
+  - `editor.rs`: Visual Column（表示幅）に基づく長行水平スクロール自動追従、全角文字・タブ文字の安全なクリッピング描画。
+  - `outline.rs`: 左サイドペインツリー描画と選択ハイライト。
   - `preview.rs`: 印刷プレビュー全画面モーダルUI描画。
 
 ---

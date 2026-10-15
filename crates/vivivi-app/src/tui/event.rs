@@ -487,6 +487,10 @@ fn handle_insert_mode(app: &mut App, key: KeyEvent) {
             }
             app.clamp_cursor();
         }
+        KeyCode::Insert => {
+            // Vim互換: 挿入モード中に Insert キーを押すとリプレース（上書き）モードへトグル切り替え
+            app.vi.set_mode(vivivi_vi::ViMode::Replace);
+        }
         KeyCode::Char(c) => {
             app.vi.record_inserted_char(c);
             app.dynamic_macro.record_char(c);
@@ -611,6 +615,10 @@ fn handle_replace_mode(app: &mut App, key: KeyEvent) {
                 app.cursor.pos.col -= 1;
             }
             app.clamp_cursor();
+        }
+        KeyCode::Insert => {
+            // Vim互換: リプレースモード中に Insert キーを押すと挿入モードへトグル復帰
+            app.vi.set_mode(vivivi_vi::ViMode::Insert);
         }
         KeyCode::Char(c) => {
             app.vi.record_inserted_char(c);
@@ -765,9 +773,13 @@ fn execute_ex_command(app: &mut App, cmd: &str) {
         }
         _ if trimmed.starts_with("w ") => {
             let path_str = trimmed[2..].trim();
-            app.file_path = Some(std::path::PathBuf::from(path_str));
+            let path = std::path::PathBuf::from(path_str);
+            app.syntax_lang = vivivi_modes::SyntaxLang::from_path(&path);
+            app.file_path = Some(path);
             if let Err(e) = app.save_file() {
                 app.status_message = Some(format!("保存エラー: {e}"));
+            } else {
+                app.refresh_outline();
             }
         }
         _ if trimmed.starts_with("%s/") || trimmed.starts_with("s/") => {
@@ -1054,6 +1066,33 @@ fn execute_ex_command(app: &mut App, cmd: &str) {
             app.status_message = Some("変更行ガター強調表示: OFF".to_string());
         }
 
+        // --- 言語構文・ファイルタイプ切替 (:set ft=<lang>, :set filetype=<lang>) ---
+        _ if trimmed.starts_with("set ft=") || trimmed.starts_with("set filetype=") => {
+            let lang_str = trimmed
+                .strip_prefix("set ft=")
+                .or_else(|| trimmed.strip_prefix("set filetype="))
+                .unwrap_or("")
+                .trim()
+                .to_ascii_lowercase();
+            app.syntax_lang = match lang_str.as_str() {
+                "rs" | "rust" => vivivi_modes::SyntaxLang::Rust,
+                "md" | "markdown" => vivivi_modes::SyntaxLang::Markdown,
+                "py" | "python" => vivivi_modes::SyntaxLang::Python,
+                "c" | "cpp" | "cxx" => vivivi_modes::SyntaxLang::Cpp,
+                "js" | "ts" | "javascript" | "typescript" => vivivi_modes::SyntaxLang::JavaScript,
+                "json" => vivivi_modes::SyntaxLang::Json,
+                "sql" => vivivi_modes::SyntaxLang::Sql,
+                "html" => vivivi_modes::SyntaxLang::Html,
+                "sh" | "bash" => vivivi_modes::SyntaxLang::Bash,
+                _ => vivivi_modes::SyntaxLang::PlainText,
+            };
+            app.refresh_outline();
+            app.status_message = Some(format!(
+                "ファイルタイプを設定しました: {:?}",
+                app.syntax_lang
+            ));
+        }
+
         // --- ToDo抽出・一覧プレビュー (:todo, :undone) ---
         "todo" | "undone" => {
             let content = app.buffer.to_string();
@@ -1268,6 +1307,11 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent) {
             }
 
             app.feed_vi_char('\x1b');
+        }
+        KeyCode::Insert => {
+            // Vim互換: ノーマルモードで Insert キーを押すと挿入モードへ遷移
+            app.g_pending = false;
+            app.feed_vi_char('i');
         }
         KeyCode::Char('/') if app.g_pending => {
             // g/ で Migemo ローマ字日本語検索を開始

@@ -240,9 +240,12 @@ static BUILTIN_SKK_ENTRIES: &[(&str, &[&str])] = &[
     ("ぼす", &["ボス"]),
 ];
 
+/// バイナリ埋め込み標準日本語辞書（独自作成・MIT License準拠。約物記号および基本語彙収録）。
+static BUILTIN_MIT_DICT_TEXT: &str = include_str!("dict/builtin_mit_dict.txt");
+
 /// ローマ字日本語検索（Migemo）エンジン。
 ///
-/// ローマ字音節テーブルおよび組み込みSKK辞書を保持し、
+/// ローマ字音節テーブルおよび組み込み辞書を保持し、
 /// 入力されたローマ字クエリから正規表現パターンを構築します。
 ///
 /// # Examples
@@ -263,7 +266,7 @@ pub struct MigemoEngine {
 }
 
 impl MigemoEngine {
-    /// 内蔵基本辞書を標準展開した `MigemoEngine` を生成します。
+    /// 内蔵基本辞書（独自MIT辞書）を展開し、さらに環境内の標準外部辞書も探索・マージした `MigemoEngine` を生成します。
     ///
     /// # Examples
     ///
@@ -276,6 +279,10 @@ impl MigemoEngine {
     /// ```
     pub fn new() -> Self {
         let mut engine = Self::default();
+        // 1. 内蔵クリーン辞書（MIT License）を一括展開
+        engine.load_skk_dict_str(BUILTIN_MIT_DICT_TEXT);
+
+        // 2. 頻出キーワードおよびエディタ固有の静的エントリをマージ
         for &(yomi, candidates) in BUILTIN_SKK_ENTRIES {
             let entry = engine.dict.entry(yomi.to_string()).or_default();
             for &c in candidates {
@@ -284,6 +291,10 @@ impl MigemoEngine {
                 }
             }
         }
+
+        // 3. 標準配置場所（%USERPROFILE%\.vivivi\ 等）に外部辞書が存在すれば自動ロード
+        engine.load_standard_external_dicts();
+
         engine
     }
 
@@ -353,8 +364,45 @@ impl MigemoEngine {
         }
     }
 
-    /// ローマ字クエリ（例: `"nihon"`, `"kensaku"`）から、ひらがな・カタカナ・漢字を統合した
-    /// 検索用正規表現パターン文字列を構築します。
+    /// 外部のSKK辞書ファイル（UTF-8, EUC-JP, Shift_JIS対応）を読み込んで登録します。
+    pub fn load_skk_dict_file<P: AsRef<std::path::Path>>(
+        &mut self,
+        path: P,
+    ) -> std::io::Result<()> {
+        let bytes = std::fs::read(path)?;
+        let (text, _, _) = vivivi_core::decode_bytes(&bytes);
+        self.load_skk_dict_str(&text);
+        Ok(())
+    }
+
+    /// 標準的な配置パス（`%USERPROFILE%\.vivivi\SKK-JISYO.*` やカレントディレクトリ）から
+    /// 外部SKK辞書を自動探索してロードします。
+    pub fn load_standard_external_dicts(&mut self) {
+        // 1. カレントディレクトリ
+        let mut candidates = vec![
+            std::path::PathBuf::from("SKK-JISYO.L"),
+            std::path::PathBuf::from("SKK-JISYO.M"),
+            std::path::PathBuf::from("dict/SKK-JISYO.L"),
+            std::path::PathBuf::from("dict/SKK-JISYO.M"),
+        ];
+
+        // 2. ホームディレクトリ (%USERPROFILE%\.vivivi\ または ~/.vivivi/)
+        if let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
+            let vivivi_dir = std::path::PathBuf::from(home).join(".vivivi");
+            candidates.push(vivivi_dir.join("SKK-JISYO.L"));
+            candidates.push(vivivi_dir.join("SKK-JISYO.M"));
+            candidates.push(vivivi_dir.join("SKK-JISYO"));
+        }
+
+        for path in candidates {
+            if path.is_file() {
+                let _ = self.load_skk_dict_file(&path);
+            }
+        }
+    }
+
+    /// ローマ字クエリ（例: `"nihon"`, `"kensaku"`, `"kakko"`, `"yajirushi"`）から、
+    /// ひらがな・カタカナ・漢字・記号を統合した検索用正規表現パターン文字列を構築します。
     ///
     /// # Examples
     ///
@@ -375,11 +423,33 @@ impl MigemoEngine {
         // 1. ローマ字をひらがなに変換
         let (hiragana, syllables) = self.parse_romaji(&romaji_lower);
 
-        // 2. 辞書から完全一致または前方一致する漢字候補を探索
+        // 2. 辞書から完全一致および前方一致する漢字・記号候補を探索
         let mut kanji_candidates = Vec::new();
         if let Some(candidates) = self.dict.get(&hiragana) {
             for c in candidates {
                 kanji_candidates.push(regex::escape(c));
+            }
+        }
+
+        // ひらがなが2文字以上の場合、前方一致する漢字候補も最大30件まで追加
+        if hiragana.chars().count() >= 2 {
+            let mut prefix_count = 0;
+            for (yomi, candidates) in &self.dict {
+                if yomi != &hiragana && yomi.starts_with(&hiragana) {
+                    for c in candidates {
+                        let escaped = regex::escape(c);
+                        if !kanji_candidates.contains(&escaped) {
+                            kanji_candidates.push(escaped);
+                            prefix_count += 1;
+                            if prefix_count >= 30 {
+                                break;
+                            }
+                        }
+                    }
+                    if prefix_count >= 30 {
+                        break;
+                    }
+                }
             }
         }
 
@@ -533,5 +603,50 @@ mod tests {
         assert!(regex.is_match("けんさく"));
         assert!(regex.is_match("ケンサク"));
         assert!(regex.is_match("kensaku"));
+    }
+
+    #[test]
+    fn test_migemo_kakko_and_yajirushi() {
+        let migemo = MigemoEngine::new();
+
+        // 1. kakko: 括弧、各種括弧記号、ひらがな・カタカナ・ローマ字
+        let re_kakko = migemo.compile_query("kakko").expect("compile kakko");
+        assert!(re_kakko.is_match("括弧で囲む"));
+        assert!(re_kakko.is_match("（全角丸括弧）"));
+        assert!(re_kakko.is_match("「鉤括弧」"));
+        assert!(re_kakko.is_match("【隅付き括弧】"));
+        assert!(re_kakko.is_match("(半角括弧)"));
+        assert!(re_kakko.is_match("かっこ"));
+        assert!(re_kakko.is_match("カッコ"));
+        assert!(re_kakko.is_match("kakko"));
+
+        // 2. yajirushi: 矢印、各種矢印記号、ひらがな・カタカナ・ローマ字
+        let re_yajirushi = migemo
+            .compile_query("yajirushi")
+            .expect("compile yajirushi");
+        assert!(re_yajirushi.is_match("矢印の方向"));
+        assert!(re_yajirushi.is_match("右へ進む -> ここ"));
+        assert!(re_yajirushi.is_match("上↑下↓左←右→"));
+        assert!(re_yajirushi.is_match("やじるし"));
+        assert!(re_yajirushi.is_match("ヤジルシ"));
+        assert!(re_yajirushi.is_match("yajirushi"));
+    }
+
+    #[test]
+    fn test_migemo_builtin_dictionary_vocabulary() {
+        let migemo = MigemoEngine::new();
+
+        // 日常語・頻出漢字
+        let re_tenki = migemo.compile_query("tenki").expect("compile tenki");
+        assert!(re_tenki.is_match("今日の天気は晴れです"));
+
+        let re_gakkou = migemo.compile_query("gakkou").expect("compile gakkou");
+        assert!(re_gakkou.is_match("小学校と中学校"));
+
+        let re_shigoto = migemo.compile_query("shigoto").expect("compile shigoto");
+        assert!(re_shigoto.is_match("仕事を進める"));
+
+        let re_maru = migemo.compile_query("maru").expect("compile maru");
+        assert!(re_maru.is_match("正解は○です"));
     }
 }

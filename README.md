@@ -144,3 +144,23 @@ Copyright (c) 2026 tkshnkgwr
 Portions of the vi command engine and specifications are adapted from openViVi:
 https://github.com/vivisuke/openViVi (MIT License)
 ```
+
+---
+
+## 🙏 Acknowledgments
+
+This project is deeply indebted to and inspired by the incredible, selfless efforts of the open-source community who have developed and maintained foundational software and linguistic datasets for decades:
+
+### 1. The SKK Project (SKK Development Team)
+- **Overview**: The "Simple Kana to Kanji conversion" (SKK) input method system originating from Emacs.
+- **Tribute**: We express our deepest gratitude to Masahiko Sato, the original author, and the entire successive development team and dictionary maintainers. Maintaining massive, high-quality Japanese dictionaries freely available for over 30 years represents an extraordinary contribution to the open-source world. `vivivi`'s Romaji-to-Japanese search parsing engine fully benefits from the clean, robust format established by the SKK project.
+- **External Dictionaries**: Optional external dictionary files (e.g., `SKK-JISYO.L`) that users may configure are licensed under the GNU General Public License (GPL). `vivivi` loads these dictionaries strictly as external data files, keeping core binary licenses clean.
+
+### 2. Migemo (Romaji Incremental Japanese Search)
+- **Creator**: Satoru Takabayashi
+- **Tribute**: Our sincerest admiration and thanks to Satoru Takabayashi for inventing the brilliant concept and algorithm of searching Japanese text incrementally directly from Romaji input without toggling the IME.
+
+### 3. openViVi
+- **Author**: vivisuke ([https://github.com/vivisuke/openViVi](https://github.com/vivisuke/openViVi))
+- **Tribute**: Sincere thanks to vivisuke for preserving and sharing the architecture and spirit of the classic ViVi editor as open source under the MIT license.
+

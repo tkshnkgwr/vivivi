@@ -115,15 +115,17 @@ Each operation generates its inverse action upon undo:
 
 ## 4. Box Drawing (Keisen) Mode Specifications (OpenViVi Base)
 - **Operations**:
-  - `Shift-F5`: Toggle keisen mode.
-  - `Ctrl + Arrow keys`: Draw box lines with automatic junction joining.
-  - `Shift + Arrow keys`: Erase box lines.
+  - `F5` / `:keisen`: Toggle keisen mode.
+  - `Ctrl + Arrow keys` / `Alt + Arrow keys`: Draw box lines with automatic junction joining (automatically expands lines downward).
+  - `Shift + Arrow keys`: Erase box lines and repair surrounding connections.
+  - Bare arrow keys / `h`/`j`/`k`/`l`: Regular cursor navigation without drawing.
 - **Joining Algorithm (Ported from OpenViVi `keisen.cpp`)**:
   - Bitmask state tracking for Unicode box characters (U+2500 - U+254B).
   - Automatically selects correct cross, T-junction, or corner characters (`┼`, `├`, `┬`, `┴`, `┤`).
+  - Geometric corner-joining eliminates dangling stubs on closed rectangular paths (`┌`, `┐`, `└`, `┘`).
 - **Keisen Protected Edit Specifications (ViVi 3 / ViVi 4 Lineage)**:
-  - While typing inside a box frame, trailing whitespace on the current line is automatically removed to keep the right border intact.
-  - Backspacing/deleting text automatically pads spaces to maintain border positions.
+  - While typing inside a box frame (`│ ... │`), trailing whitespace on the current line is automatically removed to keep the right border intact (1 space for ASCII, 2 spaces for full-width characters).
+  - Deleting text inside boxes—via `Backspace`/`Delete` in Insert mode or `x`/`X` in Normal mode—automatically pads spaces to maintain border positions.
   - Box internal text alignment via `:align left`, `:align center`, `:align right`.
 
 ---
@@ -150,20 +152,31 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
 
 ---
 
-## 6. Advanced Navigation & Search
+## 6. Advanced Navigation, Search & Layout
 
 ### 6.1 Romaji Japanese Search (Migemo / `g/`)
-- Incremental search for Japanese Kanji/Kana directly via Romaji queries without toggling IME.
-- SKK dictionary integration produces optimized regular expressions (e.g., `(検索|けんさく|kensaku)`).
-- Standard `n` and `N` navigation supported.
+- **Specification**: Incremental search for Japanese Kanji/Kana directly via Romaji queries without toggling IME.
+- **Built-in SKK Dictionary & External Expansion**:
+  - Embedded `BUILTIN_SKK_ENTRIES` provides immediate zero-config matching for common Japanese vocabulary.
+  - Automatically loads and merges `%USERPROFILE%\.vivivi\SKK-JISYO.L` if present.
+- **Commands**: Normal mode `g/` prompt, `:migemo <query>` ex command, and auto-scrolling viewport follow.
 
-### 6.2 Symbol Outline Pane (`F8`, `:outline`)
-- Displays an interactive side tree pane extracting Markdown headers (`#`), Rust items (`fn`, `struct`, `impl`), C/C++, and Python symbols.
-- Press `Enter` to jump directly to target definition.
+### 6.2 Symbol Outline Pane (`F2`, `F8`, `:outline`)
+- **Specification**: Extracts Markdown headers (`#`), Rust items (`fn`, `struct`, `impl`), C/C++, and Python symbols.
+- **UI & Controls**: Toggle via `F2`, `F8`, or `:outline`. Focus automatically transfers to the outline tree upon opening (`j`/`k` to select, `Enter` to jump). Press `Tab` or `Esc` to toggle focus between outline tree and editor buffer.
 
 ### 6.3 Multi-Window Splits (`Ctrl-w`, `:split`, `:vsplit`)
-- Horizontal (`:split`, `Ctrl-w s`) and vertical (`:vsplit`, `Ctrl-w v`) splits sharing the active buffer.
-- Window cycling (`Ctrl-w w`), closing (`Ctrl-w c`, `:close`), and single-window maximization (`Ctrl-w o`, `:only`).
+- **Specification**: Independent viewports maintaining separate cursor positions and vertical/horizontal scroll offsets without unwanted sync.
+- **Vim-Compatible Nested Split Tree (`WindowTreeNode`)**:
+  - Binary tree representation (`WindowTreeNode::Leaf` / `Split`) allows complex nested splits (e.g. splitting the bottom pane horizontally or vertically without mutating top panes).
+- **Keybindings**:
+  - Split: `Ctrl-w s` / `:split`, `Ctrl-w v` / `:vsplit`
+  - Focus Navigation: Geometric nearest-neighbor via `Ctrl-w h/j/k/l` (Left, Down, Up, Right) or cycling via `Ctrl-w w`
+  - Close / Maximize: `Ctrl-w c` / `:close` / `:q`, `Ctrl-w o` / `:only`
+
+### 6.4 Horizontal Scrolling for Long Lines
+- **Specification**: Automatically scrolls viewport left and right to follow cursor movements and `$` line-end motions on lines exceeding screen width.
+- **Visual Column Metrics**: Accurately computes display widths for ASCII (1), East Asian Wide characters (2), and Tab stops (4) via `UnicodeWidthChar`, clipping characters safely at the window boundary.
 
 ---
 
