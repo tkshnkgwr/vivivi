@@ -74,9 +74,9 @@ ViVi特有のキラー編集支援機能およびツール機能エンジン群�
 - `filer.rs`: 左右独立2ペイン型ディレクトリビュー、ファイル操作（コピー・移動・削除）。
 - `project.rs`: 複数ファイルプロジェクト管理、一括tagsファイル生成。
 - `print.rs`: A4標準改ページ・行番号・ヘッダー・フッター整形、外部依存ゼロのPDF 1.4直接出力。
-- `migemo.rs`: 内蔵SKK辞書（`BUILTIN_SKK_ENTRIES`）および外部SKK辞書読込に対応したスタンドアロンローマ字日本語検索エンジン。
+- `migemo.rs`: 独自MIT辞書（約物記号セット収録）の内蔵、および外部SKK辞書の自動ロードに対応した、ライセンス安全なローマ字日本語検索エンジン。
 - `keisen.rs`: 幾何学的角結合アルゴリズム、文字入力およびノーマルモード `x`/`X` 削除時の枠線保護・空白自動伸縮。
-- `outline.rs`: Markdown見出しおよび主要言語シンボルツリー抽出エンジン。
+- `outline.rs`: Markdown見出し（全階層）および主要言語シンボルツリー抽出エンジン。自動縦スクロール追従。
 - `csv.rs`, `expr_subst.rs`, `fftt.rs`, `conv.rs`, `align.rs`, `renumber.rs`, `dabbrev.rs`, `abbrev.rs`, `dmacro.rs`, `lexedit.rs`, `zen.rs`, `calc.rs`, `syntax.rs`。
 
 ### 4.4 `vivivi-app`

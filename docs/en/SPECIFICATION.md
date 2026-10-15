@@ -155,11 +155,23 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
 ## 6. Advanced Navigation, Search & Layout
 
 ### 6.1 Romaji Japanese Search (Migemo / `g/`)
-- **Specification**: Incremental search for Japanese Kanji/Kana directly via Romaji queries without toggling IME.
-- **Built-in SKK Dictionary & External Expansion**:
-  - Embedded `BUILTIN_SKK_ENTRIES` provides immediate zero-config matching for common Japanese vocabulary.
-  - Automatically loads and merges `%USERPROFILE%\.vivivi\SKK-JISYO.L` if present.
-- **Commands**: Normal mode `g/` prompt, `:migemo <query>` ex command, and auto-scrolling viewport follow.
+- **Specification**: Incremental search for Japanese Kanji, Kana, and symbols directly via Romaji queries without toggling IME.
+- **Built-in Clean MIT Dictionary**:
+  - Embedded `builtin_mit_dict.txt` compiled via `include_str!`, ensuring complete licensing safety (MIT License) with zero external GPL dependencies in binary distributions.
+  - **Included Vocabulary (~128 entries covering primary symbols & editor keywords)**:
+    - Brackets & Punctuation (`kakko`): `括弧`, `「` `」` `(` `)` `（` `）` `【` `】` `『` `』` `[` `]` `［` `］` `{` `}` `｛` `｝` `〈` `〉`, etc.
+    - Arrow Symbols (`yajirushi`): `矢印`, `→` `←` `↑` `↓` `⇒` `⇔` `->` `=>` `<-`
+    - Circles & Marks (`maru`, `ten`, `kara`, `nami`): `○`, `●`, `◎`, `。`, `、`, `・`, `〜`, `～`
+    - Directions & Positions: `migi (→)`, `hidari (←)`, `ue (↑)`, `shita (↓)`, inside, outside, vertical, horizontal
+    - Editor & UI Core Terms: Search, replace, save, edit, file, line, column, window, command, buffer, cursor, scroll, split, setting, execute, result, etc.
+    - Common Daily Words: Japan, Tokyo, world, today, tomorrow, yesterday, time, weather, school, work, company, etc.
+  - **Dynamic Incremental Prefix Match**: Expands matching Kanji for prefix queries with 2+ syllables, enhancing interactive typing responsiveness.
+- **External SKK Dictionary Expansion (Recommended for Full Use)**:
+  - Strongly recommended for extensive document writing, programming comments, and comprehensive vocabulary coverage (~100,000 words).
+  - Automatically loads and transparently merges `%USERPROFILE%\.vivivi\SKK-JISYO.L` (or current directory) upon application startup.
+  - Automatic charset detection: EUC-JP, UTF-8, and Shift_JIS/CP932.
+  - Official download site: [https://github.com/skk-dev/dict](https://github.com/skk-dev/dict) (Recommends `SKK-JISYO.L`).
+- **Commands**: Normal mode `g/` prompt, `:migemo <query>` / `:m <query>` ex commands, and synchronized viewport follow.
 
 ### 6.2 Symbol Outline Pane (`F2`, `F8`, `:outline`)
 - **Specification**: Extracts Markdown headers (`#`), Rust items (`fn`, `struct`, `impl`), C/C++, and Python symbols.

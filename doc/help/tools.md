@@ -83,7 +83,7 @@ ViVi 3 / ViVi 4 準拠の強力なツール機能およびファイル管理コ�
 
 ## 7. テンプレート自動読み込み (`.template.<ext>`)
 
-新規ファイル作成時、同ディレクトリまたは `~/.vivivi/templates/` 配下の `.template.<ext>` を自動探索し、
+新規ファイル作成時、同ディレクトリまたは `%USERPROFILE%\.vivivi\templates\`（Linux/macOS では `~/.vivivi/templates/`）配下の `.template.<ext>` を自動探索し、
 マクロ変数を展開してバッファ初期テキストとして挿入します。
 
 - `%FileName%`: ファイル名

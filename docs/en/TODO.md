@@ -66,6 +66,7 @@
 |  Encoding           |  Explicit Encoding Reload & Format (:e ++enc)  |  Common (ViVi / OpenViVi)  |  Force reopen with SJIS/EUC/UTF-8; convert CRLF/LF on save           |  Planned (Phase 4.8) |
 |  Robustness         |  Auto-Save & Crash Recovery (.swp)             |  Common (ViVi / OpenViVi)  |  Periodic background swap dumps & unsaved recovery on startup        |  Planned (Phase 4.8) |
 |  OS Integration     |  System Clipboard Integration ("+y, "*p)       |  Common (ViVi / OpenViVi)  |  Bidirectional transparent sync with OS clipboard registers          |  Planned (Phase 4.8) |
+|  Languages & Syntax  |  Syntax Highlighting Expansion (Go, Ruby, etc)   |  Common (ViVi / OpenViVi)  |  Syntax highlighting for Go, Ruby, TOML, PowerShell, YAML, XML, BAT  |  Planned (Phase 4.8) |
 |  UI/UX Visual       |  Minimap Overview                              |          OpenViVi          |  Bird's-eye code preview with viewport and search highlights         |   Planned (Phase 5) |
 |  UI/UX Visual       |  Gravity Drop Deletion Animation               |          OpenViVi          |  Playful physical falling character animation upon deletion          |   Planned (Phase 5) |
 |  UI/UX Visual       |  Desktop GUI (egui / eframe)                   |   OpenViVi (Qt rewrite)    |  Modern GUI frontend with rich borders and custom fonts              |   Planned (Phase 5) |
@@ -249,6 +250,15 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - Unsaved buffer recovery dialog prompt upon restarting after unexpected crash or disconnect
 - [ ] **[Common (ViVi / OpenViVi)] System Clipboard Integration ("+y, "*p)**
   - Transparent bidirectional sync with OS system clipboard (Windows API & OSC 52 ANSI escape sequences)
+- [ ] **[Common (ViVi / OpenViVi)] Syntax Highlighting Expansion (Go, Ruby, TOML, PowerShell, YAML, XML, bat/cmd)**
+  - **Go (`.go`)**: Keywords (`func`, `package`, `import`, `go`, `chan`, `defer`, `type`, `struct`, `interface`), primitive & struct types, `//` & `/* */` comments, raw string literals
+  - **Ruby (`.rb`)**: Keywords (`def`, `end`, `class`, `module`, `do`, `yield`, `attr_accessor`), symbols (`:symbol`), `#` comments, strings, heredocs
+  - **TOML (`.toml`)**: `[...]` / `[[...]]` table headers, key names, strings, numbers, booleans, datetimes, `#` comments
+  - **PowerShell (`.ps1`, `.psm1`, `.psd1`)**: Cmdlets (`Get-...`, `Set-...`), control flow, variables (`$var`), `#` and `<# #>` comments, strings
+  - **YAML (`.yaml`, `.yml`)**: Keys, list hyphens (`-`), scalar values, strings, numbers, booleans, anchors/aliases (`&`, `*`), `#` comments
+  - **XML (`.xml`)**: Tag names, attribute names, attribute values, `<?xml ...?>` declarations, `<!-- ... -->` comments, `<![CDATA[...]]>`
+  - **bat / cmd (`.bat`, `.cmd`)**: Batch commands (`echo`, `set`, `goto`, `call`, `if`, `for`, `pause`, `rem`), env variables (`%VAR%`), labels (`:label`), comments (`rem`, `::`)
+  - Status bar language badges (`[Go]`, `[Ruby]`, `[TOML]`, `[PowerShell]`, `[YAML]`, `[XML]`, `[Batch]`)
 
 ---
 

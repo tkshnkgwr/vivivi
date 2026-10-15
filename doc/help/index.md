@@ -13,7 +13,7 @@
 | [BOX選択 & 数値集計](calc.md)            | `Ctrl-v` → `:calc`, `:sum`     | 矩形選択範囲の数値自動集計（合計・平均・最大・最小・標準偏差） |
 | [動的補完 (dabbrev)](dabbrev.md)         | `Ctrl-l`, `Ctrl-m` (挿入中)    | バッファ内の単語を前方・後方から巡回探索・動的補完             |
 | [クリップボード履歴](cbhist.md)          | `F6` / `:cbhist`               | ヤンク・コピー履歴のモーダル一覧表示と選択ペースト             |
-| [ローマ字日本語検索 (Migemo)](migemo.md) | `g/` / `:migemo`               | 内蔵SKK辞書搭載、IMEオフのままローマ字で日本語を直接検索       |
+| [ローマ字日本語検索 (Migemo)](migemo.md) | `g/` / `:migemo`               | 独自MIT辞書内蔵（外部SKK対応）、IMEオフのままローマ字日本語検索 |
 | [インラインCSV/TSVモード](csv.md)        | `:csv`, `:tsv`, `:normal`      | カラム幅の自動整列表示と透過的クォート編集                     |
 | [アウトライン解析](outline.md)           | `F2` / `F8` / `:outline`       | Markdown見出し・ソースコード構造のサイドペインツリー表示       |
 | [画面分割 (Split)](split.md)             | `:split`, `:vsplit`, `Ctrl-w`  | Vim互換ネスト分割ツリー、独立スクロール、幾何学的フォーカス移動|

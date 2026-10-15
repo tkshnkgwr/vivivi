@@ -64,6 +64,7 @@
 |  エンコード    |  指定エンコード再読込・改行変換 (:e ++enc)  |  共通 (ViVi / OpenViVi)  |  Shift_JIS/EUC-JP/UTF-8の明示指定オープン、CRLF/LF変換保存       |  未実装 (Phase 4.8) |
 |  堅牢性        |  自動保存・クラッシュリカバリ (.swp)        |  共通 (ViVi / OpenViVi)  |  定期スワップ保存と異常終了時の未保存データ自動復元プロンプト    |  未実装 (Phase 4.8) |
 |  OS連携        |  システム共有クリップボード ("+y, "*p)      |  共通 (ViVi / OpenViVi)  |  OSクリップボードとViレジスタの双方向透過同期                    |  未実装 (Phase 4.8) |
+|  言語・構文    |  構文強調拡充 (Go, Ruby, TOML, PS, YAML 等)  |  共通 (ViVi / OpenViVi)  |  Go, Ruby, TOML, PowerShell, YAML, XML, bat/cmd の構文色分け    |  未実装 (Phase 4.8) |
 |  UI/UX表示     |  ミニマップ (Minimap)                       |         OpenViVi         |  ファイル全体の縮小俯瞰プレビューと検索ヒット位置の可視化        |   未実装 (Phase 5) |
 |  UI/UX表示     |  削除文字落下アニメーション                 |         OpenViVi         |  文字削除時に文字が物理重力で落下するOpenViVi特有の演出          |   未実装 (Phase 5) |
 |  UI/UX表示     |  デスクトップGUI (egui / eframe)            |   OpenViVi (Qt再構築)    |  ターミナルTUIに加え、モダンGUIによるリッチグラフィック描画      |   未実装 (Phase 5) |
@@ -248,6 +249,15 @@
   - 異常終了・クラッシュ後の次回起動時における未保存バッファ復元プロンプト
 - [ ] **【共通 (ViVi / OpenViVi)】 システム共有クリップボード連携 ("+y, "*p)**
   - OSクリップボードと Vi の `+` / `*` レジスタを透過同期（Windows API / OSC 52 エスケープシーケンス対応）
+- [ ] **【共通 (ViVi / OpenViVi)】 シンタックスハイライト対応言語の拡充 (Go, Ruby, TOML, PowerShell, YAML, XML, bat/cmd)**
+  - **Go (`.go`)**: `func`, `package`, `import`, `go`, `chan`, `defer`, `type`, `struct`, `interface` 等の予約語、基本型/構造体型、`//` および `/* */` コメント、生文字列（バッククォート）
+  - **Ruby (`.rb`)**: `def`, `end`, `class`, `module`, `do`, `yield`, `attr_accessor` 等の予約語、シンボル（`:symbol`）、`#` コメント、文字列、ヒアドキュメント
+  - **TOML (`.toml`)**: `[...]` / `[[...]]` テーブルセクション、キー名、文字列、数値、真偽値、日付時刻、`#` コメント
+  - **PowerShell (`.ps1`, `.psm1`, `.psd1`)**: コマンドレット（`Get-...`, `Set-...` 等）、制御構文、変数（`$var`）、`#` および `<# #>` コメント、文字列
+  - **YAML (`.yaml`, `.yml`)**: キー名、ハイフンリスト（`-`）、スカラー値、文字列、数値、真偽値、アンカー/エイリアス（`&`, `*`）、`#` コメント
+  - **XML (`.xml`)**: タグ名、属性名、属性値、`<?xml ...?>` 宣言、`<!-- ... -->` コメント、`<![CDATA[...]]>`
+  - **bat / cmd (`.bat`, `.cmd`)**: バッチコマンド（`echo`, `set`, `goto`, `call`, `if`, `for`, `pause`, `rem` 等）、環境変数（`%VAR%`）、ラベル（`:label`）、コメント（`rem`, `::`）
+  - ステータスバー言語バッジ表示（`[Go]`, `[Ruby]`, `[TOML]`, `[PowerShell]`, `[YAML]`, `[XML]`, `[Batch]`）
 
 ---
 
