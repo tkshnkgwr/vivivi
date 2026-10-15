@@ -356,3 +356,78 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
   - **Direct PDF Export**: Zero-dependency standalone PDF 1.4 binary generator (Courier Type 1 font, page stream operators, xref table) written in pure Rust.
   - *(Note: Desktop GUI frontend (egui) and GUI-dependent features were migrated to Phase 5 per user instruction, focusing current capabilities on TUI and core tooling engines)*.
 
+---
+
+## 12. TUI/UX Editing & Visual Assistance Specifications (Phase 4.6)
+
+### 12.1 Line Change Markers in Gutter (`gutter.rs`)
+- **Overview**: An OpenViVi visual editing aid that highlights modified lines in real-time within the leftmost gutter column (line number margin).
+- **Marker Types**:
+  - **Modified (Unsaved / Yellow `▌`)**: Lines where text has been inserted, replaced, or deleted since the last save (or file load).
+  - **Saved (Green `▌`)**: Lines that were modified during the session but subsequently saved to disk via `:w`.
+  - **Unchanged (None)**: Lines unchanged since file load.
+- **Algorithm**:
+  - Tracks line-level modifications through `TextBuffer` Undo stack states and `save_point` snapshots.
+
+### 12.2 Recent Files & Favorite Files (`recent.rs`)
+- **Overview**: Persistent tracking of recently accessed files and customizable favorites.
+- **Storage**: `%USERPROFILE%\.vivivi\recent_files.json`.
+- **Keys & Commands**:
+  - `F7` / `:recent`: Popup modal dialog for selecting recent files.
+  - `:fav`: Popup list of favorite files.
+  - `:fav add [path]`: Add current buffer or target path to favorites.
+  - `:fav del [path]`: Remove from favorites.
+- **Dialog Navigation**:
+  - `j` / `k` (or `↑` / `↓`): Navigate list.
+  - `Enter`: Open selected file in active buffer.
+  - `Esc` / `q`: Close modal dialog.
+
+### 12.3 Invisible / Whitespace Character Visualization (`invisible.rs`)
+- **Overview**: Prevents indentation errors and full-width Japanese space confusion during code editing.
+- **Commands**:
+  - `:set list`: Enable invisible character rendering.
+  - `:set nolist`: Disable invisible character rendering (default).
+  - `:set list!`: Toggle rendering.
+- **Glyph Specifications**:
+  - **Full-width space (U+3000)**: Displayed as an open square (`□`).
+  - **Tab character (`\t`)**: Displayed with a lead arrow and trailing dashes (e.g. `▸---` for tabstop 4).
+  - **EOL marker**: Displayed as a dollar sign (`$`) or return symbol.
+  - **Trailing spaces**: Highlighted with warning colors or underline.
+
+### 12.4 Search Match Highlighting
+- **Overview**: Real-time visual highlight for all pattern matches in the visible viewport when searching with `/` or `?`.
+- **Navigation & Controls**:
+  - `n` / `N`: Jump to next / previous match.
+  - `:noh`, `:nohl`, `:nohlsearch`: Clear active search highlights.
+  - `:set hls` / `:set hlsearch`: Search highlights permanently ON.
+  - `:set nohls` / `:set nohlsearch`: Search highlights permanently OFF.
+
+### 12.5 Mode-Synchronized Terminal Cursor Shapes
+- **Overview**: Dynamically changes the terminal cursor shape using standard DECSCUSR ANSI escape sequences matching the active Vi mode.
+- **Modes and Shapes**:
+  - **Normal / Visual Mode**: Steady Block cursor (`\x1b[2 q` / █)
+  - **Insert Mode**: Steady Bar / Beam cursor (`\x1b[6 q` / ▎)
+  - **Replace Mode**: Steady Underline cursor (`\x1b[4 q` /   )
+
+---
+
+## 13. Testing & Documentation Conventions
+
+### 13.1 Testing Architecture (`tests/` vs `src/`)
+- **Public API Integration Tests (`tests/*.rs`)**:
+  - Black-box verification from external crate perspective using only `pub` APIs.
+  - Validates cross-module interactions, realistic multi-step workflows, and end-to-end scenarios.
+- **Internal Unit Tests (`src/**/tests.rs` or `mod tests`)**:
+  - White-box verification focused purely on private/internal helper logic, edge cases, and internal state invariants.
+  - Prevents production source file bloat by migrating public API tests to `tests/`.
+
+### 13.2 Rustdoc Documentation Standard
+- **Natural Language Descriptions**: Comprehensive Japanese explanations covering context, invariants, and side effects rather than trivial signature restatements.
+- **Mandatory Sections**:
+  1. **One-line summary**: Purpose of the type or function.
+  2. **Detailed explanation**: Invariants, prerequisites, related types ([`Type`]).
+  3. **# Errors**: Conditions under which `Result::Err` is returned.
+  4. **# Panics**: Boundary or invalid input conditions triggering panic.
+  5. **# Examples**: Verifiable, copy-pasteable minimal examples tested by `cargo test --doc`.
+
+

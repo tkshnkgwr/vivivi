@@ -22,7 +22,7 @@ use vivivi_modes::OutlineKind;
 pub fn render_outline(frame: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(" Outline (F8/Ctrl-O) ")
+        .title(" Outline (F2/F8 | Tab/Enter) ")
         .border_style(if app.outline_focus {
             Style::default()
                 .fg(Color::Yellow)

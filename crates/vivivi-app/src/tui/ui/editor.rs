@@ -42,24 +42,35 @@ pub fn render_window(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
             .border_style(border_style);
         let inner_area = block.inner(area);
         frame.render_widget(block, area);
-        render_editor(frame, app, inner_area);
+        render_editor(frame, app, inner_area, win_idx, is_active);
     } else {
-        render_editor(frame, app, area);
+        render_editor(frame, app, area, win_idx, is_active);
     }
 }
 
 /// エディタ本体（変更追跡ガター、行番号、シンタックスハイライト、選択範囲反転、不可視文字）を描画します。
 ///
 /// スクロールオフセットを考慮して画面可視範囲内の行のみをフォーマット・レンダリングします。
+/// 各ウィンドウごとに独立したカーソル座標およびスクロール位置を適用します。
 ///
 /// # 引数
 /// - `frame`: Ratatui の描画フレーム
 /// - `app`: アプリケーション状態への参照
 /// - `area`: 描画対象領域の矩形
-pub fn render_editor(frame: &mut Frame, app: &App, area: Rect) {
-    let cur = app.cursor_pos();
+/// - `win_idx`: ウィンドウインデックス（0-based）
+/// - `is_active`: アクティブウィンドウかどうか
+pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, is_active: bool) {
+    // アクティブウィンドウはリアルタイムの app 状態、非アクティブウィンドウは個別保持された状態を取得
+    let (cur, scroll) = if is_active {
+        (app.cursor_pos(), app.scroll)
+    } else if let Some(win) = app.windows.get(win_idx) {
+        (win.cursor.pos, win.scroll)
+    } else {
+        (app.cursor_pos(), app.scroll)
+    };
+
     let total_lines = app.buffer.line_count();
-    let start_line = app.scroll.0;
+    let start_line = scroll.0;
     let end_line = (start_line + area.height as usize).min(total_lines);
 
     // カーソル位置の対応括弧ペアを探索
@@ -225,8 +236,8 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect) {
             }
         }
 
-        // ビジュアル選択範囲（文字/行/矩形ブロック）のハイライト
-        if let Some(anchor) = app.cursor.anchor {
+        // ビジュアル選択範囲（文字/行/矩形ブロック）のハイライト（アクティブウィンドウのみ）
+        if is_active && let Some(anchor) = app.cursor.anchor {
             let mode = app.mode();
             let min_line = anchor.line.min(cur.line);
             let max_line = anchor.line.max(cur.line);
@@ -295,28 +306,49 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled(" ", base_bg),
         ];
 
-        let scroll_x = app.scroll.1;
-        if scroll_x < chars.len() {
-            let mut cur_chunk = String::new();
-            let mut cur_style = styles[scroll_x];
+        let scroll_x = scroll.1;
+        let mut visual_x = 0;
+        let mut cur_chunk = String::new();
+        let mut cur_style = Style::default();
+        let mut chunk_has_started = false;
 
-            for i in scroll_x..chars.len() {
-                let ch = chars[i];
-                let st = styles[i];
-                if st == cur_style {
-                    cur_chunk.push(ch);
-                } else {
-                    if !cur_chunk.is_empty() {
-                        row_spans.push(Span::styled(cur_chunk.clone(), cur_style));
-                        cur_chunk.clear();
-                    }
-                    cur_chunk.push(ch);
-                    cur_style = st;
+        for (i, &ch) in chars.iter().enumerate() {
+            let ch_w = if ch == '\t' {
+                4 - (visual_x % 4)
+            } else {
+                unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1)
+            };
+
+            let char_end_x = visual_x + ch_w;
+
+            if char_end_x <= scroll_x {
+                // スクロール開始位置より前はスキップ
+                visual_x = char_end_x;
+                continue;
+            }
+
+            let st = styles[i];
+            if !chunk_has_started {
+                cur_style = st;
+                chunk_has_started = true;
+            }
+
+            if st == cur_style {
+                cur_chunk.push(ch);
+            } else {
+                if !cur_chunk.is_empty() {
+                    row_spans.push(Span::styled(cur_chunk.clone(), cur_style));
+                    cur_chunk.clear();
                 }
+                cur_chunk.push(ch);
+                cur_style = st;
             }
-            if !cur_chunk.is_empty() {
-                row_spans.push(Span::styled(cur_chunk, cur_style));
-            }
+
+            visual_x = char_end_x;
+        }
+
+        if !cur_chunk.is_empty() {
+            row_spans.push(Span::styled(cur_chunk, cur_style));
         }
 
         lines_spans.push(Line::from(row_spans));

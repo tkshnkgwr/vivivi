@@ -9,6 +9,7 @@ use vivivi_modes::KeisenDirection;
 use vivivi_vi::ViMode;
 
 use super::app::App;
+use super::window::WindowDirection;
 
 /// キーイベントを処理し、アプリケーション状態やテキストバッファを更新します。
 ///
@@ -300,8 +301,8 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
         return;
     }
 
-    // F8: アウトライン表示のトグル
-    if key.code == KeyCode::F(8) {
+    // F2 / F8: アウトライン表示のトグル
+    if key.code == KeyCode::F(2) || key.code == KeyCode::F(8) {
         app.toggle_outline();
         return;
     }
@@ -309,8 +310,13 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
     // アウトラインペインにフォーカスがある場合のキーハンドリング
     if app.show_outline && app.outline_focus {
         match key.code {
-            KeyCode::Esc => {
+            KeyCode::Esc | KeyCode::Tab => {
                 app.outline_focus = false;
+                app.status_message =
+                    Some("エディタフォーカス中 (Tab / Ctrl-O: アウトライン選択)".to_string());
+            }
+            KeyCode::Char('q') => {
+                app.toggle_outline();
             }
             KeyCode::Up | KeyCode::Char('k') => {
                 app.selected_outline_idx = app.selected_outline_idx.saturating_sub(1);
@@ -326,6 +332,18 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
             }
             _ => {}
         }
+        return;
+    }
+
+    // アウトライン表示中にエディタ側で Tab を押した場合にアウトラインへフォーカス移行
+    if app.show_outline
+        && !app.outline_focus
+        && app.mode() == ViMode::Normal
+        && key.code == KeyCode::Tab
+    {
+        app.outline_focus = true;
+        app.status_message =
+            Some("アウトライン選択中 (j/k:選択, Enter:ジャンプ, Tab/Esc:エディタ復帰)".to_string());
         return;
     }
 
@@ -348,19 +366,17 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
             KeyCode::Char('o') => {
                 app.only_window();
             }
-            KeyCode::Char('h') | KeyCode::Char('k') | KeyCode::Left | KeyCode::Up => {
-                if app.windows.len() > 1 {
-                    app.active_window = if app.active_window == 0 {
-                        app.windows.len() - 1
-                    } else {
-                        app.active_window - 1
-                    };
-                    app.cursor = app.windows[app.active_window].cursor.clone();
-                    app.scroll = app.windows[app.active_window].scroll;
-                }
+            KeyCode::Char('h') | KeyCode::Left => {
+                app.navigate_window(WindowDirection::Left);
             }
-            KeyCode::Char('l') | KeyCode::Char('j') | KeyCode::Right | KeyCode::Down => {
-                app.cycle_window();
+            KeyCode::Char('j') | KeyCode::Down => {
+                app.navigate_window(WindowDirection::Down);
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                app.navigate_window(WindowDirection::Up);
+            }
+            KeyCode::Char('l') | KeyCode::Right => {
+                app.navigate_window(WindowDirection::Right);
             }
             _ => {}
         }
@@ -919,6 +935,32 @@ fn execute_ex_command(app: &mut App, cmd: &str) {
             app.toggle_outline();
         }
 
+        // --- ローマ字日本語検索 (:migemo <query>, :m <query>) ---
+        _ if trimmed.starts_with("migemo ") || trimmed.starts_with("m ") => {
+            let query = if let Some(q) = trimmed.strip_prefix("migemo ") {
+                q.trim()
+            } else if let Some(q) = trimmed.strip_prefix("m ") {
+                q.trim()
+            } else {
+                ""
+            };
+            if !query.is_empty() {
+                app.execute_migemo_search(query);
+            } else {
+                app.is_migemo_search = true;
+                app.migemo_query.clear();
+                app.status_message = Some(
+                    "g/ (ローマ字入力で日本語検索 - Enterで確定, Escでキャンセル)".to_string(),
+                );
+            }
+        }
+        "migemo" => {
+            app.is_migemo_search = true;
+            app.migemo_query.clear();
+            app.status_message =
+                Some("g/ (ローマ字入力で日本語検索 - Enterで確定, Escでキャンセル)".to_string());
+        }
+
         // --- 文字変換 (:zenkaku, :hankaku, :hiragana, :katakana, etc.) ---
         "zenkaku" | "%zenkaku" => {
             app.convert_buffer_text(vivivi_modes::ConversionType::ToZenkakuAlphanumeric);
@@ -1203,15 +1245,34 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent) {
         }
     }
 
+    if key.code != KeyCode::Esc {
+        app.last_esc_time = None;
+    }
+
     match key.code {
         KeyCode::Esc => {
             app.g_pending = false;
-            app.clear_search_highlight();
+            let now = std::time::Instant::now();
+            let is_double_esc = if let Some(last_time) = app.last_esc_time {
+                now.duration_since(last_time).as_millis() <= 500
+            } else {
+                false
+            };
+
+            if is_double_esc {
+                app.clear_search_highlight();
+                app.status_message = Some("検索ハイライトを消去しました (:nohlsearch)".to_string());
+                app.last_esc_time = None;
+            } else {
+                app.last_esc_time = Some(now);
+            }
+
             app.feed_vi_char('\x1b');
         }
         KeyCode::Char('/') if app.g_pending => {
             // g/ で Migemo ローマ字日本語検索を開始
             app.g_pending = false;
+            app.feed_vi_char('\x1b'); // ViEngineのg待ち状態を安全に解除
             app.is_migemo_search = true;
             app.migemo_query.clear();
             app.status_message =

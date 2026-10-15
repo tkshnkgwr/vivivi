@@ -343,7 +343,7 @@ pub enum BoxAlignment {
     Right,
 }
 
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use vivivi_core::{CursorPosition, TextBuffer};
 
 /// 罫線モード状態管理構造体。
@@ -821,6 +821,11 @@ impl KeisenMode {
     /// let mut cursor = CursorPosition::new(0, 3);
     /// assert!(KeisenMode::insert_char_protected(&mut buffer, &mut cursor, 'b'));
     /// assert_eq!(buffer.get_line(0).unwrap(), "│ ab  │");
+    ///
+    /// // 全角文字（幅2）の入力時は末尾の半角スペース2文字分を自動消費して枠幅を完全維持
+    /// let mut cursor_zenkaku = CursorPosition::new(0, 1);
+    /// assert!(KeisenMode::insert_char_protected(&mut buffer, &mut cursor_zenkaku, 'あ'));
+    /// assert_eq!(buffer.get_line(0).unwrap(), "│あ ab│");
     /// ```
     pub fn insert_char_protected(
         buffer: &mut TextBuffer,
@@ -836,24 +841,43 @@ impl KeisenMode {
                 None => return false,
             };
             let chars: Vec<char> = line_text.chars().collect();
+            let char_w = UnicodeWidthChar::width(ch).unwrap_or(1).max(1);
 
-            // カーソル位置から右罫線直前までの範囲で、末尾側の空白を探索
-            let mut space_idx = None;
+            // カーソル位置から右罫線直前までの範囲で、末尾側から必要な幅分の空白を探索
+            let mut collected_spaces: Vec<(usize, usize)> = Vec::new(); // (col, width)
+            let mut accumulated_width = 0;
+
             for i in (cursor.col..right_col).rev() {
-                if chars[i] == ' ' || chars[i] == '　' {
-                    space_idx = Some(i);
+                let c = chars[i];
+                if c == ' ' {
+                    collected_spaces.push((i, 1));
+                    accumulated_width += 1;
+                } else if c == '　' {
+                    collected_spaces.push((i, 2));
+                    accumulated_width += 2;
+                }
+                if accumulated_width >= char_w {
                     break;
                 }
             }
 
-            if let Some(space_col) = space_idx {
+            if accumulated_width >= char_w {
                 buffer.open_undo_block();
                 let line_start = buffer.line_start_position(cursor.line);
 
-                // 1. 空白を削除
-                buffer.delete_range(line_start + space_col, line_start + space_col + 1);
+                // 1. 空白を末尾側から削除 (インデックスを保持するため降順に削除)
+                for &(col, _) in &collected_spaces {
+                    buffer.delete_range(line_start + col, line_start + col + 1);
+                }
 
-                // 2. カーソル位置に文字を挿入
+                // 2. 削りすぎた幅（全角スペースを半角文字で消費した場合等）があれば半角スペースを補填
+                let extra_width = accumulated_width - char_w;
+                let adjusted_right_col = right_col - collected_spaces.len();
+                for _ in 0..extra_width {
+                    buffer.insert_char(line_start + adjusted_right_col, ' ');
+                }
+
+                // 3. カーソル位置に文字を挿入
                 let insert_pos = line_start + cursor.col;
                 buffer.insert_char(insert_pos, ch);
 
@@ -861,7 +885,7 @@ impl KeisenMode {
                 buffer.close_undo_block();
                 return true;
             } else {
-                // 枠内に空白の余白がないため、枠線を壊さないよう挿入拒否
+                // 枠内に十分な余白がないため、枠線を壊さないよう挿入拒否
                 return false;
             }
         }
@@ -875,8 +899,8 @@ impl KeisenMode {
 
     /// 罫線枠保護モードでの文字削除（BackSpaceまたはDelete）。
     ///
-    /// 枠線内にカーソルがある場合、文字を削除した分だけ右枠線の直前に半角スペースを補填し、
-    /// 外側の枠線位置を保ちます。枠線の文字自体は誤消去されないよう保護されます。
+    /// 枠線内にカーソルがある場合、文字を削除した分（全角文字なら2文字分、半角文字なら1文字分）だけ
+    /// 右枠線の直前に空白を自動補填し、外側の枠線位置を保ちます。枠線の文字自体は誤消去されないよう保護されます。
     ///
     /// # Returns
     /// 削除に成功した場合は `true`、枠線自体の削除試行など無効な操作の場合は `false` を返します。
@@ -899,6 +923,12 @@ impl KeisenMode {
         is_backspace: bool,
     ) -> bool {
         if let Some((left_col, right_col)) = Self::find_enclosing_box_cols(buffer, *cursor) {
+            let line_text = match buffer.get_line(cursor.line) {
+                Some(t) => t,
+                None => return false,
+            };
+            let chars: Vec<char> = line_text.chars().collect();
+
             let delete_col = if is_backspace {
                 if cursor.col <= left_col + 1 {
                     return false; // 左枠線は削除させない
@@ -911,16 +941,21 @@ impl KeisenMode {
                 cursor.col
             };
 
-            if delete_col > left_col && delete_col < right_col {
+            if delete_col > left_col && delete_col < right_col && delete_col < chars.len() {
+                let del_ch = chars[delete_col];
+                let del_width = UnicodeWidthChar::width(del_ch).unwrap_or(1).max(1);
+
                 buffer.open_undo_block();
                 let line_start = buffer.line_start_position(cursor.line);
 
                 // 1. 指定位置の文字を削除
                 buffer.delete_range(line_start + delete_col, line_start + delete_col + 1);
 
-                // 2. 右枠線の手前（right_col - 1 の位置）に空白を補填
+                // 2. 削除した文字の表示幅分（半角なら1、全角なら2）右枠線の手前に空白を補填
                 let pad_pos = line_start + right_col - 1;
-                buffer.insert_char(pad_pos, ' ');
+                for _ in 0..del_width {
+                    buffer.insert_char(pad_pos, ' ');
+                }
 
                 if is_backspace {
                     cursor.col -= 1;
@@ -1163,6 +1198,24 @@ mod tests {
         assert_eq!(buffer.get_line(0), Some("│ hello     │".to_string()));
         assert_eq!(cursor, CursorPosition::new(0, 7));
 
+        // 全角文字の挿入テスト: 全角「あ」（幅2）を挿入 -> 末尾の空白が2つ削られ、右枠線の位置と全体の表示幅は維持される
+        assert!(KeisenMode::insert_char_protected(
+            &mut buffer,
+            &mut cursor,
+            'あ'
+        ));
+        assert_eq!(buffer.get_line(0), Some("│ helloあ   │".to_string()));
+        assert_eq!(cursor, CursorPosition::new(0, 8));
+
+        // BackSpace で全角「あ」を削除 -> 末尾に空白が2つ補填され、右枠線の位置と表示幅が維持される
+        assert!(KeisenMode::delete_char_protected(
+            &mut buffer,
+            &mut cursor,
+            true
+        ));
+        assert_eq!(buffer.get_line(0), Some("│ hello     │".to_string()));
+        assert_eq!(cursor, CursorPosition::new(0, 7));
+
         // 空白に余裕がないボックスでの保護テスト
         let mut full_box_buffer = TextBuffer::from_text("│12345│");
         let mut full_cursor = CursorPosition::new(0, 3);
@@ -1173,5 +1226,15 @@ mod tests {
             'x'
         ));
         assert_eq!(full_box_buffer.get_line(0), Some("│12345│".to_string()));
+
+        // 余白が1文字分（半角スペース1個）しかない場合、全角文字（幅2）は挿入拒否される
+        let mut tight_box_buffer = TextBuffer::from_text("│1234 │");
+        let mut tight_cursor = CursorPosition::new(0, 3);
+        assert!(!KeisenMode::insert_char_protected(
+            &mut tight_box_buffer,
+            &mut tight_cursor,
+            'あ'
+        ));
+        assert_eq!(tight_box_buffer.get_line(0), Some("│1234 │".to_string()));
     }
 }

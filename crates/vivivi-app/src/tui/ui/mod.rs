@@ -17,7 +17,6 @@ use ratatui::{
 };
 
 use super::app::App;
-use super::window::SplitAxis;
 use vivivi_vi::ViMode;
 
 /// ターミナル画面全体の描画を実行するメインディスパッチ関数。
@@ -62,24 +61,22 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         (None, main_area)
     };
 
-    // 画面分割 (Split / Vsplit) のレイアウト計算
+    // 画面分割 (Split / Vsplit) の階層的レイアウト計算 (Window Layout Tree)
     let window_count = app.windows.len();
-    let window_areas = if window_count <= 1 {
-        vec![editor_container]
+    let window_rects = if window_count <= 1 {
+        vec![(0, editor_container)]
     } else {
-        let constraints = vec![Constraint::Ratio(1, window_count as u32); window_count];
-        match app.split_axis {
-            SplitAxis::Horizontal => Layout::vertical(constraints)
-                .split(editor_container)
-                .to_vec(),
-            SplitAxis::Vertical => Layout::horizontal(constraints)
-                .split(editor_container)
-                .to_vec(),
-        }
+        app.window_tree.compute_rects(editor_container)
     };
+    app.window_rects = window_rects.clone();
 
-    let active_idx = app.active_window.min(window_areas.len().saturating_sub(1));
-    let active_editor_area = window_areas[active_idx];
+    let active_idx = app.active_window;
+    let active_editor_area = window_rects
+        .iter()
+        .find(|(i, _)| *i == active_idx)
+        .map(|(_, r)| *r)
+        .unwrap_or(editor_container);
+
     let inner_active_editor_area = if window_count > 1 {
         let block = Block::default().borders(Borders::ALL);
         block.inner(active_editor_area)
@@ -95,9 +92,9 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     app.adjust_scroll(text_view_height, text_view_width);
 
     // 1. 各エディタウィンドウの描画
-    for (i, &area) in window_areas.iter().enumerate() {
-        let is_active = i == active_idx;
-        editor::render_window(frame, app, area, i, is_active);
+    for &(win_idx, area) in &window_rects {
+        let is_active = win_idx == active_idx;
+        editor::render_window(frame, app, area, win_idx, is_active);
     }
 
     // 2. アウトラインペインの描画
@@ -175,26 +172,13 @@ fn set_terminal_cursor(
     let cur = app.cursor_pos();
     let screen_row = cur.line.saturating_sub(app.scroll.0);
 
-    // カレント行の0〜cur.col文字までの画面表示桁幅（全角2, 半角1, タブ幅）を計算
-    let cur_line = app.buffer.get_line(cur.line).unwrap_or_default();
+    // カレント行のカーソル表示カラム位置（全角2, 半角1, タブ幅）を計算
+    let cur_visual_col = app.visual_col_at(cur.line, cur.col);
     let scroll_x = app.scroll.1;
-    let mut visual_col = 0;
 
-    for (i, ch) in cur_line.chars().enumerate() {
-        if i >= cur.col {
-            break;
-        }
-        if i >= scroll_x {
-            if ch == '\t' {
-                visual_col += 4 - (visual_col % 4);
-            } else {
-                visual_col += unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
-            }
-        }
-    }
-
-    if screen_row < editor_area.height as usize {
-        let cursor_x = editor_area.x as usize + line_number_width + 1 + visual_col;
+    if screen_row < editor_area.height as usize && cur_visual_col >= scroll_x {
+        let relative_col = cur_visual_col - scroll_x;
+        let cursor_x = editor_area.x as usize + line_number_width + 1 + relative_col;
         let cursor_y = editor_area.y as usize + screen_row;
 
         if cursor_x < (editor_area.x + editor_area.width) as usize {

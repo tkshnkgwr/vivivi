@@ -1,5 +1,6 @@
-use super::window::{EditorWindow, SplitAxis};
+use super::window::{EditorWindow, SplitAxis, WindowDirection, WindowTreeNode};
 use crossterm::event::KeyEvent;
+use ratatui::layout::Rect;
 use std::path::PathBuf;
 use vivivi_core::{CharEncoding, CursorPosition, NewlineType, TextBuffer, TextCursor};
 use vivivi_modes::{
@@ -56,7 +57,11 @@ pub struct App {
     pub windows: Vec<EditorWindow>,
     /// 現在フォーカスがあるウィンドウのインデックス
     pub active_window: usize,
-    /// 分割方向 (水平/垂直)
+    /// 階層的ウィンドウレイアウトツリー（Window Layout Tree）
+    pub window_tree: WindowTreeNode,
+    /// 各ウィンドウの最新描画領域矩形キャッシュ [(win_idx, Rect)]
+    pub window_rects: Vec<(usize, Rect)>,
+    /// 直近の分割方向 (水平/垂直)
     pub split_axis: SplitAxis,
     /// Ctrl-W ウィンドウコマンド入力待ちフラグ
     pub ctrl_w_pending: bool,
@@ -99,6 +104,8 @@ pub struct App {
     pub migemo_query: String,
     pub migemo_last_regex: Option<regex::Regex>,
     pub is_search_highlight_visible: bool,
+    /// 直前の Esc キー押下時刻（ダブル Esc 連打による検索ハイライト消去判定用）
+    pub last_esc_time: Option<std::time::Instant>,
 
     // --- ヘルプビューア ---
     pub show_help: bool,
@@ -216,6 +223,8 @@ impl App {
 
             windows: vec![initial_window],
             active_window: 0,
+            window_tree: WindowTreeNode::new(0),
+            window_rects: Vec::new(),
             split_axis: SplitAxis::Horizontal,
             ctrl_w_pending: false,
 
@@ -239,6 +248,7 @@ impl App {
             migemo_query: String::new(),
             migemo_last_regex: None,
             is_search_highlight_visible: true,
+            last_esc_time: None,
 
             show_help: false,
             help_title: String::new(),
@@ -319,7 +329,47 @@ impl App {
                 }
                 _ => {}
             }
+
+            // 罫線保護モード有効時の 'x' / 'X' による文字削除対応
+            if self.keisen_mode.is_active {
+                match cmd {
+                    vivivi_vi::ViCommand::DeleteChar(count) => {
+                        for _ in 0..count {
+                            vivivi_modes::KeisenMode::delete_char_protected(
+                                &mut self.buffer,
+                                &mut self.cursor.pos,
+                                false,
+                            );
+                        }
+                        if let Some(win) = self.windows.get_mut(self.active_window) {
+                            win.cursor = self.cursor.clone();
+                            win.scroll = self.scroll;
+                        }
+                        return;
+                    }
+                    vivivi_vi::ViCommand::DeletePrevChar(count) => {
+                        for _ in 0..count {
+                            vivivi_modes::KeisenMode::delete_char_protected(
+                                &mut self.buffer,
+                                &mut self.cursor.pos,
+                                true,
+                            );
+                        }
+                        if let Some(win) = self.windows.get_mut(self.active_window) {
+                            win.cursor = self.cursor.clone();
+                            win.scroll = self.scroll;
+                        }
+                        return;
+                    }
+                    _ => {}
+                }
+            }
+
             let res = self.vi.execute(&cmd, &mut self.buffer, &mut self.cursor);
+            if let Some(win) = self.windows.get_mut(self.active_window) {
+                win.cursor = self.cursor.clone();
+                win.scroll = self.scroll;
+            }
             if let Some(msg) = res.message {
                 self.status_message = Some(msg);
             }
@@ -521,6 +571,25 @@ impl App {
             .step(&mut self.buffer, &mut self.cursor.pos, dir, is_erase);
     }
 
+    /// 指定された行・列座標における画面表示カラム位置（全角幅2、半角幅1、タブ幅を考慮）を計算します。
+    pub fn visual_col_at(&self, line: usize, col: usize) -> usize {
+        let Some(line_str) = self.buffer.get_line(line) else {
+            return col;
+        };
+        let mut visual_x = 0;
+        for (i, ch) in line_str.chars().enumerate() {
+            if i >= col {
+                break;
+            }
+            if ch == '\t' {
+                visual_x += 4 - (visual_x % 4);
+            } else {
+                visual_x += unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
+            }
+        }
+        visual_x
+    }
+
     /// 現在の表示領域の高さ・幅に合わせてエディタ画面のスクロールオフセットを自動調整します。
     ///
     /// カーソルが常に可視領域内に収まるよう、垂直・水平スクロール位置をクランプします。
@@ -546,11 +615,12 @@ impl App {
             self.scroll.0 = cur.line - view_height + 1;
         }
 
-        // 水平スクロール
-        if cur.col < self.scroll.1 {
-            self.scroll.1 = cur.col;
-        } else if cur.col >= self.scroll.1 + view_width {
-            self.scroll.1 = cur.col - view_width + 1;
+        // 水平スクロール（全角・タブ幅を考慮した表示カラム幅基準）
+        let cur_visual_col = self.visual_col_at(cur.line, cur.col);
+        if cur_visual_col < self.scroll.1 {
+            self.scroll.1 = cur_visual_col;
+        } else if cur_visual_col >= self.scroll.1 + view_width {
+            self.scroll.1 = cur_visual_col - view_width + 1;
         }
 
         // アクティブウィンドウの状態と同期
@@ -646,14 +716,23 @@ impl App {
     /// assert_eq!(app.windows.len(), 2);
     /// ```
     pub fn split_horizontal(&mut self) {
+        // 現在のアクティブウィンドウの最新状態を退避
+        if let Some(win) = self.windows.get_mut(self.active_window) {
+            win.cursor = self.cursor.clone();
+            win.scroll = self.scroll;
+        }
+
         let cur = self.cursor.clone();
         let scroll = self.scroll;
+        let new_idx = self.windows.len();
         self.split_axis = SplitAxis::Horizontal;
         self.windows.push(EditorWindow {
             cursor: cur,
             scroll,
         });
-        self.active_window = self.windows.len() - 1;
+        self.window_tree
+            .split_window(self.active_window, new_idx, SplitAxis::Horizontal);
+        self.active_window = new_idx;
         self.status_message = Some(format!(
             "水平分割: ウィンドウ {}/{}",
             self.active_window + 1,
@@ -672,14 +751,23 @@ impl App {
     /// assert_eq!(app.windows.len(), 2);
     /// ```
     pub fn split_vertical(&mut self) {
+        // 現在のアクティブウィンドウの最新状態を退避
+        if let Some(win) = self.windows.get_mut(self.active_window) {
+            win.cursor = self.cursor.clone();
+            win.scroll = self.scroll;
+        }
+
         let cur = self.cursor.clone();
         let scroll = self.scroll;
+        let new_idx = self.windows.len();
         self.split_axis = SplitAxis::Vertical;
         self.windows.push(EditorWindow {
             cursor: cur,
             scroll,
         });
-        self.active_window = self.windows.len() - 1;
+        self.window_tree
+            .split_window(self.active_window, new_idx, SplitAxis::Vertical);
+        self.active_window = new_idx;
         self.status_message = Some(format!(
             "垂直分割: ウィンドウ {}/{}",
             self.active_window + 1,
@@ -687,25 +775,14 @@ impl App {
         ));
     }
 
-    /// フォーカスを次のウィンドウへ巡回移動します (`Ctrl-W w` 相当)。
-    ///
-    /// 現在のウィンドウのカーソル・スクロール状態を退避し、遷移先ウィンドウの状態を復元します。
-    ///
-    /// # Examples
-    /// ```rust,ignore
-    /// use vivivi_app::tui::App;
-    ///
-    /// let mut app = App::new("test", None, Default::default(), Default::default());
-    /// app.split_horizontal();
-    /// app.cycle_window();
-    /// ```
-    pub fn cycle_window(&mut self) {
-        if self.windows.len() > 1 {
+    /// 指定されたインデックスのウィンドウへフォーカスを切り替えます。
+    pub fn switch_to_window(&mut self, target_idx: usize) {
+        if target_idx < self.windows.len() && target_idx != self.active_window {
             // 現在のウィンドウ状態を退避
             self.windows[self.active_window].cursor = self.cursor.clone();
             self.windows[self.active_window].scroll = self.scroll;
 
-            self.active_window = (self.active_window + 1) % self.windows.len();
+            self.active_window = target_idx;
             self.cursor = self.windows[self.active_window].cursor.clone();
             self.scroll = self.windows[self.active_window].scroll;
             self.status_message = Some(format!(
@@ -713,6 +790,117 @@ impl App {
                 self.active_window + 1,
                 self.windows.len()
             ));
+        }
+    }
+
+    /// フォーカスを次のウィンドウへ巡回移動します (`Ctrl-W w` 相当)。
+    pub fn cycle_window(&mut self) {
+        if self.windows.len() > 1 {
+            let next_idx = (self.active_window + 1) % self.windows.len();
+            self.switch_to_window(next_idx);
+        }
+    }
+
+    /// フォーカスを前のウィンドウへ逆巡回移動します (`Ctrl-W W` 相当)。
+    pub fn cycle_window_prev(&mut self) {
+        if self.windows.len() > 1 {
+            let prev_idx = if self.active_window == 0 {
+                self.windows.len() - 1
+            } else {
+                self.active_window - 1
+            };
+            self.switch_to_window(prev_idx);
+        }
+    }
+
+    /// 幾何学的な画面位置に基づいて、指定方向（上下左右）の隣接ウィンドウへフォーカスを移動します (`Ctrl-W h/j/k/l` 相当)。
+    pub fn navigate_window(&mut self, dir: WindowDirection) {
+        if self.windows.len() <= 1 {
+            return;
+        }
+
+        let cur_idx = self.active_window;
+        let cur_rect = self
+            .window_rects
+            .iter()
+            .find(|(idx, _)| *idx == cur_idx)
+            .map(|(_, r)| *r);
+
+        let Some(cur_rect) = cur_rect else {
+            // 矩形キャッシュがない場合のフォールバック
+            match dir {
+                WindowDirection::Left | WindowDirection::Up => self.cycle_window_prev(),
+                WindowDirection::Right | WindowDirection::Down => self.cycle_window(),
+            }
+            return;
+        };
+
+        let mut best_target = None;
+        let mut best_score = u32::MAX;
+
+        for &(idx, rect) in &self.window_rects {
+            if idx == cur_idx {
+                continue;
+            }
+
+            let is_in_direction = match dir {
+                WindowDirection::Left => {
+                    rect.x + rect.width <= cur_rect.x + 1 && rect.x < cur_rect.x
+                }
+                WindowDirection::Right => {
+                    rect.x + 1 >= cur_rect.x + cur_rect.width || rect.x > cur_rect.x
+                }
+                WindowDirection::Up => {
+                    rect.y + rect.height <= cur_rect.y + 1 && rect.y < cur_rect.y
+                }
+                WindowDirection::Down => {
+                    rect.y + 1 >= cur_rect.y + cur_rect.height || rect.y > cur_rect.y
+                }
+            };
+
+            if is_in_direction {
+                let score = match dir {
+                    WindowDirection::Left => {
+                        let dx = (cur_rect.x as i32 - (rect.x + rect.width) as i32).unsigned_abs();
+                        let cy_cur = cur_rect.y as i32 + (cur_rect.height as i32 / 2);
+                        let cy_rect = rect.y as i32 + (rect.height as i32 / 2);
+                        let dy = (cy_cur - cy_rect).unsigned_abs();
+                        dx * 10 + dy
+                    }
+                    WindowDirection::Right => {
+                        let dx =
+                            (rect.x as i32 - (cur_rect.x + cur_rect.width) as i32).unsigned_abs();
+                        let cy_cur = cur_rect.y as i32 + (cur_rect.height as i32 / 2);
+                        let cy_rect = rect.y as i32 + (rect.height as i32 / 2);
+                        let dy = (cy_cur - cy_rect).unsigned_abs();
+                        dx * 10 + dy
+                    }
+                    WindowDirection::Up => {
+                        let dy = (cur_rect.y as i32 - (rect.y + rect.height) as i32).unsigned_abs();
+                        let cx_cur = cur_rect.x as i32 + (cur_rect.width as i32 / 2);
+                        let cx_rect = rect.x as i32 + (rect.width as i32 / 2);
+                        let dx = (cx_cur - cx_rect).unsigned_abs();
+                        dy * 10 + dx
+                    }
+                    WindowDirection::Down => {
+                        let dy =
+                            (rect.y as i32 - (cur_rect.y + cur_rect.height) as i32).unsigned_abs();
+                        let cx_cur = cur_rect.x as i32 + (cur_rect.width as i32 / 2);
+                        let cx_rect = rect.x as i32 + (rect.width as i32 / 2);
+                        let dx = (cx_cur - cx_rect).unsigned_abs();
+                        dy * 10 + dx
+                    }
+                };
+
+                if score < best_score {
+                    best_score = score;
+                    best_target = Some(idx);
+                }
+            }
+        }
+
+        if let Some(target) = best_target {
+            self.switch_to_window(target);
         }
     }
 
@@ -731,7 +919,10 @@ impl App {
     /// ```
     pub fn close_window(&mut self) {
         if self.windows.len() > 1 {
-            self.windows.remove(self.active_window);
+            let target_idx = self.active_window;
+            self.window_tree.remove_window(target_idx);
+            self.window_tree.adjust_indices_after_remove(target_idx);
+            self.windows.remove(target_idx);
             if self.active_window >= self.windows.len() {
                 self.active_window = self.windows.len() - 1;
             }
@@ -765,6 +956,7 @@ impl App {
             scroll,
         }];
         self.active_window = 0;
+        self.window_tree = WindowTreeNode::new(0);
         self.status_message = Some("単一ウィンドウに統合しました".to_string());
     }
 
@@ -786,10 +978,14 @@ impl App {
         self.show_outline = !self.show_outline;
         if self.show_outline {
             self.refresh_outline();
-            self.status_message = Some("アウトライン表示: ON (F8 で切替)".to_string());
+            self.outline_focus = true;
+            self.status_message = Some(
+                "アウトライン: ON (j/k:選択, Enter:ジャンプ, Tab/Esc:エディタ復帰, F2/F8:閉じる)"
+                    .to_string(),
+            );
         } else {
             self.outline_focus = false;
-            self.status_message = Some("アウトライン表示: OFF".to_string());
+            self.status_message = Some("アウトライン: OFF".to_string());
         }
     }
 
@@ -1068,6 +1264,10 @@ impl App {
                 if let Some(m) = found_match {
                     let char_idx = full_text[..m.start()].chars().count();
                     self.cursor.pos = self.buffer.position_to_cursor(char_idx);
+                    if let Some(win) = self.windows.get_mut(self.active_window) {
+                        win.cursor = self.cursor.clone();
+                        win.scroll = self.scroll;
+                    }
                     self.status_message = Some(format!("g/{romaji} [Migemo一致: {}]", m.as_str()));
                 } else {
                     self.status_message = Some(format!("g/{romaji} [Migemo: 一致なし]"));
@@ -1115,6 +1315,10 @@ impl App {
             {
                 let char_idx = full_text[..m.start()].chars().count();
                 self.cursor.pos = self.buffer.position_to_cursor(char_idx);
+                if let Some(win) = self.windows.get_mut(self.active_window) {
+                    win.cursor = self.cursor.clone();
+                    win.scroll = self.scroll;
+                }
                 self.status_message = Some(format!("[Migemo] 一致: {}", m.as_str()));
             }
         } else {
@@ -1134,6 +1338,10 @@ impl App {
             {
                 let char_idx = full_text[..m.start()].chars().count();
                 self.cursor.pos = self.buffer.position_to_cursor(char_idx);
+                if let Some(win) = self.windows.get_mut(self.active_window) {
+                    win.cursor = self.cursor.clone();
+                    win.scroll = self.scroll;
+                }
                 self.status_message = Some(format!("[Migemo] 一致: {}", m.as_str()));
             }
         }
@@ -1756,10 +1964,109 @@ mod tests {
         app.close_window();
         assert_eq!(app.windows.len(), 2);
 
+        // 独立スクロール・独立カーソル検証（同期スクロール防止）
+        let multi_line_text = (0..100)
+            .map(|i| format!("line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let mut app_scroll = App::new(&multi_line_text, None, CharEncoding::Utf8, NewlineType::Lf);
+        assert_eq!(app_scroll.scroll, (0, 0));
+        assert_eq!(app_scroll.cursor.pos.line, 0);
+
+        // 分割して新ウィンドウを50行目にスクロール移動
+        app_scroll.split_horizontal();
+        assert_eq!(app_scroll.active_window, 1);
+        app_scroll.cursor.pos.line = 50;
+        app_scroll.adjust_scroll(20, 80);
+        assert!(
+            app_scroll.scroll.0 > 0,
+            "アクティブウィンドウはスクロールしている"
+        );
+
+        // ウィンドウ 0 (非アクティブ) のスクロールとカーソルは同期せず (0, 0) を維持している
+        assert_eq!(app_scroll.windows[0].scroll, (0, 0));
+        assert_eq!(app_scroll.windows[0].cursor.pos.line, 0);
+
+        // ウィンドウ 0 へ切り替え -> スクロール位置 (0, 0) が復元される
+        app_scroll.cycle_window();
+        assert_eq!(app_scroll.active_window, 0);
+        assert_eq!(app_scroll.scroll, (0, 0));
+        assert_eq!(app_scroll.cursor.pos.line, 0);
+
+        // ウィンドウ 0 で10行目に移動
+        app_scroll.cursor.pos.line = 10;
+        app_scroll.adjust_scroll(20, 80);
+
+        // ウィンドウ 1 へ戻る -> ウィンドウ 1 のスクロール位置が独立して保持されている
+        app_scroll.cycle_window();
+        assert_eq!(app_scroll.active_window, 1);
+        assert!(app_scroll.scroll.0 > 0);
+        assert_eq!(app_scroll.cursor.pos.line, 50);
+
+        // cycle_window_prev でウィンドウ 0 へ戻る -> ウィンドウ 0 のカーソル位置 (10行目) が保持されている
+        app_scroll.cycle_window_prev();
+        assert_eq!(app_scroll.active_window, 0);
+        assert_eq!(app_scroll.cursor.pos.line, 10);
+
         // 単一ウィンドウ統合
         app.only_window();
         assert_eq!(app.windows.len(), 1);
         assert_eq!(app.active_window, 0);
+    }
+
+    #[test]
+    fn test_nested_split_vim_behavior() {
+        let mut app = App::new("test vim split", None, CharEncoding::Utf8, NewlineType::Lf);
+        assert_eq!(app.windows.len(), 1);
+        assert_eq!(app.active_window, 0);
+
+        // 1. :split (水平分割) -> 上: win 0, 下: win 1
+        app.split_horizontal();
+        assert_eq!(app.windows.len(), 2);
+        assert_eq!(app.active_window, 1); // 下の win 1 がアクティブ
+
+        // 2. 下ウィンドウ (win 1) で :vsplit (垂直分割)
+        // Vim では下ウィンドウのみが左右に2分割され、全体が左・中・右の3分割にならない！
+        app.split_vertical();
+        assert_eq!(app.windows.len(), 3);
+        assert_eq!(app.active_window, 2); // 右下の win 2 がアクティブ
+
+        // 画面サイズ 100 x 40 で領域計算を検証
+        let rects = app.window_tree.compute_rects(Rect::new(0, 0, 100, 40));
+        assert_eq!(rects.len(), 3);
+        // 上半分 (win 0): y=0, height=20, width=100
+        assert_eq!(rects[0], (0, Rect::new(0, 0, 100, 20)));
+        // 左下 (win 1): y=20, height=20, width=50
+        assert_eq!(rects[1], (1, Rect::new(0, 20, 50, 20)));
+        // 右下 (win 2): y=20, height=20, width=50, x=50
+        assert_eq!(rects[2], (2, Rect::new(50, 20, 50, 20)));
+
+        // 3. 幾何学的ナビゲーション (Ctrl-W h/j/k/l) の検証
+        app.window_rects = rects;
+        // 現在は win 2 (右下) にフォーカス
+        // Left (Ctrl-W h) -> 左下 (win 1) へ移動
+        app.navigate_window(WindowDirection::Left);
+        assert_eq!(app.active_window, 1);
+
+        // Up (Ctrl-W k) -> 上半分 (win 0) へ移動
+        app.navigate_window(WindowDirection::Up);
+        assert_eq!(app.active_window, 0);
+
+        // Down (Ctrl-W j) -> 下 (win 1) へ移動
+        app.navigate_window(WindowDirection::Down);
+        assert_eq!(app.active_window, 1);
+
+        // Right (Ctrl-W l) -> 右下 (win 2) へ移動
+        app.navigate_window(WindowDirection::Right);
+        assert_eq!(app.active_window, 2);
+
+        // 4. close_window で右下 (win 2) を閉じる -> 下半分が win 1 のみになり、上下2分割に戻る
+        app.close_window();
+        assert_eq!(app.windows.len(), 2);
+        let rects2 = app.window_tree.compute_rects(Rect::new(0, 0, 100, 40));
+        assert_eq!(rects2.len(), 2);
+        assert_eq!(rects2[0], (0, Rect::new(0, 0, 100, 20)));
+        assert_eq!(rects2[1], (1, Rect::new(0, 20, 100, 20)));
     }
 
     #[test]
@@ -2253,7 +2560,17 @@ mod tests {
         app.feed_vi_char('n');
         assert!(app.active_search_regex().is_some());
 
-        // 5. ノーマルモードで Esc を押すとハイライトが消去される
+        // 5. ノーマルモードで Esc 1回押しではハイライトは消えない（誤操作防止）
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Esc,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert!(app.active_search_regex().is_some());
+
+        // 6. ノーマルモードで素早く Esc をもう一度押す（ダブルEsc連打）とハイライトが消去される
         crate::tui::event::handle_key_event(
             &mut app,
             crossterm::event::KeyEvent::new(
@@ -2343,6 +2660,63 @@ mod tests {
         );
         assert_eq!(app.mode(), ViMode::Normal);
         assert_eq!(app.cursor.pos.col, 4);
+    }
+
+    #[test]
+    fn test_keisen_normal_x_protected() {
+        // 罫線ボックス内のテキスト
+        let text = "┌──────────┐\n│ hello    │\n└──────────┘";
+        let mut app = App::new(text, None, CharEncoding::Utf8, NewlineType::Lf);
+        app.keisen_mode.is_active = true;
+
+        // 1行目の 'h' (line: 1, col: 2) にカーソルを合わせる
+        app.cursor.pos = CursorPosition::new(1, 2);
+
+        // ノーマルモードで 'x' を押す
+        app.feed_vi_char('x');
+
+        // 'h' が削除され、右枠線手前に半角スペースが1つ自動補填されて全体の行幅（枠線位置）が完全維持される
+        let line1 = app.buffer.line_text(1).unwrap();
+        assert_eq!(line1, "│ ello     │");
+        assert_eq!(line1.chars().count(), 12);
+    }
+
+    #[test]
+    fn test_horizontal_scroll_over_80_columns() {
+        // 120文字の長い行
+        let long_line = "a".repeat(120);
+        let mut app = App::new(&long_line, None, CharEncoding::Utf8, NewlineType::Lf);
+        assert_eq!(app.scroll, (0, 0));
+
+        // 行末 '$' へ移動
+        app.feed_vi_char('$');
+        assert_eq!(app.cursor.pos.col, 119);
+
+        // 表示幅 80 カラムでスクロール調整
+        app.adjust_scroll(24, 80);
+        // 水平スクロール位置が 0 から右にスクロールしていること
+        assert!(
+            app.scroll.1 > 0,
+            "水平スクロールが発生していること (scroll.1 = {})",
+            app.scroll.1
+        );
+        // カーソルがスクロール後の画面可視範囲 (scroll.1..scroll.1 + 80) 内に収まっていること
+        assert!(app.cursor.pos.col >= app.scroll.1);
+        assert!(app.cursor.pos.col < app.scroll.1 + 80);
+    }
+
+    #[test]
+    fn test_migemo_builtin_kanji_search() {
+        let text = "これは日本語の検索テストです。世界中どこでも動きます。";
+        let mut app = App::new(text, None, CharEncoding::Utf8, NewlineType::Lf);
+
+        // 1. "kensaku" で "検索"（漢字）にマッチしてカーソルがジャンプすること
+        app.execute_migemo_search("kensaku");
+        assert_eq!(app.cursor.pos.col, 7); // "検索" の開始位置
+
+        // 2. "sekai" で "世界" にマッチすること
+        app.execute_migemo_search("sekai");
+        assert_eq!(app.cursor.pos.col, 15); // "世界" の開始位置
     }
 
     fn vi_cmd_bang(vi: &mut ViEngine) -> Option<vivivi_vi::ViCommand> {
