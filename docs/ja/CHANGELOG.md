@@ -227,6 +227,15 @@
   - ユニット/統合テスト拡充（全550件超のテスト合格、clippy警告ゼロ、fmtパス）。
 
 ### Changed / Refactored
+- **大規模モジュール分割リファクタリング（肥大化ソースコードの責務分離・可読性向上）**:
+  - 開発の進展に伴い1,000行を超えて肥大化していた全モジュールを対象に、公開APIや機能の完全な後方互換性を維持したまま責務ごとにサブモジュールへ構造分割：
+    - `vivivi-app/src/tui/app.rs` (3,440行) $\to$ `tui/app/` (`mod.rs`, `tabs.rs`, `windows.rs`, `files.rs`, `tools.rs`, `tests.rs`): アプリ状態管理、タブ制御、画面分割、ファイルI/O、内蔵ツール（バイナリ・ヘルプ・アウトライン）を完全分離。
+    - `vivivi-app/src/tui/event.rs` (1,696行) $\to$ `tui/event/` (`mod.rs`, `modes.rs`, `ex.rs`): イベントループディスパッチ、モード別キーハンドラ、exコマンド実行ループを分離。
+    - `vivivi-modes/src/syntax.rs` (1,563行) $\to$ `syntax/` (`mod.rs`, `keywords.rs`, `tests.rs`): 構文解析・トークナイザロジックと各言語（Rust/Python/Go等）のキーワード定義テーブルを分離。
+    - `vivivi-modes/src/keisen.rs` (1,240行) $\to$ `keisen/` (`mod.rs`, `draw.rs`, `protect.rs`, `tests.rs`): 罫線ステートマシン、十字/矢印/分岐描画ロジック、文字保護・置換ロジックを分離。
+    - `vivivi-vi/src/engine/mod.rs` (1,182行) $\to$ `engine/` (`mod.rs`, `exec.rs`): ViEngine コア状態機械（モード遷移・マクロ記録・プロパティ）と、コマンド実行ディスパッチ（`execute`・タグジャンプ・トグル）を分離。
+    - `vivivi-core/src/undo.rs` (960行) $\to$ `undo/` (`mod.rs`, `serialize.rs`, `tests.rs`): アンドゥ/リドゥトランザクション管理本体と、undofile 永続化（シリアライズ/デシリアライズ・構文パース）を分離。
+  - テスト専用ファイルを除くすべてのプロダクションソースコードで1,000行未満（最大でも800〜900行程度）を達成し、保守性・可読性・拡張性を大幅に向上。全354件超の単体・結合・doctest全件PASS。
 - **モジュール分割・ファイル肥大化解消リファクタリング**:
   - 1,000行を超えていた `vivivi-vi` の `engine.rs` (1,441行) を機能責務ごとに `engine/` ディレクトリ配下（`motion.rs`, `operate.rs`, `visual.rs`, `ex.rs`, `mod.rs`, `tests.rs`）へ分割（各ファイル150〜350行へスリム化）。
   - `vivivi-app` の `tui/ui.rs` (514行) を `ui/` ディレクトリ配下（`editor.rs`, `outline.rs`, `status.rs`, `mod.rs`）へ分割し、今後のGrepペイン・DIFF画面等の拡張性を強化。

@@ -227,6 +227,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - Expanded unit and integration test suite (over 550 tests passing, 0 clippy warnings, fmt check passed).
 
 ### Changed / Refactored
+- **Large-Scale Module Decomposition & Architecture Refactoring**:
+  - Decomposed oversized source files (>1,000 lines) across all crates into focused submodules with clean separation of concerns, maintaining 100% backward compatibility of public APIs:
+    - `vivivi-app/src/tui/app.rs` (3,440 lines) $\to$ `tui/app/` (`mod.rs`, `tabs.rs`, `windows.rs`, `files.rs`, `tools.rs`, `tests.rs`): Separated app state management, tab operations, window layouts, file I/O, built-in tools (binary viewer, help, outline).
+    - `vivivi-app/src/tui/event.rs` (1,696 lines) $\to$ `tui/event/` (`mod.rs`, `modes.rs`, `ex.rs`): Separated main event loop, per-mode key handlers, and ex command execution loops.
+    - `vivivi-modes/src/syntax.rs` (1,563 lines) $\to$ `syntax/` (`mod.rs`, `keywords.rs`, `tests.rs`): Separated syntax parsing/tokenization engine from language keyword tables (Rust/Python/Go/etc.).
+    - `vivivi-modes/src/keisen.rs` (1,240 lines) $\to$ `keisen/` (`mod.rs`, `draw.rs`, `protect.rs`, `tests.rs`): Separated box-drawing state machine, cross/arrow/branch logic, and character protection algorithms.
+    - `vivivi-vi/src/engine/mod.rs` (1,182 lines) $\to$ `engine/` (`mod.rs`, `exec.rs`): Separated ViEngine core state machine from command execution dispatch (`execute`, tag jump, toggles).
+    - `vivivi-core/src/undo.rs` (960 lines) $\to$ `undo/` (`mod.rs`, `serialize.rs`, `tests.rs`): Separated undo/redo transaction engine from undofile serialization/deserialization.
+  - Every production source file (excluding test files) across the entire workspace is now strictly under 1,000 lines (most under 800 lines), significantly boosting readability and maintainability. All 354+ unit, integration, and doc tests pass with 0 warnings.
 - **Code Modularization & Source Decomposition Refactoring**:
   - Decomposed oversized `vivivi-vi`'s `engine.rs` (1,441 lines) into focused submodules under `engine/` (`motion.rs`, `operate.rs`, `visual.rs`, `ex.rs`, `mod.rs`, `tests.rs`), keeping all files between 150-350 lines.
   - Decomposed `vivivi-app`'s `tui/ui.rs` (514 lines) into structured modules under `ui/` (`editor.rs`, `outline.rs`, `status.rs`, `mod.rs`), improving extensibility for future Grep panes and DIFF views.
