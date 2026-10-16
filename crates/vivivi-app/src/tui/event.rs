@@ -60,6 +60,13 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) {
     }
 
     dispatch_key_event(app, key);
+
+    // クラッシュリカバリ: 20打鍵ごと、または Esc キーで編集モードを抜けた際に自動スワップ保存
+    app.key_stroke_count += 1;
+    if app.key_stroke_count >= 20 || key.code == KeyCode::Esc {
+        app.key_stroke_count = 0;
+        app.save_swap_file();
+    }
 }
 
 /// 内部キーイベントディスパッチ処理
@@ -758,18 +765,75 @@ fn execute_ex_command(app: &mut App, cmd: &str) {
                     "E37: 前回の変更が保存されていません (! を追加して :q! で強制終了)".to_string(),
                 );
             } else {
+                app.remove_swap_file();
                 app.should_quit = true;
             }
         }
         "q!" | "qa!" | "qall!" => {
+            app.remove_swap_file();
             app.should_quit = true;
         }
         "wq" | "x" => {
             if let Err(e) = app.save_file() {
                 app.status_message = Some(format!("保存エラー: {e}"));
             } else {
+                app.remove_swap_file();
                 app.should_quit = true;
             }
+        }
+
+        // --- クラッシュリカバリ・スワップファイル操作 (:recover, :swap) ---
+        "recover" => {
+            if let Err(e) = app.recover_from_swap() {
+                app.status_message = Some(format!("復元エラー: {e}"));
+            }
+        }
+        "swap" => {
+            if let Some(ref path) = app.file_path {
+                let swp = vivivi_core::SwapFile::swap_path_for(path);
+                if swp.exists() {
+                    app.status_message = Some(format!("スワップファイル検出: {}", swp.display()));
+                } else {
+                    app.save_swap_file();
+                    app.status_message =
+                        Some(format!("スワップファイルを作成しました: {}", swp.display()));
+                }
+            } else {
+                app.status_message =
+                    Some("無名バッファにはスワップファイルがありません".to_string());
+            }
+        }
+
+        // --- マルチタブ操作 (:tabnew, :tabedit, :tabclose, :tabnext, :tabprev, :tabonly) ---
+        "tabnew" | "tabe" | "tabedit" => {
+            app.new_tab(None);
+        }
+        _ if trimmed.starts_with("tabnew ")
+            || trimmed.starts_with("tabe ")
+            || trimmed.starts_with("tabedit ") =>
+        {
+            let path_str = trimmed
+                .strip_prefix("tabnew ")
+                .or_else(|| trimmed.strip_prefix("tabe "))
+                .or_else(|| trimmed.strip_prefix("tabedit "))
+                .unwrap_or("")
+                .trim();
+            let path = std::path::PathBuf::from(path_str);
+            app.new_tab(Some(path));
+        }
+        "tabclose" | "tabc" => {
+            if let Err(e) = app.close_tab() {
+                app.status_message = Some(e.to_string());
+            }
+        }
+        "tabnext" | "tabn" => {
+            app.next_tab();
+        }
+        "tabprev" | "tabp" | "tabprevious" => {
+            app.prev_tab();
+        }
+        "tabonly" | "tabo" => {
+            app.close_other_tabs();
         }
         _ if trimmed.starts_with("w ") => {
             let path_str = trimmed[2..].trim();
@@ -1033,15 +1097,178 @@ fn execute_ex_command(app: &mut App, cmd: &str) {
         "fav" | "favorite" | "addfav" => {
             app.toggle_favorite_current_file();
         }
-        _ if trimmed.starts_with("e ") || trimmed.starts_with("edit ") => {
-            let path_str = trimmed
-                .strip_prefix("edit ")
-                .or_else(|| trimmed.strip_prefix("e "))
-                .unwrap_or(trimmed)
+        _ if trimmed.starts_with("e ")
+            || trimmed.starts_with("edit ")
+            || trimmed == "e"
+            || trimmed == "edit" =>
+        {
+            let rest = trimmed
+                .strip_prefix("edit")
+                .or_else(|| trimmed.strip_prefix("e"))
+                .unwrap_or("")
                 .trim();
-            if let Err(e) = app.open_file(std::path::PathBuf::from(path_str)) {
-                app.status_message = Some(format!("ファイル読込エラー: {e}"));
+
+            let mut forced_enc = None;
+            let mut file_target = None;
+
+            for part in rest.split_whitespace() {
+                if let Some(enc_name) = part.strip_prefix("++enc=") {
+                    if let Some(enc) = vivivi_core::CharEncoding::parse_enc(enc_name) {
+                        forced_enc = Some(enc);
+                    } else {
+                        app.status_message =
+                            Some(format!("未対応のエンコーディングです: {enc_name}"));
+                        return;
+                    }
+                } else if !part.is_empty() {
+                    file_target = Some(part);
+                }
             }
+
+            if let Some(file_path_str) = file_target {
+                let path = std::path::PathBuf::from(file_path_str);
+                if let Err(e) = app.open_file_with_encoding(path, forced_enc) {
+                    app.status_message = Some(format!("ファイル読込エラー: {e}"));
+                }
+            } else if let Some(enc) = forced_enc {
+                if let Err(e) = app.reload_with_encoding(enc) {
+                    app.status_message = Some(format!("再読込エラー: {e}"));
+                }
+            } else if let Some(ref path) = app.file_path.clone()
+                && let Err(e) = app.open_file(path.clone())
+            {
+                app.status_message = Some(format!("再読込エラー: {e}"));
+            }
+        }
+
+        // --- 保存時文字コード切替 (:set fenc=<enc>, :set fileencoding=<enc>, :set fenc?, :set fenc) ---
+        "set fenc?" | "set fileencoding?" | "set fenc" | "set fileencoding" => {
+            app.status_message = Some(format!(
+                "現在のファイルエンコーディング (fenc): {}",
+                app.encoding.name()
+            ));
+        }
+        _ if trimmed.starts_with("set fenc=") || trimmed.starts_with("set fileencoding=") => {
+            let enc_str = trimmed
+                .strip_prefix("set fenc=")
+                .or_else(|| trimmed.strip_prefix("set fileencoding="))
+                .unwrap_or("")
+                .trim();
+            if let Some(enc) = vivivi_core::CharEncoding::parse_enc(enc_str) {
+                app.encoding = enc;
+                app.status_message = Some(format!(
+                    "保存エンコーディング (fenc) を設定しました: {}",
+                    enc.name()
+                ));
+            } else {
+                app.status_message = Some(format!(
+                    "不明なエンコーディングです: {enc_str} (使用可能: utf-8, sjis, euc-jp, utf-16le, utf-16be)"
+                ));
+            }
+        }
+
+        // --- 保存時改行コード切替 (:set ff=<format>, :set fileformat=<format>, :set ff?, :set ff) ---
+        "set ff?" | "set fileformat?" | "set ff" | "set fileformat" => {
+            app.status_message = Some(format!("現在の改行形式 (ff): {}", app.newline.name()));
+        }
+        _ if trimmed.starts_with("set ff=") || trimmed.starts_with("set fileformat=") => {
+            let ff_str = trimmed
+                .strip_prefix("set ff=")
+                .or_else(|| trimmed.strip_prefix("set fileformat="))
+                .unwrap_or("")
+                .trim();
+            if let Some(nl) = vivivi_core::NewlineType::parse_ff(ff_str) {
+                app.newline = nl;
+                app.status_message = Some(format!("改行形式 (ff) を設定しました: {}", nl.name()));
+            } else {
+                app.status_message = Some(format!(
+                    "不明な改行形式です: {ff_str} (使用可能: unix/lf, dos/crlf, mac/cr)"
+                ));
+            }
+        }
+
+        // --- システムクリップボード同期 (:set clipboard=<opt>, :set cb=<opt>, :set clipboard?, :set cb?) ---
+        "set clipboard?" | "set cb?" | "set clipboard" | "set cb" => {
+            let current = match app.vi.clipboard_option() {
+                vivivi_vi::ClipboardOption::None => "none",
+                vivivi_vi::ClipboardOption::Unnamed => "unnamed",
+                vivivi_vi::ClipboardOption::UnnamedPlus => "unnamedplus",
+            };
+            app.status_message = Some(format!("現在のクリップボード設定 (clipboard): {current}"));
+        }
+        _ if trimmed.starts_with("set clipboard=") || trimmed.starts_with("set cb=") => {
+            let cb_str = trimmed
+                .strip_prefix("set clipboard=")
+                .or_else(|| trimmed.strip_prefix("set cb="))
+                .unwrap_or("")
+                .trim();
+            let opt = vivivi_vi::ClipboardOption::parse(cb_str);
+            app.vi.set_clipboard_option(opt);
+            let opt_name = match opt {
+                vivivi_vi::ClipboardOption::None => "none (同期無効)",
+                vivivi_vi::ClipboardOption::Unnamed => "unnamed (* レジスタ同期)",
+                vivivi_vi::ClipboardOption::UnnamedPlus => "unnamedplus (+ レジスタ同期)",
+            };
+            app.status_message = Some(format!(
+                "クリップボード同期 (clipboard) を設定しました: {opt_name}"
+            ));
+        }
+
+        // --- 行番号表示切替 (:set number / :set nonumber / :set nu / :set nonu) ---
+        "number" | "set number" | "nu" | "set nu" => {
+            app.show_line_numbers = true;
+            app.status_message = Some("行番号表示: ON".to_string());
+        }
+        "nonumber" | "set nonumber" | "nonu" | "set nonu" => {
+            app.show_line_numbers = false;
+            app.status_message = Some("行番号表示: OFF".to_string());
+        }
+
+        // --- 相対行番号表示切替 (:set relativenumber / :set norelativenumber / :set rnu / :set nornu) ---
+        "relativenumber" | "set relativenumber" | "rnu" | "set rnu" => {
+            app.relative_number = true;
+            app.status_message = Some("相対行番号表示: ON".to_string());
+        }
+        "norelativenumber" | "set norelativenumber" | "nornu" | "set nornu" => {
+            app.relative_number = false;
+            app.status_message = Some("相対行番号表示: OFF".to_string());
+        }
+
+        // --- タブ幅切替 (:set tabstop=<N>, :set ts=<N>) ---
+        _ if trimmed.starts_with("set tabstop=") || trimmed.starts_with("set ts=") => {
+            let val = trimmed
+                .strip_prefix("set tabstop=")
+                .or_else(|| trimmed.strip_prefix("set ts="))
+                .unwrap_or("")
+                .trim();
+            if let Ok(w) = val.parse::<usize>() {
+                app.tab_width = w.max(1);
+                app.status_message = Some(format!(
+                    "タブ幅 (tabstop) を設定しました: {}",
+                    app.tab_width
+                ));
+            } else {
+                app.status_message = Some(format!("無効なタブ幅です: {val}"));
+            }
+        }
+
+        // --- 設定ファイル再読込・パス確認 (:config, :set config) ---
+        "config" | "set config" => {
+            let path = crate::config::AppConfig::default_config_path();
+            let new_config = crate::config::AppConfig::load_or_default(Some(&path));
+            app.show_line_numbers = new_config.editor.line_number;
+            app.relative_number = new_config.editor.relative_number;
+            app.tab_width = new_config.editor.tab_width;
+            app.change_tracker.enabled = new_config.gutter.enabled;
+            app.list_chars_config.enabled = new_config.invisible.enabled;
+            app.list_chars_config.zenkaku_space =
+                Box::leak(new_config.invisible.zenkaku_space.clone().into_boxed_str());
+            app.list_chars_config.space = new_config.invisible.space;
+            app.list_chars_config.eol = new_config.invisible.eol;
+            let cb_opt = vivivi_vi::ClipboardOption::parse(&new_config.editor.clipboard);
+            app.vi.set_clipboard_option(cb_opt);
+            app.config = new_config;
+            app.status_message = Some(format!("設定を再読込しました: {}", path.display()));
         }
 
         // --- 不可視文字可視化 (:set list / :set nolist / :list / :nolist) ---
@@ -1084,6 +1311,13 @@ fn execute_ex_command(app: &mut App, cmd: &str) {
                 "sql" => vivivi_modes::SyntaxLang::Sql,
                 "html" => vivivi_modes::SyntaxLang::Html,
                 "sh" | "bash" => vivivi_modes::SyntaxLang::Bash,
+                "go" => vivivi_modes::SyntaxLang::Go,
+                "rb" | "ruby" => vivivi_modes::SyntaxLang::Ruby,
+                "toml" => vivivi_modes::SyntaxLang::Toml,
+                "ps1" | "powershell" => vivivi_modes::SyntaxLang::PowerShell,
+                "yaml" | "yml" => vivivi_modes::SyntaxLang::Yaml,
+                "xml" => vivivi_modes::SyntaxLang::Xml,
+                "bat" | "cmd" | "batch" => vivivi_modes::SyntaxLang::Batch,
                 _ => vivivi_modes::SyntaxLang::PlainText,
             };
             app.refresh_outline();
@@ -1322,6 +1556,18 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent) {
             app.status_message =
                 Some("g/ (ローマ字入力で日本語検索 - Enterで確定, Escでキャンセル)".to_string());
         }
+        KeyCode::Char('t') if app.g_pending => {
+            // gt: 次のタブへ切り替え
+            app.g_pending = false;
+            app.feed_vi_char('\x1b');
+            app.next_tab();
+        }
+        KeyCode::Char('T') if app.g_pending => {
+            // gT: 前のタブへ切り替え
+            app.g_pending = false;
+            app.feed_vi_char('\x1b');
+            app.prev_tab();
+        }
         KeyCode::Char('g') => {
             if app.g_pending {
                 // gg (先頭行ジャンプ)
@@ -1423,7 +1669,7 @@ pub fn play_macro(app: &mut App) {
     }
 }
 
-/// AI連携exコマンド (:ai [instruction]) の実行
+/// AI連携exコマンド (`:ai <instruction>`) の実行
 fn execute_ai_command(app: &mut App, cmd: &str) {
     let instruction = if cmd == "ai" { "help" } else { cmd[3..].trim() };
 

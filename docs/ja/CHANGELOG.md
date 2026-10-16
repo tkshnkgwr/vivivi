@@ -195,6 +195,35 @@
     - `README.md` / `README_JA.md` にSKKプロジェクト、Migemo考案者、openViViへの謝辞・クレジットセクションを追加。
   - **ヘルプおよびドキュメントの全面刷新（`doc/help/`, `docs/`）**:
     - `doc/help/` 配下のヘルプ（`basic.md`, `index.md`, `keisen.md`, `migemo.md`, `outline.md`, `split.md`）および `docs/ja/`, `docs/en/` 配下の全設計・仕様書を最新機能（階層分割、罫線x削除保護、アウトライン、長行スクロール等）に合わせて同期・最新化。
+  - **Phase 4.8 高度エディタ機能 & 堅牢化の全面実装**:
+    - **マルチタブ管理 (Tab Bar UI)**:
+      - 独立した画面分割構造・カレントバッファ・カーソル位置を保持する `TabPage` 実装。
+      - 2つ以上のタブオープン時に画面最上部にタブバーを自動描画し、アクティブタブを強調表示。
+      - `gt`, `gT`, `[count]gt`, `:tabnew [file]`, `:tabclose` (`:tabc`), `:tabnext`, `:tabprev`, `:tabonly` の完全サポート。
+    - **矩形選択一括編集 (Visual Block Operations)**:
+      - `Ctrl-v` 矩形選択に対する `I<text>Esc`（左端一括挿入）、`A<text>Esc`（右端一括追加）、`c<text>Esc`（一括置換）、`r<char>`（一括塗りつぶし）、`d` / `x`（一括削除と文字詰め）を実装。
+    - **設定ファイルと永続カスタマイズ (`config.toml` / `vivivirc`)**:
+      - `%USERPROFILE%\.vivivi\config.toml`（または `~/.vivivi/config.toml`）からの自動設定ロード。
+      - エディタ設定（`tab_stop`, `number`, `relative_number`, `gutter`, `hlsearch`, `clipboard`, `theme`）、不可視文字設定、キーマップ（Normal/Insert）の永続化。
+      - 起動中の `:config` 再読込コマンド、および `:set number`, `:set relativenumber`, `:set tabstop`, `:set clipboard` コマンドの実装。
+    - **文字コード・改行明示変換 (:e ++enc, :set fenc, :set ff)**:
+      - `:e ++enc=sjis [file]`, `:e ++enc=euc-jp [file]`: 文字コードを指定した再読込。
+      - `:set fenc=utf-8 / sjis / euc-jp`: ファイル保存文字コードの動的指定。
+      - `:set ff=unix / dos`: 保存時の改行コード（LF / CRLF）変換指定。
+    - **クラッシュリカバリ・スワップファイル (.swp)**:
+      - 20打鍵ごとおよびEscキー復帰時におけるバックグラウンドスワップ自動保存（`.<filename>.swp` 形式）。
+      - 異常終了後の次回起動時におけるスワップファイル検出と警告プロンプト表示。
+      - `:recover`（未保存データの完全復元）および `:swap`（スワップ詳細情報確認）コマンドの実装。
+      - 保存時および未変更終了時におけるスワップファイルの安全な自動消去。
+    - **システム共有クリップボード連携 ("+y, "*p)**:
+      - `arboard` クレートを用いた `SystemClipboard` プロバイダの実装。
+      - `"+y`, `"*y` によるOSクリップボードへの直接ヤンク、`"+p`, `"*p` による直接貼り付け。
+      - `:set clipboard=unnamed / unnamedplus / none` による通常ヤンク/プットとOSクリップボードの透過同期。
+    - **シンタックスハイライト対応言語の拡充 (全18言語対応)**:
+      - Go (`.go`), Ruby (`.rb`), TOML (`.toml`), PowerShell (`.ps1`, `.psm1`, `.psd1`), YAML (`.yaml`, `.yml`), XML (`.xml`), Windows Batch (`.bat`, `.cmd`) の構文解析トークナイザーとステータスバーバッジ表示を実装。
+    - **内蔵ヘルプシステムの拡充**:
+      - `doc/help/tab.md`, `doc/help/config.md`, `doc/help/recovery.md`, `doc/help/clipboard.md` を新設。
+      - `doc/help/index.md`, `doc/help/syntax.md`, `doc/help/visual.md`, `doc/help/basic.md` を最新機能に同期。
   - ユニット/統合テスト拡充（全550件超のテスト合格、clippy警告ゼロ、fmtパス）。
 
 ### Changed / Refactored

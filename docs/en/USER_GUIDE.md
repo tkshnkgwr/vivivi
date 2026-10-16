@@ -236,3 +236,52 @@ Folds code blocks based on indentation hierarchy.
 - **Print Preview**: Run `:preview` or `:print` for a full-screen paginated A4 preview modal with line numbers, headers, and footers. Scroll with `j`/`k` or `d`/`u`, and exit with `Esc` or `q`.
 - **Direct PDF Export**: Run `:pdf [path]` to export standard PDF 1.4 documents directly to disk without any external tools or libraries.
 - *(Note: Desktop GUI (egui) and GUI-dependent features were migrated to Phase 5 per user instruction, focusing current capabilities on TUI and core tooling)*.
+
+---
+
+## 6. Advanced Power Tools & Hardening (Phase 4.8)
+
+### (1) Multi-Tab Buffer Management (Tab Bar UI)
+Work with multiple files and buffers across dedicated tab pages. When two or more tabs are open, an interactive tab bar is automatically rendered along the top edge of the terminal.
+- **Keybindings**:
+  - `gt`: Switch to next tab (loops back from the last tab to the first).
+  - `gT`: Switch to previous tab.
+  - `[count]gt`: Jump directly to tab index (e.g., `2gt`).
+- **Ex Commands**:
+  - `:tabnew [file]` / `:tabe [file]`: Open a new tab page (optionally loading a file).
+  - `:tabclose` / `:tabc`: Close current tab page.
+  - `:tabnext` / `:tabprev`: Switch to next / previous tab.
+  - `:tabonly` / `:tabo`: Close all tab pages except the current one.
+
+### (2) Visual Block Column Operations
+Perform multi-line columnar editing on `Ctrl-v` block selections:
+- `I<text>Esc`: Prepend text across all selected lines simultaneously.
+- `A<text>Esc`: Append text to the end of all selected block lines.
+- `c<text>Esc`: Replace rectangular block with entered text.
+- `r<char>`: Fill entire block area with specified character.
+- `d` / `x`: Delete block columns and shift trailing text leftward.
+
+### (3) Configuration File & Customization (`config.toml`)
+Persist user preferences and key mappings in `%USERPROFILE%\.vivivi\config.toml` (or `~/.vivivi/config.toml`).
+- **Options**: `tab_stop`, `number`, `relative_number`, `gutter`, `hlsearch`, `clipboard`, `theme`, invisible symbols, and key mappings.
+- **Dynamic Reloading**: Run `:config` at any time to reload and apply changes without restarting.
+- **Runtime Set Options**: `:set number`, `:set relativenumber`, `:set tabstop=4`, `:set clipboard=unnamed`, etc.
+
+### (4) Explicit Encoding Reopening & Line Ending Format
+- `:e ++enc=<enc> [file]`: Reopen file forcing specified encoding (`utf-8`, `sjis`, `euc-jp`).
+- `:set fenc=<enc>`: Set encoding format for subsequent saves.
+- `:set ff=unix` / `:set ff=dos`: Convert line endings (LF vs CRLF) on save.
+
+### (5) Crash Recovery & Auto-Save Swap Files (.swp)
+- **Automatic Checkpoints**: Background swap dumps saved to `.<filename>.swp` every 20 keystrokes and upon returning to Normal mode (`Esc`).
+- **Recovery Prompt**: Displays warning on launch if an uncleaned swap file is detected.
+- **Commands**: `:recover` to restore unsaved buffer, `:swap` to inspect swap file metadata.
+
+### (6) System Clipboard Integration
+- `"+y` / `"*y`: Yank selection or lines directly to OS clipboard.
+- `"+p` / `"*p`: Paste text directly from OS clipboard.
+- `:set clipboard=unnamed`: Transparently sync default `y` and `p` operations with OS clipboard.
+
+### (7) Syntax Highlighting Expansion (18 Languages)
+- Expanded syntax highlighting to 18 languages: added Go (`.go`), Ruby (`.rb`), TOML (`.toml`), PowerShell (`.ps1`), YAML (`.yaml`), XML (`.xml`), and Windows Batch (`.bat`, `.cmd`). Status bar displays active language badges automatically.
+

@@ -113,3 +113,18 @@ cargo build --release
 | 7-8  | Outline Navigation (F2 / F8 / Tab)      | Open via `F2` or `F8`; press `j`/`k`/`Tab`   | Immediately selectable; `Tab`/`Esc` toggles editor/outline focus  |   [ ]   |
 | 7-9  | Horizontal Scrolling over 80 Columns    | Move to end-of-line `$` on 80+ char line     | View smoothly scrolls horizontally; cursor tracks correctly       |   [ ]   |
 | 7-10 | Romaji Japanese (Migemo) Search         | Run `g/` or `:migemo kensaku`                | Built-in dictionary directly matches Kanji candidates like 検索   |   [ ]   |
+
+---
+
+## 8. Phase 4.8 Verification Items (Advanced Power Tools & Hardening)
+
+| No. | Test Item                                            | Action / Key Sequence                                     | Expected Result                                                                   | Checked |
+| :-- | :--------------------------------------------------- | :-------------------------------------------------------- | :-------------------------------------------------------------------------------- | :-----: |
+| 8-1 | Multi-Tab Management (`:tabnew`, `gt`)               | Create tab via `:tabnew`, switch with `gt`/`gT`           | Top tab bar is rendered; window split layouts remain independent per tab          |   [ ]   |
+| 8-2 | Visual Block Column Ops (`Ctrl-v` + `I`/`A`/`c`/`r`) | Select column block via `Ctrl-v`, run `I// <Esc>` or `r*` | Batch inserts, replaces, or fills across all selected lines at column position    |   [ ]   |
+| 8-3 | Config Persistence (`config.toml`, `:config`)        | Place settings in `~/.vivivi/config.toml`, run `:config`  | Reloads keymaps, tab width, and theme dynamically into running editor             |   [ ]   |
+| 8-4 | Encoding & Line Ending Format (`:e ++enc=`)          | Run `:e ++enc=sjis` or `:set ff=unix`                     | Reopens buffer with specified encoding; converts LF/CRLF line endings on save     |   [ ]   |
+| 8-5 | Crash Recovery & Swap Files (`.swp`, `:recover`)     | Terminate unsaved buffer and restart; run `:recover`      | Startup warning warns of existing swap; `:recover` restores unsaved changes       |   [ ]   |
+| 8-6 | System Clipboard Sync (`"+y`, `"*p`)                 | Yank with `"+y`, paste in Notepad; `:set cb=unnamed`      | Transparent bidirectional synchronization between OS clipboard and registers      |   [ ]   |
+| 8-7 | Syntax Expansion (Go, Ruby, TOML, PS, etc.)          | Open `.go`, `.rb`, `.toml`, `.ps1`, etc.                  | Status bar shows language badge; keywords, types, and comments syntax highlighted |   [ ]   |
+

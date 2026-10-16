@@ -195,6 +195,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     - Added comprehensive Acknowledgments section in `README.md` and `README_JA.md` honoring the SKK Project, Migemo creator, and openViVi.
   - **Comprehensive Help & Documentation Overhaul (`doc/help/`, `docs/`)**:
     - Synchronized and updated built-in help files (`basic.md`, `index.md`, `keisen.md`, `migemo.md`, `outline.md`, `split.md`) and all design specifications across Japanese and English docs with latest capabilities.
+  - **Phase 4.8 Advanced Editing Power Tools & Hardening**:
+    - **Multi-Tab Buffer Management (Tab Bar UI)**:
+      - Implemented `TabPage` maintaining independent window split trees, active buffers, and cursor positions per tab.
+      - Automatically render a top-line tab bar when 2+ tabs are open, highlighting the active tab and indicating unsaved modifications (`[+]`).
+      - Full support for `gt`, `gT`, `[count]gt`, `:tabnew [file]`, `:tabclose` (`:tabc`), `:tabnext`, `:tabprev`, `:tabonly`.
+    - **Visual Block Column Operations**:
+      - Supported multi-line columnar operations on `Ctrl-v` rectangular selections: `I<text>Esc` (prepend column), `A<text>Esc` (append column), `c<text>Esc` (replace block), `r<char>` (fill block), and `d` / `x` (delete block and shift text).
+    - **Configuration File & Customization (`config.toml` / `vivivirc`)**:
+      - Automatic loading of settings from `%USERPROFILE%\.vivivi\config.toml` (or `~/.vivivi/config.toml`).
+      - Persistent options for editor settings (`tab_stop`, `number`, `relative_number`, `gutter`, `hlsearch`, `clipboard`, `theme`), invisible characters, and key remapping.
+      - Added dynamic runtime `:config` reload command, and `:set number`, `:set relativenumber`, `:set tabstop`, `:set clipboard` commands.
+    - **Explicit Encoding Reopening & Line Ending Format (:e ++enc, :set fenc, :set ff)**:
+      - `:e ++enc=sjis [file]`, `:e ++enc=euc-jp [file]`: Force reload file using specified character encoding.
+      - `:set fenc=utf-8 / sjis / euc-jp`: Dynamically change file encoding for next save.
+      - `:set ff=unix / dos`: Convert line endings (LF vs CRLF) on save.
+    - **Crash Recovery & Auto-Save Swap Files (.swp)**:
+      - Periodic background swap file checkpoints every 20 keystrokes and on `Esc` (`.<filename>.swp` format).
+      - Warning prompt upon launching if an existing swap file is detected after an unexpected exit or crash.
+      - Implemented `:recover` (restore unsaved buffer) and `:swap` (inspect swap file metadata) commands.
+      - Automatic cleanup of swap files upon successful save or clean exit.
+    - **System Clipboard Integration ("+y, "*p)**:
+      - Integrated `arboard` crate for cross-platform `SystemClipboard` provider.
+      - Supported `"+y` / `"*y` (yank directly to OS clipboard) and `"+p` / `"*p` (paste from OS clipboard).
+      - Added `:set clipboard=unnamed / unnamedplus / none` for transparent synchronization with standard Vi registers.
+    - **Syntax Highlighting Expansion (18 Languages Supported)**:
+      - Added syntax tokenizers and status bar badges for Go (`.go`), Ruby (`.rb`), TOML (`.toml`), PowerShell (`.ps1`), YAML (`.yaml`), XML (`.xml`), and Windows Batch (`.bat`, `.cmd`).
+    - **Built-in Help System Expansion**:
+      - Added `doc/help/tab.md`, `doc/help/config.md`, `doc/help/recovery.md`, `doc/help/clipboard.md`.
+      - Synchronized `doc/help/index.md`, `doc/help/syntax.md`, `doc/help/visual.md`, and `doc/help/basic.md`.
   - Expanded unit and integration test suite (over 550 tests passing, 0 clippy warnings, fmt check passed).
 
 ### Changed / Refactored

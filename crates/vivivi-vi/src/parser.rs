@@ -56,6 +56,8 @@ pub enum ParserState {
     WaitingForZ,
     /// 単一文字置換の置換文字待ち (`r` の後)
     WaitingForReplaceChar { count: usize },
+    /// ビジュアルモードでの一括文字置換待ち (`r` の後)
+    WaitingForVisualReplaceChar,
     /// コマンドラインまたは検索文字列入力中 (`:`, `/`, `?`)
     CommandLine { prefix: char, buffer: String },
 }
@@ -288,6 +290,11 @@ impl CommandParser {
                     self.reset();
                     return Some(ViCommand::VisualSwapCase);
                 }
+                'r' => {
+                    self.reset();
+                    self.state = ParserState::WaitingForVisualReplaceChar;
+                    return None;
+                }
                 'v' => {
                     self.reset();
                     if mode == ViMode::Visual {
@@ -486,6 +493,15 @@ impl CommandParser {
                     None
                 } else {
                     Some(ViCommand::ReplaceChar { ch, count })
+                }
+            }
+
+            ParserState::WaitingForVisualReplaceChar => {
+                self.reset();
+                if ch == '\x1b' {
+                    None
+                } else {
+                    Some(ViCommand::VisualReplaceChar(ch))
                 }
             }
 

@@ -245,6 +245,71 @@ fn test_visual_block_insert() {
 }
 
 #[test]
+fn test_visual_block_change_and_replace() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("apple\nbanana\ncherry\n");
+    let mut cur = TextCursor::new(0, 0);
+
+    // 1. VisualBlock で (0,0) から (2,1) まで矩形選択（先頭2文字 'ap', 'ba', 'ch'）
+    vi.execute(
+        &ViCommand::EnterMode(ViMode::VisualBlock),
+        &mut buf,
+        &mut cur,
+    );
+    cur.anchor = Some(cur.pos);
+    cur.pos = CursorPosition::new(2, 1);
+
+    // 2. r で一括文字置換 'X' -> 'XXple', 'XXnana', 'XXerry'
+    vi.execute(&ViCommand::VisualReplaceChar('X'), &mut buf, &mut cur);
+    assert_eq!(vi.mode(), ViMode::Normal);
+
+    let lines: Vec<String> = (0..buf.line_count())
+        .filter_map(|i| buf.line_text(i))
+        .collect();
+    assert_eq!(lines[0], "XXple");
+    assert_eq!(lines[1], "XXnana");
+    assert_eq!(lines[2], "XXerry");
+
+    // 3. 次に VisualBlock で 'XX' を選択し、c で一括置換
+    cur.pos = CursorPosition::new(0, 0);
+    vi.execute(
+        &ViCommand::EnterMode(ViMode::VisualBlock),
+        &mut buf,
+        &mut cur,
+    );
+    cur.anchor = Some(cur.pos);
+    cur.pos = CursorPosition::new(2, 1);
+
+    vi.execute(
+        &ViCommand::VisualOperate {
+            op: Operator::Change,
+            register: None,
+        },
+        &mut buf,
+        &mut cur,
+    );
+    assert_eq!(vi.mode(), ViMode::Insert);
+
+    // 'NEW_' を入力
+    for c in "NEW_".chars() {
+        vi.record_inserted_char(c);
+        let pos = cur.pos.col;
+        buf.insert_text(pos, &c.to_string());
+        cur.pos.col += 1;
+    }
+
+    // Esc で Normal に戻ると全行に 'NEW_' が反映される
+    vi.execute(&ViCommand::EnterMode(ViMode::Normal), &mut buf, &mut cur);
+
+    let lines2: Vec<String> = (0..buf.line_count())
+        .filter_map(|i| buf.line_text(i))
+        .collect();
+    assert_eq!(lines2[0], "NEW_ple");
+    assert_eq!(lines2[1], "NEW_nana");
+    assert_eq!(lines2[2], "NEW_erry");
+}
+
+#[test]
 fn test_macro_record_and_playback() {
     let mut vi = ViEngine::new();
     let mut buf = TextBuffer::from_text("line1\nline2\nline3\n");

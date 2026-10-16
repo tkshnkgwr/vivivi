@@ -4,6 +4,7 @@
 //! クリップボード連携レジスタ (`"+`, `"*`)、および行指向/文字指向の属性を管理します。
 
 use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex};
 
 /// レジスタに格納されるテキストの形式・指向性。
 ///
@@ -285,6 +286,37 @@ impl ClipboardHistory {
     }
 }
 
+/// クリップボード同期オプション (`:set clipboard=...`)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ClipboardOption {
+    /// システムクリップボードとの自動同期なし（デフォルト）
+    #[default]
+    None,
+    /// 無名レジスタの操作を `*` レジスタ（システムクリップボード）と同期
+    Unnamed,
+    /// 無名レジスタの操作を `+` レジスタ（システムクリップボード）と同期
+    UnnamedPlus,
+}
+
+impl ClipboardOption {
+    /// 文字列から [`ClipboardOption`] を解析します。
+    pub fn parse(s: &str) -> Self {
+        match s.trim() {
+            "unnamed" => Self::Unnamed,
+            "unnamedplus" => Self::UnnamedPlus,
+            _ => Self::None,
+        }
+    }
+}
+
+/// 外部クリップボード（OS クリップボード）プロバイダの抽象トレイト。
+pub trait ClipboardProvider: std::fmt::Debug + Send + Sync {
+    /// クリップボードから文字列を取得します。
+    fn get_text(&mut self) -> Result<String, String>;
+    /// クリップボードに文字列を設定します。
+    fn set_text(&mut self, text: String) -> Result<(), String>;
+}
+
 /// Vi の全レジスタ（無名、名前付き、大文字アペンド）およびクリップボード履歴を統括するマネージャ。
 ///
 /// # Examples
@@ -301,10 +333,14 @@ impl ClipboardHistory {
 pub struct RegisterMgr {
     /// 無名レジスタ (デフォルトのコピー・削除先)
     unnamed: Option<RegisterContent>,
-    /// 名前付きレジスタ ('a' - 'z', '0' - '9' 等)
+    /// 名前付きレジスタ ('a' - 'z', '0' - '9', '+', '*' 等)
     named: HashMap<char, RegisterContent>,
     /// クリップボード履歴
     history: ClipboardHistory,
+    /// 外部クリップボードプロバイダ
+    clipboard_provider: Option<Arc<Mutex<dyn ClipboardProvider>>>,
+    /// クリップボード同期オプション
+    clipboard_option: ClipboardOption,
 }
 
 impl RegisterMgr {
@@ -322,11 +358,27 @@ impl RegisterMgr {
         Self::default()
     }
 
+    /// 外部クリップボードプロバイダを設定します。
+    pub fn set_clipboard_provider(&mut self, provider: Arc<Mutex<dyn ClipboardProvider>>) {
+        self.clipboard_provider = Some(provider);
+    }
+
+    /// クリップボード同期オプションを設定します。
+    pub fn set_clipboard_option(&mut self, opt: ClipboardOption) {
+        self.clipboard_option = opt;
+    }
+
+    /// 現在のクリップボード同期オプションを取得します。
+    pub fn clipboard_option(&self) -> ClipboardOption {
+        self.clipboard_option
+    }
+
     /// 指定されたレジスタにテキスト内容を格納します。
     ///
     /// - レジスタ名が `None` の場合は無名レジスタに設定します。
     /// - 小文字レジスタ（`'a'`〜`'z'`）は上書き保存されます。
     /// - 大文字レジスタ（`'A'`〜`'Z'`）は対応する小文字レジスタの既存内容へ末尾追記（アペンド）されます。
+    /// - `'+'` または `'*'` レジスタ、もしくは `clipboard=unnamed/unnamedplus` の場合は OS クリップボードへも自動送信されます。
     /// - 格納された内容は、無名レジスタおよびクリップボード履歴にも自動同期されます。
     ///
     /// # Examples
@@ -342,6 +394,22 @@ impl RegisterMgr {
     pub fn set(&mut self, reg_name: Option<char>, content: RegisterContent) {
         // 履歴に自動蓄積
         self.history.push(content.clone());
+
+        let sync_system_clipboard = match reg_name {
+            Some('+' | '*') => true,
+            None => matches!(
+                self.clipboard_option,
+                ClipboardOption::Unnamed | ClipboardOption::UnnamedPlus
+            ),
+            _ => false,
+        };
+
+        if sync_system_clipboard
+            && let Some(ref provider) = self.clipboard_provider
+            && let Ok(mut lock) = provider.lock()
+        {
+            let _ = lock.set_text(content.as_str().to_string());
+        }
 
         match reg_name {
             Some(name) if name.is_ascii_alphabetic() => {
@@ -371,6 +439,10 @@ impl RegisterMgr {
                 }
                 self.unnamed = Some(content);
             }
+            Some(name @ ('+' | '*')) => {
+                self.named.insert(name, content.clone());
+                self.unnamed = Some(content);
+            }
             _ => {
                 self.unnamed = Some(content);
             }
@@ -397,7 +469,7 @@ impl RegisterMgr {
         &mut self.history
     }
 
-    /// 指定されたレジスタの内容を取得します。
+    /// 指定されたレジスタの内容を取得します（内部キャッシュ参照）。
     ///
     /// `reg_name` が `None` の場合は無名レジスタの内容を返します。
     ///
@@ -421,8 +493,43 @@ impl RegisterMgr {
                 .named
                 .get(&name.to_ascii_lowercase())
                 .or(self.unnamed.as_ref()),
+            Some(name @ ('+' | '*')) => self.named.get(&name).or(self.unnamed.as_ref()),
             _ => self.unnamed.as_ref(),
         }
+    }
+
+    /// 指定されたレジスタの内容を、外部クリップボードと同期して取得します。
+    ///
+    /// `'+'` や `'*'` レジスタ、または `clipboard=unnamed/unnamedplus` の無名レジスタ取得時は
+    /// OS クリップボードから最新文字列をフェッチして返します。
+    pub fn fetch(&mut self, reg_name: Option<char>) -> Option<RegisterContent> {
+        let should_fetch_system = match reg_name {
+            Some('+' | '*') => true,
+            None => matches!(
+                self.clipboard_option,
+                ClipboardOption::Unnamed | ClipboardOption::UnnamedPlus
+            ),
+            _ => false,
+        };
+
+        if should_fetch_system
+            && let Some(ref provider) = self.clipboard_provider
+            && let Ok(mut lock) = provider.lock()
+            && let Ok(text) = lock.get_text()
+        {
+            let content = if text.ends_with('\n') {
+                RegisterContent::LineWise(text)
+            } else {
+                RegisterContent::CharacterWise(text)
+            };
+            if let Some(name @ ('+' | '*')) = reg_name {
+                self.named.insert(name, content.clone());
+            }
+            self.unnamed = Some(content.clone());
+            return Some(content);
+        }
+
+        self.get(reg_name).cloned()
     }
 
     /// 無名レジスタの内容を取得します。

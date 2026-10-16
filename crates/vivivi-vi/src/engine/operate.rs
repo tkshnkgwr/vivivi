@@ -123,8 +123,8 @@ impl ViEngine {
         buffer: &mut TextBuffer,
         cursor: &mut TextCursor,
     ) {
-        let content = match self.registers.get(reg) {
-            Some(c) => c.clone(),
+        let content = match self.registers.fetch(reg) {
+            Some(c) => c,
             None => return,
         };
 

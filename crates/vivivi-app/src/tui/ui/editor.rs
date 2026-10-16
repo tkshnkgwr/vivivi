@@ -98,7 +98,18 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
         let is_current_line = line_idx == cur.line;
 
         // 行番号のフォーマット
-        let line_num_str = format!("{:>4} ", line_idx + 1);
+        let line_num_str = if !app.show_line_numbers {
+            String::new()
+        } else if app.relative_number {
+            if is_current_line {
+                format!("{:>4} ", line_idx + 1)
+            } else {
+                let rel = (line_idx as isize - cur.line as isize).unsigned_abs();
+                format!("{:>4} ", rel)
+            }
+        } else {
+            format!("{:>4} ", line_idx + 1)
+        };
         let num_style = if is_current_line {
             Style::default()
                 .fg(Color::Yellow)
@@ -300,21 +311,23 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
             Style::default()
         };
 
-        let mut row_spans = vec![
-            Span::styled(line_num_str, num_style),
-            Span::styled(gutter_sym, gutter_style),
-            Span::styled(" ", base_bg),
-        ];
+        let mut row_spans = Vec::new();
+        if !line_num_str.is_empty() {
+            row_spans.push(Span::styled(line_num_str, num_style));
+        }
+        row_spans.push(Span::styled(gutter_sym, gutter_style));
+        row_spans.push(Span::styled(" ", base_bg));
 
         let scroll_x = scroll.1;
         let mut visual_x = 0;
         let mut cur_chunk = String::new();
         let mut cur_style = Style::default();
         let mut chunk_has_started = false;
+        let tab_w_setting = app.tab_width.max(1);
 
         for (i, &ch) in chars.iter().enumerate() {
             let ch_w = if ch == '\t' {
-                4 - (visual_x % 4)
+                tab_w_setting - (visual_x % tab_w_setting)
             } else {
                 unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1)
             };

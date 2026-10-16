@@ -142,7 +142,14 @@ pub fn parse_outline(lines: &[String], lang: SyntaxLang) -> Vec<OutlineItem> {
         | SyntaxLang::PlSql
         | SyntaxLang::Bash
         | SyntaxLang::Html
-        | SyntaxLang::Json => parse_generic_outline(lines),
+        | SyntaxLang::Json
+        | SyntaxLang::Go
+        | SyntaxLang::Ruby
+        | SyntaxLang::Toml
+        | SyntaxLang::PowerShell
+        | SyntaxLang::Yaml
+        | SyntaxLang::Xml
+        | SyntaxLang::Batch => parse_generic_outline(lines),
     }
 }
 

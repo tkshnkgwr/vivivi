@@ -128,6 +128,21 @@ pub struct App {
 
     // --- 不可視文字可視化 (:set list / :set nolist) ---
     pub list_chars_config: ListCharsConfig,
+
+    // --- 永続設定 & 表示オプション ---
+    pub config: crate::config::AppConfig,
+    pub show_line_numbers: bool,
+    pub relative_number: bool,
+    pub tab_width: usize,
+
+    // --- クラッシュリカバリ・スワップファイル (.swp) ---
+    pub key_stroke_count: usize,
+    pub has_swap_warning: bool,
+
+    // --- マルチタブ管理 (Tab Bar UI) ---
+    pub tabs: Vec<crate::tui::tab::TabPage>,
+    pub active_tab: usize,
+    pub next_tab_id: usize,
 }
 
 impl App {
@@ -184,7 +199,15 @@ impl App {
         let initial_cursor = TextCursor::new(0, 0);
         let initial_window = EditorWindow::new(0, 0);
 
+        let config = crate::config::AppConfig::load_or_default(None);
+        let show_line_numbers = config.editor.line_number;
+        let relative_number = config.editor.relative_number;
+        let tab_width = config.editor.tab_width;
+
         let mut vi = ViEngine::new();
+        vi.set_clipboard_provider(crate::tui::clipboard::SystemClipboard::new_shared());
+        let cb_opt = vivivi_vi::ClipboardOption::parse(&config.editor.clipboard);
+        vi.set_clipboard_option(cb_opt);
         if let Some(ref path) = file_path {
             vi.current_file_path = path.to_string_lossy().to_string();
         }
@@ -193,7 +216,8 @@ impl App {
         let lines: Vec<String> = (0..buffer.line_count())
             .filter_map(|i| buffer.get_line(i))
             .collect();
-        let change_tracker = ChangeTracker::new(&lines);
+        let mut change_tracker = ChangeTracker::new(&lines);
+        change_tracker.enabled = config.gutter.enabled;
 
         // 最近使ったファイルとお気に入りの読み込み
         let mut recent_manager = RecentManager::new();
@@ -204,7 +228,41 @@ impl App {
             let _ = recent_manager.save_to_file(&recent_file_path);
         }
 
-        let list_chars_config = ListCharsConfig::default();
+        let list_chars_config = ListCharsConfig {
+            enabled: config.invisible.enabled,
+            zenkaku_space: Box::leak(config.invisible.zenkaku_space.clone().into_boxed_str()),
+            space: config.invisible.space,
+            eol: config.invisible.eol,
+            ..Default::default()
+        };
+
+        let mut has_swap_warning = false;
+        let mut initial_status_message = None;
+        if let Some(ref path) = file_path
+            && vivivi_core::SwapFile::exists_for(path)
+        {
+            has_swap_warning = true;
+            initial_status_message = Some(
+                "⚠️ 未保存スワップファイルが存在します。復元するには ':recover' を実行してください"
+                    .to_string(),
+            );
+        }
+
+        let initial_tab = crate::tui::tab::TabPage {
+            id: 1,
+            buffer: buffer.clone(),
+            cursor: initial_cursor.clone(),
+            windows: vec![initial_window.clone()],
+            active_window: 0,
+            window_tree: WindowTreeNode::new(0),
+            split_axis: SplitAxis::Horizontal,
+            file_path: file_path.clone(),
+            encoding,
+            newline,
+            syntax_lang,
+            scroll: (0, 0),
+            change_tracker: change_tracker.clone(),
+        };
 
         Self {
             buffer,
@@ -219,7 +277,7 @@ impl App {
             scroll: (0, 0),
             file_path,
             should_quit: false,
-            status_message: None,
+            status_message: initial_status_message,
 
             windows: vec![initial_window],
             active_window: 0,
@@ -264,7 +322,205 @@ impl App {
             show_recent_modal: false,
             selected_recent_idx: 0,
             list_chars_config,
+
+            config,
+            show_line_numbers,
+            relative_number,
+            tab_width,
+            key_stroke_count: 0,
+            has_swap_warning,
+
+            tabs: vec![initial_tab],
+            active_tab: 0,
+            next_tab_id: 2,
         }
+    }
+
+    /// 現在のアクティブエディタ状態を、対応するタブページ構造体に退避・同期します。
+    pub fn sync_active_tab_state(&mut self) {
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.buffer = self.buffer.clone();
+            tab.cursor = self.cursor.clone();
+            tab.windows = self.windows.clone();
+            tab.active_window = self.active_window;
+            tab.window_tree = self.window_tree.clone();
+            tab.split_axis = self.split_axis;
+            tab.file_path = self.file_path.clone();
+            tab.encoding = self.encoding;
+            tab.newline = self.newline;
+            tab.syntax_lang = self.syntax_lang;
+            tab.scroll = self.scroll;
+            tab.change_tracker = self.change_tracker.clone();
+        }
+    }
+
+    /// 指定インデックスのタブページからエディタ状態を復元・ロードします。
+    pub fn load_tab_state(&mut self, index: usize) {
+        if let Some(tab) = self.tabs.get(index) {
+            self.buffer = tab.buffer.clone();
+            self.cursor = tab.cursor.clone();
+            self.windows = tab.windows.clone();
+            self.active_window = tab.active_window;
+            self.window_tree = tab.window_tree.clone();
+            self.split_axis = tab.split_axis;
+            self.file_path = tab.file_path.clone();
+            self.encoding = tab.encoding;
+            self.newline = tab.newline;
+            self.syntax_lang = tab.syntax_lang;
+            self.scroll = tab.scroll;
+            self.change_tracker = tab.change_tracker.clone();
+            self.active_tab = index;
+            if let Some(ref path) = self.file_path {
+                self.vi.current_file_path = path.to_string_lossy().to_string();
+            } else {
+                self.vi.current_file_path = String::new();
+            }
+            self.refresh_outline();
+        }
+    }
+
+    /// 新規タブを開きます (`:tabnew [file]`)。
+    pub fn new_tab(&mut self, file_path: Option<PathBuf>) {
+        self.sync_active_tab_state();
+
+        let (initial_text, enc, nl) = if let Some(ref path) = file_path {
+            if path.exists() {
+                if let Ok(bytes) = std::fs::read(path) {
+                    let (content, enc, nl) = vivivi_core::decode_bytes(&bytes);
+                    (content, enc, nl)
+                } else {
+                    (String::new(), CharEncoding::Utf8, NewlineType::default())
+                }
+            } else {
+                (String::new(), CharEncoding::Utf8, NewlineType::default())
+            }
+        } else {
+            (String::new(), CharEncoding::Utf8, NewlineType::default())
+        };
+
+        let tab =
+            crate::tui::tab::TabPage::new(self.next_tab_id, &initial_text, file_path, enc, nl);
+        self.next_tab_id += 1;
+        self.tabs.push(tab);
+        let new_idx = self.tabs.len() - 1;
+        self.load_tab_state(new_idx);
+        self.status_message = Some(format!("タブ {} を開きました", self.active_tab + 1));
+    }
+
+    /// 次のタブに切り替えます (`gt`)。
+    pub fn next_tab(&mut self) {
+        if self.tabs.len() <= 1 {
+            return;
+        }
+        self.sync_active_tab_state();
+        let next_idx = (self.active_tab + 1) % self.tabs.len();
+        self.load_tab_state(next_idx);
+        self.status_message = Some(format!("タブ {}/{}", self.active_tab + 1, self.tabs.len()));
+    }
+
+    /// 前のタブに切り替えます (`gT`)。
+    pub fn prev_tab(&mut self) {
+        if self.tabs.len() <= 1 {
+            return;
+        }
+        self.sync_active_tab_state();
+        let prev_idx = if self.active_tab == 0 {
+            self.tabs.len() - 1
+        } else {
+            self.active_tab - 1
+        };
+        self.load_tab_state(prev_idx);
+        self.status_message = Some(format!("タブ {}/{}", self.active_tab + 1, self.tabs.len()));
+    }
+
+    /// 指定番号のタブに切り替えます (`[count]gt`)。1-based index。
+    #[allow(dead_code)]
+    pub fn switch_tab_1based(&mut self, tab_number: usize) {
+        if tab_number == 0 || tab_number > self.tabs.len() {
+            return;
+        }
+        self.sync_active_tab_state();
+        self.load_tab_state(tab_number - 1);
+        self.status_message = Some(format!("タブ {}/{}", self.active_tab + 1, self.tabs.len()));
+    }
+
+    /// 現在のタブを閉じます (`:tabclose`)。
+    pub fn close_tab(&mut self) -> Result<(), &'static str> {
+        if self.tabs.len() <= 1 {
+            return Err("最後のタブは閉じられません (:q で終了してください)");
+        }
+        self.tabs.remove(self.active_tab);
+        let new_idx = if self.active_tab >= self.tabs.len() {
+            self.tabs.len() - 1
+        } else {
+            self.active_tab
+        };
+        self.load_tab_state(new_idx);
+        self.status_message = Some(format!(
+            "タブを閉じました (現在: {}/{})",
+            self.active_tab + 1,
+            self.tabs.len()
+        ));
+        Ok(())
+    }
+
+    /// 現在のタブ以外のすべてのタブを閉じます (`:tabonly`)。
+    pub fn close_other_tabs(&mut self) {
+        if self.tabs.len() <= 1 {
+            return;
+        }
+        self.sync_active_tab_state();
+        let current = self.tabs.remove(self.active_tab);
+        self.tabs = vec![current];
+        self.active_tab = 0;
+        self.status_message = Some("他のタブをすべて閉じました".to_string());
+    }
+
+    /// 編集中バッファをスワップファイル（`.<filename>.swp`）に保存します。
+    pub fn save_swap_file(&self) {
+        if let Some(ref path) = self.file_path
+            && self.buffer.is_modified()
+        {
+            let swp_path = vivivi_core::SwapFile::swap_path_for(path);
+            let _ = vivivi_core::SwapFile::save(
+                &swp_path,
+                Some(path),
+                &self.buffer.to_string(),
+                self.encoding,
+                self.newline,
+            );
+        }
+    }
+
+    /// スワップファイルを安全に削除します。
+    pub fn remove_swap_file(&self) {
+        if let Some(ref path) = self.file_path {
+            let swp_path = vivivi_core::SwapFile::swap_path_for(path);
+            let _ = vivivi_core::SwapFile::remove(&swp_path);
+        }
+    }
+
+    /// スワップファイルからバッファ内容を復元します。
+    pub fn recover_from_swap(&mut self) -> Result<(), std::io::Error> {
+        if let Some(ref path) = self.file_path {
+            let swp_path = vivivi_core::SwapFile::swap_path_for(path);
+            if swp_path.exists() {
+                let rec = vivivi_core::SwapFile::load(&swp_path)?;
+                self.buffer = vivivi_core::TextBuffer::from_text(&rec.content);
+                self.encoding = rec.encoding;
+                self.newline = rec.newline;
+                self.has_swap_warning = false;
+                self.status_message = Some(format!(
+                    "スワップファイルから復元しました ({})",
+                    swp_path.display()
+                ));
+                return Ok(());
+            }
+        }
+        Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "復元対象のスワップファイルが見つかりません",
+        ))
     }
 
     /// アクティブウィンドウにおける現在のカーソル座標を取得します。
@@ -432,6 +688,9 @@ impl App {
             // 永続Undoを保存
             let _ = self.buffer.save_undofile(&path);
 
+            // 保存完了に伴いスワップファイルをクリーンアップ
+            self.remove_swap_file();
+
             self.syntax_lang = SyntaxLang::from_path(&path);
             self.refresh_outline();
 
@@ -468,11 +727,28 @@ impl App {
     /// let _ = app.open_file(PathBuf::from("src/main.rs"));
     /// ```
     pub fn open_file(&mut self, path: PathBuf) -> Result<(), std::io::Error> {
+        self.open_file_with_encoding(path, None)
+    }
+
+    /// 指定された文字エンコーディング（省略時は自動判別）でファイルを開きます。
+    pub fn open_file_with_encoding(
+        &mut self,
+        path: PathBuf,
+        forced_encoding: Option<CharEncoding>,
+    ) -> Result<(), std::io::Error> {
         let (content, enc, nl) = if path.exists() {
             let bytes = std::fs::read(&path)?;
-            vivivi_core::decode_bytes(&bytes)
+            if let Some(forced) = forced_encoding {
+                vivivi_core::decode_bytes_with_encoding(&bytes, forced)
+            } else {
+                vivivi_core::decode_bytes(&bytes)
+            }
         } else {
-            (String::new(), CharEncoding::Utf8, NewlineType::default())
+            (
+                String::new(),
+                forced_encoding.unwrap_or(CharEncoding::Utf8),
+                NewlineType::default(),
+            )
         };
 
         self.buffer = TextBuffer::from_text(&content);
@@ -502,8 +778,27 @@ impl App {
         let recent_file_path = get_recent_file_path();
         let _ = self.recent_manager.save_to_file(&recent_file_path);
 
-        self.status_message = Some(format!("ファイルを開きました: {:?}", self.file_path));
+        self.status_message = Some(format!(
+            "ファイルを開きました [{}/{}]: {:?}",
+            self.encoding.name(),
+            self.newline.name(),
+            self.file_path
+        ));
         Ok(())
+    }
+
+    /// 現在開いているファイルを、指定された文字エンコーディングで再読み込みします。
+    pub fn reload_with_encoding(&mut self, enc: CharEncoding) -> Result<(), std::io::Error> {
+        if let Some(path) = self.file_path.clone() {
+            self.open_file_with_encoding(path, Some(enc))
+        } else {
+            self.encoding = enc;
+            self.status_message = Some(format!(
+                "文字エンコーディングを設定しました: {}",
+                enc.name()
+            ));
+            Ok(())
+        }
     }
 
     /// 現在開いているファイルのお気に入り登録／解除をトグル（切り替え）します。
@@ -2787,6 +3082,356 @@ mod tests {
             ),
         );
         assert_eq!(app.mode(), ViMode::Normal);
+    }
+
+    #[test]
+    fn test_encoding_and_newline_ex_commands() {
+        let mut app = App::new("hello", None, CharEncoding::Utf8, NewlineType::Lf);
+
+        // :set fenc=sjis
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(':'),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        for c in "set fenc=sjis".chars() {
+            crate::tui::event::handle_key_event(
+                &mut app,
+                crossterm::event::KeyEvent::new(
+                    crossterm::event::KeyCode::Char(c),
+                    crossterm::event::KeyModifiers::empty(),
+                ),
+            );
+        }
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.encoding, CharEncoding::ShiftJis);
+
+        // :set ff=dos
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(':'),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        for c in "set ff=dos".chars() {
+            crate::tui::event::handle_key_event(
+                &mut app,
+                crossterm::event::KeyEvent::new(
+                    crossterm::event::KeyCode::Char(c),
+                    crossterm::event::KeyModifiers::empty(),
+                ),
+            );
+        }
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.newline, NewlineType::Crlf);
+
+        // :e ++enc=euc-jp
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(':'),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        for c in "e ++enc=euc-jp".chars() {
+            crate::tui::event::handle_key_event(
+                &mut app,
+                crossterm::event::KeyEvent::new(
+                    crossterm::event::KeyCode::Char(c),
+                    crossterm::event::KeyModifiers::empty(),
+                ),
+            );
+        }
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.encoding, CharEncoding::EucJp);
+        assert_eq!(app.newline, NewlineType::Crlf);
+
+        // :set clipboard=unnamed
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(':'),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        for c in "set clipboard=unnamed".chars() {
+            crate::tui::event::handle_key_event(
+                &mut app,
+                crossterm::event::KeyEvent::new(
+                    crossterm::event::KeyCode::Char(c),
+                    crossterm::event::KeyModifiers::empty(),
+                ),
+            );
+        }
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(
+            app.vi.clipboard_option(),
+            vivivi_vi::ClipboardOption::Unnamed
+        );
+    }
+
+    #[test]
+    fn test_swap_file_and_recovery() {
+        let temp_dir = std::env::temp_dir();
+        let target_file = temp_dir.join("vivivi_test_doc.txt");
+        let swp_file = vivivi_core::SwapFile::swap_path_for(&target_file);
+
+        // 事前クリーンアップ
+        let _ = vivivi_core::SwapFile::remove(&swp_file);
+
+        // 1. スワップファイルが存在しない状態で起動
+        let mut app = App::new(
+            "original text",
+            Some(target_file.clone()),
+            CharEncoding::Utf8,
+            NewlineType::Lf,
+        );
+        assert!(!app.has_swap_warning);
+
+        // 2. バッファ変更後にスワップ保存
+        app.buffer.insert_text(13, " modified");
+        assert!(app.buffer.is_modified());
+        app.save_swap_file();
+        assert!(swp_file.exists());
+
+        // 3. 次回起動時にスワップファイル検出と警告メッセージ
+        let mut new_app = App::new(
+            "original text",
+            Some(target_file.clone()),
+            CharEncoding::Utf8,
+            NewlineType::Lf,
+        );
+        assert!(new_app.has_swap_warning);
+        assert!(
+            new_app
+                .status_message
+                .as_ref()
+                .unwrap()
+                .contains("スワップ")
+        );
+
+        // 4. :recover コマンドでスワップから復元
+        crate::tui::event::handle_key_event(
+            &mut new_app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(':'),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        for c in "recover".chars() {
+            crate::tui::event::handle_key_event(
+                &mut new_app,
+                crossterm::event::KeyEvent::new(
+                    crossterm::event::KeyCode::Char(c),
+                    crossterm::event::KeyModifiers::empty(),
+                ),
+            );
+        }
+        crate::tui::event::handle_key_event(
+            &mut new_app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(new_app.buffer.to_string(), "original text modified");
+        assert!(!new_app.has_swap_warning);
+
+        // 5. 保存するとスワップファイルが削除される
+        let _ = new_app.save_file();
+        assert!(!swp_file.exists());
+        let _ = std::fs::remove_file(&target_file);
+    }
+
+    #[test]
+    fn test_multi_tab_workflow() {
+        let mut app = App::new("tab1 content", None, CharEncoding::Utf8, NewlineType::Lf);
+        assert_eq!(app.tabs.len(), 1);
+        assert_eq!(app.active_tab, 0);
+
+        // 1. :tabnew で新規タブ作成
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(':'),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        for c in "tabnew".chars() {
+            crate::tui::event::handle_key_event(
+                &mut app,
+                crossterm::event::KeyEvent::new(
+                    crossterm::event::KeyCode::Char(c),
+                    crossterm::event::KeyModifiers::empty(),
+                ),
+            );
+        }
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.tabs.len(), 2);
+        assert_eq!(app.active_tab, 1);
+        assert_eq!(app.buffer.to_string(), "");
+
+        // タブ2を編集
+        app.buffer.insert_text(0, "tab2 content");
+        assert_eq!(app.buffer.to_string(), "tab2 content");
+
+        // 2. gt で次のタブ（循環してタブ1へ）
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char('g'),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char('t'),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.active_tab, 0);
+        assert_eq!(app.buffer.to_string(), "tab1 content");
+
+        // 3. gT で前のタブ（タブ2へ）
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char('g'),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char('T'),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.active_tab, 1);
+        assert_eq!(app.buffer.to_string(), "tab2 content");
+
+        // 4. :tabclose でタブ2を閉じる
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(':'),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        for c in "tabclose".chars() {
+            crate::tui::event::handle_key_event(
+                &mut app,
+                crossterm::event::KeyEvent::new(
+                    crossterm::event::KeyCode::Char(c),
+                    crossterm::event::KeyModifiers::empty(),
+                ),
+            );
+        }
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.tabs.len(), 1);
+        assert_eq!(app.active_tab, 0);
+        assert_eq!(app.buffer.to_string(), "tab1 content");
+
+        // 5. 最後の1タブで :tabclose を実行しても閉じずにエラーメッセージ
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(':'),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        for c in "tabc".chars() {
+            crate::tui::event::handle_key_event(
+                &mut app,
+                crossterm::event::KeyEvent::new(
+                    crossterm::event::KeyCode::Char(c),
+                    crossterm::event::KeyModifiers::empty(),
+                ),
+            );
+        }
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.tabs.len(), 1);
+        assert!(app.status_message.as_ref().unwrap().contains("最後のタブ"));
+
+        // 6. switch_tab_1based と :tabonly の検証
+        app.new_tab(None);
+        app.new_tab(None);
+        assert_eq!(app.tabs.len(), 3);
+        assert_eq!(app.tabs[0].id, 1);
+        app.switch_tab_1based(2);
+        assert_eq!(app.active_tab, 1);
+
+        // :tabonly で他タブを一括クローズ
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(':'),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        for c in "tabonly".chars() {
+            crate::tui::event::handle_key_event(
+                &mut app,
+                crossterm::event::KeyEvent::new(
+                    crossterm::event::KeyCode::Char(c),
+                    crossterm::event::KeyModifiers::empty(),
+                ),
+            );
+        }
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        assert_eq!(app.tabs.len(), 1);
     }
 
     fn vi_cmd_bang(vi: &mut ViEngine) -> Option<vivivi_vi::ViCommand> {

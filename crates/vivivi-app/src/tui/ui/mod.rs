@@ -9,6 +9,7 @@ pub mod outline;
 pub mod preview;
 pub mod recent;
 pub mod status;
+pub mod tab_bar;
 
 use ratatui::{
     Frame,
@@ -46,8 +47,23 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     ])
     .split(size);
 
-    let main_area = chunks[0];
+    // 複数タブが開かれている場合は最上部にタブバーを配置
+    let (tab_bar_area, main_area) = if app.tabs.len() > 1 {
+        let v = Layout::vertical([
+            Constraint::Length(1), // タブバー
+            Constraint::Min(1),    // エディタ領域
+        ])
+        .split(chunks[0]);
+        (Some(v[0]), v[1])
+    } else {
+        (None, chunks[0])
+    };
+
     let status_area = chunks[1];
+
+    if let Some(tb_area) = tab_bar_area {
+        tab_bar::render_tab_bar(frame, app, tb_area);
+    }
 
     // アウトライン表示が有効な場合は画面左側にサイドペインを配置
     let (outline_area, editor_container) = if app.show_outline {

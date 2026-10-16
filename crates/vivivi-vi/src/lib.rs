@@ -25,4 +25,7 @@ pub use command::{Motion, Operator, ViCommand, WordSearchKind};
 pub use engine::ViEngine;
 pub use mode::ViMode;
 pub use parser::{CommandParser, ParserState};
-pub use register::{ClipboardHistory, ClipboardItem, RegisterContent, RegisterMgr};
+pub use register::{
+    ClipboardHistory, ClipboardItem, ClipboardOption, ClipboardProvider, RegisterContent,
+    RegisterMgr,
+};

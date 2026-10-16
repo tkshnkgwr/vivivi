@@ -62,15 +62,21 @@ impl ViEngine {
 
                 self.registers
                     .set(register, RegisterContent::BlockWise(block_lines));
-                buffer.close_undo_block();
 
                 cursor.pos.line = min_line;
                 cursor.pos.col = min_col;
                 cursor.clear_selection();
 
                 if op == Operator::Change {
+                    self.block_insert_session = Some(BlockInsertSession {
+                        start_line: min_line,
+                        end_line: max_line,
+                        col: min_col,
+                        typed_chars: Vec::new(),
+                    });
                     self.mode = ViMode::Insert;
                 } else {
+                    buffer.close_undo_block();
                     self.mode = ViMode::Normal;
                 }
             }
@@ -257,5 +263,78 @@ impl ViEngine {
             }
             buffer.close_undo_block();
         }
+    }
+
+    /// ビジュアルモードでの選択領域一括文字置換 (`r<char>`)
+    pub(crate) fn execute_visual_replace_char(
+        &mut self,
+        replacement: char,
+        buffer: &mut TextBuffer,
+        cursor: &mut TextCursor,
+    ) {
+        let anchor = cursor.anchor.unwrap_or(cursor.pos);
+        let pos = cursor.pos;
+
+        let min_line = anchor.line.min(pos.line);
+        let max_line = anchor.line.max(pos.line);
+        let min_col = anchor.col.min(pos.col);
+        let max_col = anchor.col.max(pos.col);
+
+        buffer.open_undo_block();
+        match self.mode {
+            ViMode::VisualBlock => {
+                for line in min_line..=max_line {
+                    if line >= buffer.line_count() {
+                        continue;
+                    }
+                    let line_str = buffer.line_text(line).unwrap_or_default();
+                    let chars: Vec<char> = line_str.chars().collect();
+                    let start = min_col.min(chars.len());
+                    let end = (max_col + 1).min(chars.len());
+
+                    if start < end {
+                        let count = end - start;
+                        let replaced: String = std::iter::repeat_n(replacement, count).collect();
+                        let replace_start = buffer.line_start_position(line) + start;
+                        buffer.delete_text(replace_start, count, false);
+                        buffer.insert_text(replace_start, &replaced);
+                    }
+                }
+            }
+            ViMode::VisualLine => {
+                for line in min_line..=max_line {
+                    if line >= buffer.line_count() {
+                        continue;
+                    }
+                    let line_str = buffer.line_text(line).unwrap_or_default();
+                    let count = line_str.chars().count();
+                    if count > 0 {
+                        let replaced: String = std::iter::repeat_n(replacement, count).collect();
+                        let start_pos = buffer.line_start_position(line);
+                        buffer.delete_text(start_pos, count, false);
+                        buffer.insert_text(start_pos, &replaced);
+                    }
+                }
+            }
+            ViMode::Visual => {
+                let p1 = buffer.cursor_to_position(anchor);
+                let p2 = buffer.cursor_to_position(pos);
+                let from = p1.min(p2);
+                let to = (p1.max(p2) + 1).min(buffer.len());
+                let count = to.saturating_sub(from);
+                if count > 0 {
+                    let replaced: String = std::iter::repeat_n(replacement, count).collect();
+                    buffer.delete_text(from, count, false);
+                    buffer.insert_text(from, &replaced);
+                }
+            }
+            _ => {}
+        }
+        buffer.close_undo_block();
+
+        cursor.pos.line = min_line;
+        cursor.pos.col = min_col;
+        cursor.clear_selection();
+        self.mode = ViMode::Normal;
     }
 }

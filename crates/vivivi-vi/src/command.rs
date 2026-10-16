@@ -224,6 +224,8 @@ pub enum ViCommand {
     VisualSwapCase,
     /// ビジュアルブロックでの一括挿入 (`I` または `A`)
     VisualBlockInsert { at_end: bool },
+    /// ビジュアルモードでの選択領域一括文字置換 (`r<char>`)
+    VisualReplaceChar(char),
     /// exコマンドの実行 (`:w`, `:q`, `:%s/...` 等)
     ExCommand(String),
     /// キーボードマクロの記録開始 (`q<reg>`)

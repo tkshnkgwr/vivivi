@@ -58,13 +58,13 @@
 |  UI/UX表示     |  検索ハイライト・消去 (:noh / :set hls)     |    共通 (Gvim / ViVi)    |  一致箇所のリアルタイム色反転と :noh によるハイライト消去        |    実装済み (app) |
 |  UI/UX表示     |  モード連動カーソル形状 (DECSCUSR)          |         独自拡張         |  Normal(ブロック)/Insert(縦棒)/Replace(下線)の形状自動同期       |    実装済み (app) |
 |  UI/UX表示     |  最近使ったファイル / お気に入りファイル    |         OpenViVi         |  最近オープンした履歴およびお気に入りファイルの永続クイック管理  |    実装済み (app) |
-|  UI/UX表示     |  マルチタブ管理 (タブバー / タブ毎分割)     |  共通 (ViVi / OpenViVi)  |  画面上部タブバーによる複数ファイル切替、タブ毎の画面分割維持    |  未実装 (Phase 4.8) |
-|  編集支援      |  矩形選択一括編集 (Ctrl-v + I/A/c/r)        |  共通 (ViVi / OpenViVi)  |  矩形選択範囲の左端/右端一括文字挿入、一括置換、一括削除         |  未実装 (Phase 4.8) |
-|  設定・環境    |  設定ファイル (config.toml / vivivirc)      |  共通 (ViVi / OpenViVi)  |  キーマップ、タブ幅、カラーテーマ、初期オプションの永続設定      |  未実装 (Phase 4.8) |
-|  エンコード    |  指定エンコード再読込・改行変換 (:e ++enc)  |  共通 (ViVi / OpenViVi)  |  Shift_JIS/EUC-JP/UTF-8の明示指定オープン、CRLF/LF変換保存       |  未実装 (Phase 4.8) |
-|  堅牢性        |  自動保存・クラッシュリカバリ (.swp)        |  共通 (ViVi / OpenViVi)  |  定期スワップ保存と異常終了時の未保存データ自動復元プロンプト    |  未実装 (Phase 4.8) |
-|  OS連携        |  システム共有クリップボード ("+y, "*p)      |  共通 (ViVi / OpenViVi)  |  OSクリップボードとViレジスタの双方向透過同期                    |  未実装 (Phase 4.8) |
-|  言語・構文    |  構文強調拡充 (Go, Ruby, TOML, PS, YAML 等)  |  共通 (ViVi / OpenViVi)  |  Go, Ruby, TOML, PowerShell, YAML, XML, bat/cmd の構文色分け    |  未実装 (Phase 4.8) |
+|  UI/UX表示     |  マルチタブ管理 (タブバー / タブ毎分割)     |  共通 (ViVi / OpenViVi)  |  画面上部タブバーによる複数ファイル切替、タブ毎の画面分割維持    | 実装済み (Phase 4.8) |
+|  編集支援      |  矩形選択一括編集 (Ctrl-v + I/A/c/r)        |  共通 (ViVi / OpenViVi)  |  矩形選択範囲の左端/右端一括文字挿入、一括置換、一括削除         | 実装済み (Phase 4.8) |
+|  設定・環境    |  設定ファイル (config.toml / vivivirc)      |  共通 (ViVi / OpenViVi)  |  キーマップ、タブ幅、カラーテーマ、初期オプションの永続設定      | 実装済み (Phase 4.8) |
+|  エンコード    |  指定エンコード再読込・改行変換 (:e ++enc)  |  共通 (ViVi / OpenViVi)  |  Shift_JIS/EUC-JP/UTF-8の明示指定オープン、CRLF/LF変換保存       | 実装済み (Phase 4.8) |
+|  堅牢性        |  自動保存・クラッシュリカバリ (.swp)        |  共通 (ViVi / OpenViVi)  |  定期スワップ保存と異常終了時の未保存データ自動復元プロンプト    | 実装済み (Phase 4.8) |
+|  OS連携        |  システム共有クリップボード ("+y, "*p)      |  共通 (ViVi / OpenViVi)  |  OSクリップボードとViレジスタの双方向透過同期                    | 実装済み (Phase 4.8) |
+|  言語・構文    |  構文強調拡充 (Go, Ruby, TOML, PS, YAML 等)  |  共通 (ViVi / OpenViVi)  |  Go, Ruby, TOML, PowerShell, YAML, XML, bat/cmd の構文色分け    | 実装済み (Phase 4.8) |
 |  UI/UX表示     |  ミニマップ (Minimap)                       |         OpenViVi         |  ファイル全体の縮小俯瞰プレビューと検索ヒット位置の可視化        |   未実装 (Phase 5) |
 |  UI/UX表示     |  削除文字落下アニメーション                 |         OpenViVi         |  文字削除時に文字が物理重力で落下するOpenViVi特有の演出          |   未実装 (Phase 5) |
 |  UI/UX表示     |  デスクトップGUI (egui / eframe)            |   OpenViVi (Qt再構築)    |  ターミナルTUIに加え、モダンGUIによるリッチグラフィック描画      |   未実装 (Phase 5) |
@@ -72,6 +72,7 @@
 |  将来構想      |  バイナリモード (Hex Editor)                |     ViVi 3 / ViVi 4      |  16進ダンプ＋ASCII並行表示によるバイト単位の直接編集             |   未実装 (Phase 5) |
 |  将来構想      |  スクリプトエンジン (現代版ViViScript)      |     ViVi 3 / ViVi 4      |  Rhai / Lua等を用いたエディタ操作自動化・マクロ拡張              |   未実装 (Phase 5) |
 |  将来構想      |  プロジェクト可視化グラフ (Visualize)       |          ViVi 4          |  インクルード依存関係・ファイル鮮度を物理力学2Dグラフで描画      |   未実装 (Phase 5) |
+|  配布・運用    |  更新チェック・通知・自動更新準備           |         独自拡張         |  GitHub Releases連携による更新確認・通知UI・自己更新基盤の調査   |   未実装 (Phase 5) |
 
 ---
 
@@ -226,30 +227,30 @@
   - 静的SKK辞書 `BUILTIN_SKK_ENTRIES` をバイナリ内に組み込み、外部辞書なしでも即座に代表的漢字へマッチ。`g/` プロンプトおよび `:migemo <query>` コマンド対応、マッチ行への画面自動スクロール追従。
 
 #### 4.8 ViVi / OpenViVi 高度エディタ機能 & 堅牢化 (Phase 4.8)
-- [ ] **【共通 (ViVi / OpenViVi)】 マルチタブ管理 (Tab Bar UI)**
+- [x] **【共通 (ViVi / OpenViVi)】 マルチタブ管理 (Tab Bar UI)**
   - 画面最上部にタブバーを表示し、複数バッファを独立タブとして切り替え
   - 各タブごとに独立した画面分割レイアウト（`:split`, `:vsplit`）を保持
   - キー・コマンド操作: `gt`, `gT`, `[count]gt`, `:tabnew [file]`, `:tabclose` (`:tabc`), `:tabnext`, `:tabprev`
-- [ ] **【共通 (ViVi / OpenViVi)】 矩形選択一括編集 (Visual Block Operations)**
+- [x] **【共通 (ViVi / OpenViVi)】 矩形選択一括編集 (Visual Block Operations)**
   - `Ctrl-v` での矩形範囲選択に対する一括編集支援
   - `I<text>Esc`: 選択行すべての左端に同一テキストを一括挿入
   - `A<text>Esc`: 選択行すべての右端に同一テキストを一括追加
   - `c<text>Esc`: 選択矩形領域を一括置換
   - `r<char>`: 選択矩形領域を指定文字で一括塗りつぶし
   - `d` / `x`: 選択矩形領域の一括削除と文字詰め
-- [ ] **【共通 (ViVi / OpenViVi)】 設定ファイルと永続カスタマイズ (`config.toml` / `vivivirc`)**
+- [x] **【共通 (ViVi / OpenViVi)】 設定ファイルと永続カスタマイズ (`config.toml` / `vivivirc`)**
   - `%USERPROFILE%\.vivivi\config.toml`（または `~/.vivivi/config.toml`）からの自動設定ロード
   - キーバインドのリマップ（ノーマル・インサート・ビジュアル）、タブ幅、行番号表示、テーマ色、不可視文字記号等の設定
-- [ ] **【共通 (ViVi / OpenViVi)】 文字コード・改行明示変換 (:e ++enc, :set fenc, :set ff)**
+- [x] **【共通 (ViVi / OpenViVi)】 文字コード・改行明示変換 (:e ++enc, :set fenc, :set ff)**
   - `:e ++enc=sjis [file]`, `:e ++enc=euc-jp [file]`: 文字コードを指定してファイルを再読込
   - `:set fenc=utf-8 / sjis / euc-jp`: 保存時のファイル文字コード指定
   - `:set ff=unix / dos`: 改行コード（LF / CRLF）の変換保存
-- [ ] **【共通 (ViVi / OpenViVi)】 クラッシュリカバリ・スワップファイル (.swp)**
+- [x] **【共通 (ViVi / OpenViVi)】 クラッシュリカバリ・スワップファイル (.swp)**
   - 一定打鍵数または時間経過によるバックグラウンドスワップファイル自動保存
   - 異常終了・クラッシュ後の次回起動時における未保存バッファ復元プロンプト
-- [ ] **【共通 (ViVi / OpenViVi)】 システム共有クリップボード連携 ("+y, "*p)**
+- [x] **【共通 (ViVi / OpenViVi)】 システム共有クリップボード連携 ("+y, "*p)**
   - OSクリップボードと Vi の `+` / `*` レジスタを透過同期（Windows API / OSC 52 エスケープシーケンス対応）
-- [ ] **【共通 (ViVi / OpenViVi)】 シンタックスハイライト対応言語の拡充 (Go, Ruby, TOML, PowerShell, YAML, XML, bat/cmd)**
+- [x] **【共通 (ViVi / OpenViVi)】 シンタックスハイライト対応言語の拡充 (Go, Ruby, TOML, PowerShell, YAML, XML, bat/cmd)**
   - **Go (`.go`)**: `func`, `package`, `import`, `go`, `chan`, `defer`, `type`, `struct`, `interface` 等の予約語、基本型/構造体型、`//` および `/* */` コメント、生文字列（バッククォート）
   - **Ruby (`.rb`)**: `def`, `end`, `class`, `module`, `do`, `yield`, `attr_accessor` 等の予約語、シンボル（`:symbol`）、`#` コメント、文字列、ヒアドキュメント
   - **TOML (`.toml`)**: `[...]` / `[[...]]` テーブルセクション、キー名、文字列、数値、真偽値、日付時刻、`#` コメント
@@ -285,6 +286,24 @@
   - **Scoop**: 自作バケット (`scoop-bucket`) の作成と `vivivi.json` マニフェスト配置（管理者権限不要、CLI/TUIユーザー向け即日導入）
   - **Winget**: `wingetcreate` を用いた `microsoft/winget-pkgs` へのマニフェスト登録・PR送信（Windows 11 標準パッケージマネージャー対応）
   - GitHub Releases（v0.1.0等のポータブルzip配布）と連携した自動化・更新手順の確立
+- [ ] **【更新管理・運用】 アプリの更新チェック機能・通知機能・自動更新の環境整備とプログラム連携（優先度：中）**
+  - **1. GitHub Actions CI/CD リリース自動化パイプラインの構築 (`.github/workflows/release.yml`)**:
+    - `git push origin v*`（バージョンタグ）をトリガーとした自動クロスビルド＆リリースワークフローの策定。
+    - Windows x86_64 (`x86_64-pc-windows-msvc`) を最優先とし、将来の macOS / Linux 向けマトリクスビルドを整備。
+    - リリースアセットの標準命名規則: `vivivi-v<X.Y.Z>-<target-triple>.zip`（例: `vivivi-v0.1.0-x86_64-pc-windows-msvc.zip`）。
+    - チェックサム自動生成: リリースごとに全アセットの `SHA256SUMS` を自動計算して GitHub Releases へ同時添付。
+  - **2. リリース規約・バージョニング標準の策定**:
+    - セマンティックバージョニング完全準拠（`v<Major>.<Minor>.<Patch>`）。アルファ/ベータ版は `v0.1.0-alpha.1` 形式で pre-release フラグを自動設定。
+    - 配布 zip 内の構成仕様: `vivivi.exe`、`README.md`、`LICENSE`、`doc/help/`（オフライン完結ヘルプ一式）。
+  - **3. プログラム側連携プロトコル（vivivi アプリ内の要求仕様）**:
+    - **非同期エンドポイント照会**: 起動完了後にバックグラウンドスレッドで `GET https://api.github.com/repos/<owner>/vivivi/releases/latest` を非同期照会（エディタ起動速度を 0ms も阻害しない）。
+    - **スロットリング・キャッシュ**: `%USERPROFILE%\.vivivi\cache\update_check.json` に照会結果を記録し、GitHub API レートリミット（未認証60回/時）対策として最低24時間に1回の頻度制限。
+    - **アセット動的選定 & SHA256 検証**: 動作環境（OS / アーキテクチャ）に合致するアセット URL を自動特定し、ダウンロード後に `SHA256SUMS` と照合して改ざん防止・完全性検証を実施。
+    - **Windows 実行中バイナリの自己置換 (リネームトリック)**: 実行中 exe のロックを回避するため、現在の `vivivi.exe` を一時的に `vivivi.exe.old` へリネームし、解凍した新バイナリを `vivivi.exe` として同ディレクトリに配置。次回起動時または終了時に `.old` を安全に削除。
+    - **更新通知 UX**: ステータスバー右端に `[⬆ v0.2.0利用可能 (:upgrade)]` を控えめに表示。ボスの指示（`:upgrade` やメニュー選択）があった場合のみダウンロードと自己置換を実行（未保存バッファを強制終了せず安全に次回反映案内）。
+  - **4. 外部パッケージマネージャー (Scoop / Winget) との協調・共存判定**:
+    - 実行中バイナリのパス判定（`scoop\apps\vivivi\` 配下や `WindowsApps` 配下等）により、パッケージマネージャー経由でインストールされているかを自動検出。
+    - パッケージマネージャー管理下の場合は、バイナリ直接置換を自動抑止し、`scoop update vivivi` や `winget upgrade vivivi` のコマンド案内を提示して二重管理・不整合を防止。
 - [ ] **【品質・極限性能】 性能測定ベンチマークスイート導入 (`benches/`)（優先度：中）**
   - `criterion` クレートを用いた統計的ベンチマーク計測とHTMLグラフ出力の確立
   - 100万文字テキスト挿入・削除における GapBuffer と標準 Vec の $O(1)$ vs $O(N)$ 速度実測

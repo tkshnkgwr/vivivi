@@ -63,3 +63,54 @@ fn test_clipboard_history() {
     assert_eq!(history.get(1).unwrap().content.as_str(), "second");
     assert_eq!(history.get(2).unwrap().content.as_str(), "first");
 }
+
+#[derive(Debug, Default)]
+struct MockClipboard {
+    text: String,
+}
+
+impl vivivi_vi::ClipboardProvider for MockClipboard {
+    fn get_text(&mut self) -> Result<String, String> {
+        Ok(self.text.clone())
+    }
+    fn set_text(&mut self, text: String) -> Result<(), String> {
+        self.text = text;
+        Ok(())
+    }
+}
+
+#[test]
+fn test_system_clipboard_sync() {
+    use std::sync::{Arc, Mutex};
+    use vivivi_vi::ClipboardOption;
+
+    let mock = Arc::new(Mutex::new(MockClipboard::default()));
+    let mut mgr = RegisterMgr::new();
+    mgr.set_clipboard_provider(mock.clone());
+
+    // 1. "+ レジスタへの設定 -> MockClipboard に同期される
+    mgr.set(
+        Some('+'),
+        RegisterContent::CharacterWise("from_plus".to_string()),
+    );
+    assert_eq!(mock.lock().unwrap().text, "from_plus");
+    assert_eq!(mgr.get(Some('+')).unwrap().as_str(), "from_plus");
+
+    // 2. 外部クリップボードの更新 -> fetch(Some('+')) で取得できる
+    mock.lock().unwrap().text = "external_text\n".to_string();
+    let fetched = mgr.fetch(Some('+')).unwrap();
+    assert_eq!(fetched.as_str(), "external_text\n");
+    assert!(fetched.is_line_wise());
+
+    // 3. clipboard=unnamed の検証
+    mgr.set_clipboard_option(ClipboardOption::Unnamed);
+    mgr.set(
+        None,
+        RegisterContent::CharacterWise("unnamed_val".to_string()),
+    );
+    assert_eq!(mock.lock().unwrap().text, "unnamed_val");
+
+    mock.lock().unwrap().text = "new_external".to_string();
+    let fetched_unnamed = mgr.fetch(None).unwrap();
+    assert_eq!(fetched_unnamed.as_str(), "new_external");
+}

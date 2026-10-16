@@ -3,6 +3,7 @@
 //! Vi/Vim の操作体系を基盤とし、全角文字を崩さない罫線描画、インラインCSV/TSV整列、
 //! Migemo ローマ字日本語検索、アウトライン表示、画面分割、永続Undoなどをターミナル上で提供します。
 
+pub mod config;
 mod tui;
 
 use std::env;

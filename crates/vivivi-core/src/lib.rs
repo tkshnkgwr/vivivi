@@ -24,15 +24,18 @@ pub mod gap_buffer;
 pub mod line_mgr;
 pub mod paren;
 pub mod search;
+pub mod swap;
 pub mod undo;
 
 pub use buffer::TextBuffer;
 pub use cursor::{CursorPosition, TextCursor};
 pub use encoding::{
-    CharEncoding, NewlineType, decode_bytes, detect_encoding, detect_newline, encode_text,
+    CharEncoding, NewlineType, decode_bytes, decode_bytes_with_encoding, detect_encoding,
+    detect_newline, encode_text,
 };
 pub use gap_buffer::GapBuffer;
 pub use paren::{
     find_matching_paren, find_matching_paren_in_line, get_cursor_matching_paren, paren_pair,
 };
+pub use swap::{SwapFile, SwapRecord};
 pub use undo::{UndoAction, UndoBlock, UndoMgr};

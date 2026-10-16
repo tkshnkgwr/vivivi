@@ -181,6 +181,24 @@ impl ViEngine {
         &mut self.registers
     }
 
+    /// 外部クリップボードプロバイダを設定します。
+    pub fn set_clipboard_provider(
+        &mut self,
+        provider: std::sync::Arc<std::sync::Mutex<dyn crate::register::ClipboardProvider>>,
+    ) {
+        self.registers.set_clipboard_provider(provider);
+    }
+
+    /// クリップボード同期オプション（`:set clipboard=...`）を設定します。
+    pub fn set_clipboard_option(&mut self, opt: crate::register::ClipboardOption) {
+        self.registers.set_clipboard_option(opt);
+    }
+
+    /// 現在のクリップボード同期オプションを取得します。
+    pub fn clipboard_option(&self) -> crate::register::ClipboardOption {
+        self.registers.clipboard_option()
+    }
+
     /// 内部のコマンドパーサー（[`CommandParser`]）への参照を取得します。
     pub fn parser(&self) -> &CommandParser {
         &self.parser
@@ -752,6 +770,11 @@ impl ViEngine {
 
             ViCommand::VisualBlockInsert { at_end } => {
                 self.execute_visual_block_insert(*at_end, buffer, cursor);
+                result.need_redraw = true;
+            }
+
+            ViCommand::VisualReplaceChar(c) => {
+                self.execute_visual_replace_char(*c, buffer, cursor);
                 result.need_redraw = true;
             }
 

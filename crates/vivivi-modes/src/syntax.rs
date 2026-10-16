@@ -45,6 +45,20 @@ pub enum SyntaxLang {
     Html,
     /// Bash / Shell
     Bash,
+    /// Go
+    Go,
+    /// Ruby
+    Ruby,
+    /// TOML
+    Toml,
+    /// PowerShell
+    PowerShell,
+    /// YAML
+    Yaml,
+    /// XML
+    Xml,
+    /// Windows Batch / CMD
+    Batch,
 }
 
 impl SyntaxLang {
@@ -57,6 +71,13 @@ impl SyntaxLang {
     ///
     /// assert_eq!(SyntaxLang::from_path("index.html"), SyntaxLang::Html);
     /// assert_eq!(SyntaxLang::from_path("script.py"), SyntaxLang::Python);
+    /// assert_eq!(SyntaxLang::from_path("main.go"), SyntaxLang::Go);
+    /// assert_eq!(SyntaxLang::from_path("app.rb"), SyntaxLang::Ruby);
+    /// assert_eq!(SyntaxLang::from_path("Cargo.toml"), SyntaxLang::Toml);
+    /// assert_eq!(SyntaxLang::from_path("deploy.ps1"), SyntaxLang::PowerShell);
+    /// assert_eq!(SyntaxLang::from_path("config.yaml"), SyntaxLang::Yaml);
+    /// assert_eq!(SyntaxLang::from_path("pom.xml"), SyntaxLang::Xml);
+    /// assert_eq!(SyntaxLang::from_path("build.bat"), SyntaxLang::Batch);
     /// assert_eq!(SyntaxLang::from_path("unknown.xyz"), SyntaxLang::PlainText);
     /// ```
     pub fn from_path<P: AsRef<Path>>(path: P) -> Self {
@@ -79,6 +100,13 @@ impl SyntaxLang {
             "java" => Self::Java,
             "html" | "htm" => Self::Html,
             "sh" | "bash" | "zsh" => Self::Bash,
+            "go" => Self::Go,
+            "rb" | "ruby" => Self::Ruby,
+            "toml" => Self::Toml,
+            "ps1" | "psm1" | "psd1" => Self::PowerShell,
+            "yaml" | "yml" => Self::Yaml,
+            "xml" | "xsd" | "xsl" | "svg" => Self::Xml,
+            "bat" | "cmd" => Self::Batch,
             _ => Self::PlainText,
         }
     }
@@ -180,10 +208,14 @@ pub fn tokenize_line(line: &str, lang: SyntaxLang) -> Vec<SyntaxToken> {
         }
 
         // 2. コメント判定
-        // C/Java/Rust/JSスタイル行コメント: //
+        // C/Java/Rust/JS/Go スタイル行コメント: //
         if matches!(
             lang,
-            SyntaxLang::Rust | SyntaxLang::Cpp | SyntaxLang::JavaScript | SyntaxLang::Java
+            SyntaxLang::Rust
+                | SyntaxLang::Cpp
+                | SyntaxLang::JavaScript
+                | SyntaxLang::Java
+                | SyntaxLang::Go
         ) && ch == '/'
             && i + 1 < len
             && chars[i + 1] == '/'
@@ -195,7 +227,7 @@ pub fn tokenize_line(line: &str, lang: SyntaxLang) -> Vec<SyntaxToken> {
             break;
         }
 
-        // C/Java/Rust/JS/SQL/PL-SQL スタイルブロックコメント: /* ... */
+        // C/Java/Rust/JS/SQL/PL-SQL/Go スタイルブロックコメント: /* ... */
         if matches!(
             lang,
             SyntaxLang::Rust
@@ -204,6 +236,7 @@ pub fn tokenize_line(line: &str, lang: SyntaxLang) -> Vec<SyntaxToken> {
                 | SyntaxLang::Java
                 | SyntaxLang::Sql
                 | SyntaxLang::PlSql
+                | SyntaxLang::Go
         ) && ch == '/'
             && i + 1 < len
             && chars[i + 1] == '*'
@@ -229,13 +262,45 @@ pub fn tokenize_line(line: &str, lang: SyntaxLang) -> Vec<SyntaxToken> {
             continue;
         }
 
-        // Python / Bash 行コメント: #
-        if matches!(lang, SyntaxLang::Python | SyntaxLang::Bash) && ch == '#' {
+        // Python / Bash / Ruby / Toml / PowerShell / Yaml 行コメント: #
+        if matches!(
+            lang,
+            SyntaxLang::Python
+                | SyntaxLang::Bash
+                | SyntaxLang::Ruby
+                | SyntaxLang::Toml
+                | SyntaxLang::PowerShell
+                | SyntaxLang::Yaml
+        ) && ch == '#'
+        {
             tokens.push(SyntaxToken {
                 text: chars[i..].iter().collect(),
                 token_type: TokenType::Comment,
             });
             break;
+        }
+
+        // PowerShell ブロックコメント: <# ... #>
+        if lang == SyntaxLang::PowerShell && ch == '<' && i + 1 < len && chars[i + 1] == '#' {
+            let start = i;
+            i += 2;
+            let mut closed = false;
+            while i + 1 < len {
+                if chars[i] == '#' && chars[i + 1] == '>' {
+                    i += 2;
+                    closed = true;
+                    break;
+                }
+                i += 1;
+            }
+            if !closed {
+                i = len;
+            }
+            tokens.push(SyntaxToken {
+                text: chars[start..i].iter().collect(),
+                token_type: TokenType::Comment,
+            });
+            continue;
         }
 
         // SQL / PL/SQL 行コメント: --
@@ -251,8 +316,8 @@ pub fn tokenize_line(line: &str, lang: SyntaxLang) -> Vec<SyntaxToken> {
             break;
         }
 
-        // HTML コメント: <!-- ... -->
-        if lang == SyntaxLang::Html
+        // HTML / XML コメント: <!-- ... -->
+        if matches!(lang, SyntaxLang::Html | SyntaxLang::Xml)
             && ch == '<'
             && i + 3 < len
             && chars[i + 1] == '!'
@@ -280,7 +345,47 @@ pub fn tokenize_line(line: &str, lang: SyntaxLang) -> Vec<SyntaxToken> {
             continue;
         }
 
+        // Windows Batch コメント: rem / REM / ::
+        if lang == SyntaxLang::Batch {
+            if ch == ':' && i + 1 < len && chars[i + 1] == ':' {
+                tokens.push(SyntaxToken {
+                    text: chars[i..].iter().collect(),
+                    token_type: TokenType::Comment,
+                });
+                break;
+            }
+            if (ch == 'r' || ch == 'R')
+                && i + 2 < len
+                && (chars[i + 1] == 'e' || chars[i + 1] == 'E')
+                && (chars[i + 2] == 'm' || chars[i + 2] == 'M')
+                && (i + 3 == len || chars[i + 3].is_whitespace())
+            {
+                tokens.push(SyntaxToken {
+                    text: chars[i..].iter().collect(),
+                    token_type: TokenType::Comment,
+                });
+                break;
+            }
+        }
+
         // 3. 文字列リテラル
+        // Go raw string: `...`
+        if lang == SyntaxLang::Go && ch == '`' {
+            let start = i;
+            i += 1;
+            while i < len && chars[i] != '`' {
+                i += 1;
+            }
+            if i < len && chars[i] == '`' {
+                i += 1;
+            }
+            tokens.push(SyntaxToken {
+                text: chars[start..i].iter().collect(),
+                token_type: TokenType::StringLiteral,
+            });
+            continue;
+        }
+
         if ch == '"' || (ch == '\'' && lang != SyntaxLang::Rust) {
             let quote = ch;
             let start = i;
@@ -847,6 +952,159 @@ fn is_keyword(word: &str, lang: SyntaxLang) -> bool {
                 | "true"
                 | "false"
         ),
+        SyntaxLang::Go => matches!(
+            word,
+            "break"
+                | "case"
+                | "chan"
+                | "const"
+                | "continue"
+                | "default"
+                | "defer"
+                | "else"
+                | "fallthrough"
+                | "for"
+                | "func"
+                | "go"
+                | "goto"
+                | "if"
+                | "import"
+                | "interface"
+                | "map"
+                | "package"
+                | "range"
+                | "return"
+                | "select"
+                | "struct"
+                | "switch"
+                | "type"
+                | "var"
+                | "true"
+                | "false"
+                | "nil"
+                | "iota"
+        ),
+        SyntaxLang::Ruby => matches!(
+            word,
+            "alias"
+                | "and"
+                | "begin"
+                | "break"
+                | "case"
+                | "class"
+                | "def"
+                | "defined"
+                | "do"
+                | "else"
+                | "elsif"
+                | "end"
+                | "ensure"
+                | "false"
+                | "for"
+                | "if"
+                | "in"
+                | "module"
+                | "next"
+                | "nil"
+                | "not"
+                | "or"
+                | "redo"
+                | "rescue"
+                | "retry"
+                | "return"
+                | "self"
+                | "super"
+                | "then"
+                | "true"
+                | "undef"
+                | "unless"
+                | "until"
+                | "when"
+                | "while"
+                | "yield"
+        ),
+        SyntaxLang::Toml => matches!(word, "true" | "false" | "inf" | "nan"),
+        SyntaxLang::PowerShell => {
+            let lower = word.to_ascii_lowercase();
+            matches!(
+                lower.as_str(),
+                "if" | "else"
+                    | "elseif"
+                    | "switch"
+                    | "while"
+                    | "default"
+                    | "for"
+                    | "foreach"
+                    | "in"
+                    | "do"
+                    | "until"
+                    | "break"
+                    | "continue"
+                    | "return"
+                    | "param"
+                    | "function"
+                    | "filter"
+                    | "workflow"
+                    | "try"
+                    | "catch"
+                    | "finally"
+                    | "throw"
+                    | "trap"
+                    | "process"
+                    | "begin"
+                    | "end"
+                    | "exit"
+                    | "true"
+                    | "false"
+                    | "null"
+            )
+        }
+        SyntaxLang::Yaml => {
+            let lower = word.to_ascii_lowercase();
+            matches!(
+                lower.as_str(),
+                "true" | "false" | "yes" | "no" | "on" | "off" | "null"
+            )
+        }
+        SyntaxLang::Xml => {
+            let lower = word.to_ascii_lowercase();
+            matches!(
+                lower.as_str(),
+                "xml" | "version" | "encoding" | "standalone" | "xmlns" | "id" | "name"
+            )
+        }
+        SyntaxLang::Batch => {
+            let lower = word.to_ascii_lowercase();
+            matches!(
+                lower.as_str(),
+                "echo"
+                    | "set"
+                    | "if"
+                    | "else"
+                    | "goto"
+                    | "call"
+                    | "exit"
+                    | "for"
+                    | "in"
+                    | "do"
+                    | "pause"
+                    | "cls"
+                    | "cd"
+                    | "md"
+                    | "rd"
+                    | "del"
+                    | "copy"
+                    | "move"
+                    | "start"
+                    | "shift"
+                    | "not"
+                    | "exist"
+                    | "defined"
+                    | "errorlevel"
+                    | "on"
+                    | "off"
+            )
+        }
         _ => false,
     }
 }
@@ -1023,6 +1281,74 @@ fn is_type(word: &str, lang: SyntaxLang) -> bool {
                     | "selected"
             )
         }
+        SyntaxLang::Go => matches!(
+            word,
+            "bool"
+                | "byte"
+                | "complex64"
+                | "complex128"
+                | "error"
+                | "float32"
+                | "float64"
+                | "int"
+                | "int8"
+                | "int16"
+                | "int32"
+                | "int64"
+                | "rune"
+                | "string"
+                | "uint"
+                | "uint8"
+                | "uint16"
+                | "uint32"
+                | "uint64"
+                | "uintptr"
+        ),
+        SyntaxLang::Ruby => matches!(
+            word,
+            "String"
+                | "Integer"
+                | "Float"
+                | "Array"
+                | "Hash"
+                | "Symbol"
+                | "Regexp"
+                | "Range"
+                | "NilClass"
+                | "TrueClass"
+                | "FalseClass"
+                | "Numeric"
+                | "Class"
+                | "Module"
+        ),
+        SyntaxLang::PowerShell => {
+            let lower = word.to_ascii_lowercase();
+            matches!(
+                lower.as_str(),
+                "string"
+                    | "int"
+                    | "int32"
+                    | "int64"
+                    | "bool"
+                    | "boolean"
+                    | "byte"
+                    | "char"
+                    | "double"
+                    | "decimal"
+                    | "array"
+                    | "hashtable"
+                    | "pscustomobject"
+                    | "xml"
+                    | "void"
+            )
+        }
+        SyntaxLang::Xml => {
+            let lower = word.to_ascii_lowercase();
+            matches!(
+                lower.as_str(),
+                "string" | "integer" | "boolean" | "date" | "time" | "decimal"
+            )
+        }
         _ => false,
     }
 }
@@ -1146,5 +1472,92 @@ mod tests {
         assert_eq!(SyntaxLang::from_path("deploy.bash"), SyntaxLang::Bash);
         assert_eq!(SyntaxLang::from_path(".zshrc"), SyntaxLang::PlainText);
         assert_eq!(SyntaxLang::from_path("setup.zsh"), SyntaxLang::Bash);
+        assert_eq!(SyntaxLang::from_path("main.go"), SyntaxLang::Go);
+        assert_eq!(SyntaxLang::from_path("script.rb"), SyntaxLang::Ruby);
+        assert_eq!(SyntaxLang::from_path("config.toml"), SyntaxLang::Toml);
+        assert_eq!(SyntaxLang::from_path("deploy.ps1"), SyntaxLang::PowerShell);
+        assert_eq!(SyntaxLang::from_path("data.yaml"), SyntaxLang::Yaml);
+        assert_eq!(SyntaxLang::from_path("app.xml"), SyntaxLang::Xml);
+        assert_eq!(SyntaxLang::from_path("run.bat"), SyntaxLang::Batch);
+        assert_eq!(SyntaxLang::from_path("run.cmd"), SyntaxLang::Batch);
+    }
+
+    #[test]
+    fn test_new_languages_tokenization() {
+        // Go
+        let go_line = "func main() { var msg string = `hello`; } // go comment";
+        let go_tokens = tokenize_line(go_line, SyntaxLang::Go);
+        assert!(
+            go_tokens
+                .iter()
+                .any(|t| t.text == "func" && t.token_type == TokenType::Keyword)
+        );
+        assert!(
+            go_tokens
+                .iter()
+                .any(|t| t.text == "string" && t.token_type == TokenType::Type)
+        );
+        assert!(
+            go_tokens
+                .iter()
+                .any(|t| t.token_type == TokenType::StringLiteral)
+        );
+        assert_eq!(go_tokens.last().unwrap().token_type, TokenType::Comment);
+
+        // Ruby
+        let rb_line = "def hello; return \"world\"; end # ruby comment";
+        let rb_tokens = tokenize_line(rb_line, SyntaxLang::Ruby);
+        assert!(
+            rb_tokens
+                .iter()
+                .any(|t| t.text == "def" && t.token_type == TokenType::Keyword)
+        );
+        assert!(
+            rb_tokens
+                .iter()
+                .any(|t| t.token_type == TokenType::StringLiteral)
+        );
+        assert_eq!(rb_tokens.last().unwrap().token_type, TokenType::Comment);
+
+        // TOML
+        let toml_line = "enabled = true # config";
+        let toml_tokens = tokenize_line(toml_line, SyntaxLang::Toml);
+        assert!(
+            toml_tokens
+                .iter()
+                .any(|t| t.text == "true" && t.token_type == TokenType::Keyword)
+        );
+        assert_eq!(toml_tokens.last().unwrap().token_type, TokenType::Comment);
+
+        // PowerShell
+        let ps_line = "function Deploy { param([string]$name) return $true } # ps comment";
+        let ps_tokens = tokenize_line(ps_line, SyntaxLang::PowerShell);
+        assert!(
+            ps_tokens
+                .iter()
+                .any(|t| t.text.eq_ignore_ascii_case("function")
+                    && t.token_type == TokenType::Keyword)
+        );
+        assert!(
+            ps_tokens
+                .iter()
+                .any(|t| t.text.eq_ignore_ascii_case("string") && t.token_type == TokenType::Type)
+        );
+        assert_eq!(ps_tokens.last().unwrap().token_type, TokenType::Comment);
+
+        // Batch
+        let bat_line = "echo Hello World & set var=1 :: batch comment";
+        let bat_tokens = tokenize_line(bat_line, SyntaxLang::Batch);
+        assert!(
+            bat_tokens
+                .iter()
+                .any(|t| t.text.eq_ignore_ascii_case("echo") && t.token_type == TokenType::Keyword)
+        );
+        assert!(
+            bat_tokens
+                .iter()
+                .any(|t| t.text.eq_ignore_ascii_case("set") && t.token_type == TokenType::Keyword)
+        );
+        assert_eq!(bat_tokens.last().unwrap().token_type, TokenType::Comment);
     }
 }

@@ -102,6 +102,13 @@ pub fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         vivivi_modes::SyntaxLang::Java => "Java",
         vivivi_modes::SyntaxLang::Html => "HTML",
         vivivi_modes::SyntaxLang::Bash => "Bash",
+        vivivi_modes::SyntaxLang::Go => "Go",
+        vivivi_modes::SyntaxLang::Ruby => "Ruby",
+        vivivi_modes::SyntaxLang::Toml => "TOML",
+        vivivi_modes::SyntaxLang::PowerShell => "PowerShell",
+        vivivi_modes::SyntaxLang::Yaml => "YAML",
+        vivivi_modes::SyntaxLang::Xml => "XML",
+        vivivi_modes::SyntaxLang::Batch => "Batch",
     };
 
     let enc_info = format!(

@@ -455,4 +455,50 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
   4. **# Panics**: Boundary or invalid input conditions triggering panic.
   5. **# Examples**: Verifiable, copy-pasteable minimal examples tested by `cargo test --doc`.
 
+---
+
+## 14. Advanced Power Tools & Hardening Specifications (Phase 4.8)
+
+### 14.1 Multi-Tab Buffer Management (`TabPage`, Tab Bar UI)
+- **Data Structure**: `TabPage` encapsulates per-tab active buffer ID, recursive window tree (`WindowTreeNode`), cursor position, and scroll offsets.
+- **Tab Bar UI**: Automatically drawn at the top line when tab count $\ge 2$. Active tab is highlighted; unsaved modified buffers display a `[+]` badge.
+- **State Synchronization**: `sync_active_tab_state` persists active editor states to the tab before switching, and `load_tab_state` restores target tab states, ensuring complete isolation across tabs.
+- **Keybindings & Commands**: `gt`, `gT`, `[count]gt`, `:tabnew [file]`, `:tabclose`, `:tabnext`, `:tabprev`, `:tabonly`.
+
+### 14.2 Visual Block Column Operations (`VisualBlock`)
+- **Column-wise Manipulation**: Operates on rectangular regions across multiple lines selected via `Ctrl-v`.
+- **Prepend (`I`) & Append (`A`)**: Batch text insertion at the left or right column boundary across all selected lines. Short lines are auto-padded with spaces.
+- **Replace (`c`) & Fill (`r`)**: Column replacement with arbitrary text or uniform fill with a single character.
+- **Delete (`d`, `x`)**: Columnar deletion shifting trailing characters leftward uniformly.
+
+### 14.3 Configuration File & Customization (`config.toml`)
+- **Location**: `%USERPROFILE%\.vivivi\config.toml` (or `~/.vivivi/config.toml`).
+- **Configuration Schema**:
+  - `[editor]`: `tab_stop`, `number`, `relative_number`, `gutter`, `hlsearch`, `clipboard`, `theme`
+  - `[invisible]`: `enabled`, `space`, `tab`, `eol`
+  - `[keymap.normal]`, `[keymap.insert]`: Custom key remapping tables
+- **Dynamic Reload**: `:config` ex command reloads settings from disk on the fly.
+
+### 14.4 Explicit Encoding Reload & Line Ending Format
+- **Explicit Encoding Reopening (`:e ++enc=<enc>`)**: Bypass auto-detection and force reload buffer using `utf-8`, `sjis`, or `euc-jp`.
+- **Target Save Encoding (`:set fenc=<enc>`)**: Specify destination encoding on next save.
+- **Line Ending Format (`:set ff=unix|dos`)**: Convert newline convention between LF and CRLF on save.
+
+### 14.5 Crash Recovery & Auto-Save Swap Files (.swp)
+- **Swap Creation**: Creates hidden `.<filename>.swp` in the same directory for modified buffers.
+- **Periodic Checkpoints**: Automatically writes buffer snapshots every 20 keystrokes and on `Esc` (return to Normal mode).
+- **Recovery Workflow**: Detects uncleaned swap files on startup, emits status warning, and restores buffer content via `:recover` (`:swap` inspects metadata).
+- **Safe Cleanup**: Swap files are automatically deleted upon successful `:w` save or clean exit.
+
+### 14.6 System Clipboard Integration
+- **Trait Abstraction**: UI-independent `ClipboardProvider` trait defined in `vivivi-vi`.
+- **Provider Implementation**: `SystemClipboard` leveraging `arboard` in `vivivi-app`.
+- **Register Binding**: Transparent synchronization between `"+` / `"*` registers and the OS system clipboard. Unnamed register sync available via `:set clipboard=unnamed`.
+
+### 14.7 Syntax Highlighting Expansion (18 Languages)
+- **New Languages**: Go (`.go`), Ruby (`.rb`), TOML (`.toml`), PowerShell (`.ps1`), YAML (`.yaml`), XML (`.xml`), and Windows Batch (`.bat`, `.cmd`).
+- **Lexical Analysis**: Accurate tokenization of keywords, types/classes, strings, numbers, comments, symbols, and environment variables (Batch).
+- **Status Bar Badges**: Distinct language badges (`[Go]`, `[Ruby]`, `[TOML]`, `[PowerShell]`, `[YAML]`, `[XML]`, `[Batch]`) rendered in the status bar.
+
+
 

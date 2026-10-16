@@ -50,6 +50,34 @@ impl CharEncoding {
             Self::Utf16Be => "UTF-16BE",
         }
     }
+
+    /// 文字列（例: `"utf-8"`, `"sjis"`, `"euc-jp"`）から文字エンコーディングを判別します。
+    ///
+    /// 大文字小文字やハイフン・アンダースコアの差異を柔軟に吸収します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::CharEncoding;
+    ///
+    /// assert_eq!(CharEncoding::parse_enc("utf-8"), Some(CharEncoding::Utf8));
+    /// assert_eq!(CharEncoding::parse_enc("sjis"), Some(CharEncoding::ShiftJis));
+    /// assert_eq!(CharEncoding::parse_enc("cp932"), Some(CharEncoding::ShiftJis));
+    /// assert_eq!(CharEncoding::parse_enc("euc-jp"), Some(CharEncoding::EucJp));
+    /// assert_eq!(CharEncoding::parse_enc("unknown"), None);
+    /// ```
+    pub fn parse_enc(s: &str) -> Option<Self> {
+        let clean = s.trim().to_ascii_lowercase().replace(['-', '_'], "");
+        match clean.as_str() {
+            "utf8" => Some(Self::Utf8),
+            "utf8bom" => Some(Self::Utf8Bom),
+            "sjis" | "shiftjis" | "cp932" | "windows31j" => Some(Self::ShiftJis),
+            "eucjp" | "euc" => Some(Self::EucJp),
+            "utf16le" | "utf16" => Some(Self::Utf16Le),
+            "utf16be" => Some(Self::Utf16Be),
+            _ => None,
+        }
+    }
 }
 
 /// テキストファイルの改行コード種別。
@@ -101,12 +129,36 @@ impl NewlineType {
     ///
     /// assert_eq!(NewlineType::Lf.name(), "LF");
     /// assert_eq!(NewlineType::Crlf.name(), "CRLF");
+    /// assert_eq!(NewlineType::Cr.name(), "CR");
     /// ```
     pub fn name(&self) -> &'static str {
         match self {
             Self::Lf => "LF",
             Self::Crlf => "CRLF",
             Self::Cr => "CR",
+        }
+    }
+
+    /// 文字列（例: `"unix"`, `"dos"`, `"mac"`, `"lf"`, `"crlf"`）から改行種別を判別します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_core::NewlineType;
+    ///
+    /// assert_eq!(NewlineType::parse_ff("unix"), Some(NewlineType::Lf));
+    /// assert_eq!(NewlineType::parse_ff("dos"), Some(NewlineType::Crlf));
+    /// assert_eq!(NewlineType::parse_ff("mac"), Some(NewlineType::Cr));
+    /// assert_eq!(NewlineType::parse_ff("crlf"), Some(NewlineType::Crlf));
+    /// assert_eq!(NewlineType::parse_ff("unknown"), None);
+    /// ```
+    pub fn parse_ff(s: &str) -> Option<Self> {
+        let clean = s.trim().to_ascii_lowercase();
+        match clean.as_str() {
+            "unix" | "lf" => Some(Self::Lf),
+            "dos" | "crlf" => Some(Self::Crlf),
+            "mac" | "cr" => Some(Self::Cr),
+            _ => None,
         }
     }
 }
@@ -263,6 +315,60 @@ pub fn decode_bytes(bytes: &[u8]) -> (String, CharEncoding, NewlineType) {
     // 改行を \n に正規化
     let normalized = decoded.replace("\r\n", "\n").replace('\r', "\n");
 
+    (normalized, encoding, newline)
+}
+
+/// 指定された文字エンコーディングで生バイト列をデコードし、改行を `\n` に正規化します。
+///
+/// # Examples
+///
+/// ```
+/// use vivivi_core::{CharEncoding, NewlineType, decode_bytes_with_encoding};
+///
+/// let (text, enc, nl) = decode_bytes_with_encoding(b"Hello\n", CharEncoding::Utf8);
+/// assert_eq!(text, "Hello\n");
+/// assert_eq!(enc, CharEncoding::Utf8);
+/// ```
+pub fn decode_bytes_with_encoding(
+    bytes: &[u8],
+    encoding: CharEncoding,
+) -> (String, CharEncoding, NewlineType) {
+    let enc_type: &'static encoding_rs::Encoding = match encoding {
+        CharEncoding::Utf8 | CharEncoding::Utf8Bom => encoding_rs::UTF_8,
+        CharEncoding::ShiftJis => encoding_rs::SHIFT_JIS,
+        CharEncoding::EucJp => encoding_rs::EUC_JP,
+        CharEncoding::Utf16Le => encoding_rs::UTF_16LE,
+        CharEncoding::Utf16Be => encoding_rs::UTF_16BE,
+    };
+    let newline = detect_newline(bytes);
+
+    let body = match encoding {
+        CharEncoding::Utf8Bom => {
+            if bytes.starts_with(b"\xEF\xBB\xBF") {
+                &bytes[3..]
+            } else {
+                bytes
+            }
+        }
+        CharEncoding::Utf16Le => {
+            if bytes.starts_with(b"\xFF\xFE") {
+                &bytes[2..]
+            } else {
+                bytes
+            }
+        }
+        CharEncoding::Utf16Be => {
+            if bytes.starts_with(b"\xFE\xFF") {
+                &bytes[2..]
+            } else {
+                bytes
+            }
+        }
+        _ => bytes,
+    };
+
+    let (decoded, _, _) = enc_type.decode(body);
+    let normalized = decoded.replace("\r\n", "\n").replace('\r', "\n");
     (normalized, encoding, newline)
 }
 
