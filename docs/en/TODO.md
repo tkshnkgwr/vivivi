@@ -78,32 +78,32 @@
 
 ---
 
-## 1. Completed Tasks
-- [x] Initial workspace environment & multi-crate architecture setup.
-- [x] **[OpenViVi]** `vivivi-core`: Implemented OpenViVi-compatible `GapBuffer<T>`.
-- [x] **[OpenViVi]** `vivivi-core`: Implemented transactional `UndoMgr` (nested blocks, typing merge, save point tracking).
-- [x] **[OpenViVi]** `vivivi-core`: Implemented `TextBuffer` combining `GapBuffer` and `UndoMgr`.
+## 1. Completed Tasks (v0.0.1-alpha - v0.1.0-alpha: Completed)
+- [x] Initial workspace environment & multi-crate architecture setup. [v0.0.1-alpha]
+- [x] **[OpenViVi]** `vivivi-core`: Implemented OpenViVi-compatible `GapBuffer<T>`. [v0.1.0-alpha]
+- [x] **[OpenViVi]** `vivivi-core`: Implemented transactional `UndoMgr` (nested blocks, typing merge, save point tracking). [v0.1.0-alpha]
+- [x] **[OpenViVi]** `vivivi-core`: Implemented `TextBuffer` combining `GapBuffer` and `UndoMgr`. [v0.1.0-alpha]
 - [x] Agent infrastructure setup (`.agents/`, `GEMINI.md`, `RULES.md`).
 - [x] Bilingual documentation structure (`docs/ja/`, `docs/en/`).
 
 ---
 
-## 2. Upcoming Roadmap
+## 2. Completed Milestones (v0.2.0-alpha - v0.9.0-alpha)
 
-### Phase 1: Full Vi Command Engine Port (`vivivi-vi`)
+### Phase 1: Full Vi Command Engine Port (`vivivi-vi`) [v0.2.0-alpha]
 - [x] **[Common]** Basic cursor motions (`h`, `j`, `k`, `l`, `w`, `b`, `e`, `0`, `$`, `^`, `gg`, `G`).
 - [x] **[Common]** Operators and deletions/changes/yanks (`d`, `c`, `y` + motion / `dd`, `yy`, `cc`).
 - [x] **[Common]** Paste (`p`, `P`) and register operations (`"a` - `"z`, clipboard).
 - [x] **[Common]** Search commands (`/`, `?`, `n`, `N`).
 - [x] **[Common]** Basic ex commands (`:w`, `:q`, `:wq`, `:s`, `:%s`).
 
-### Phase 2: Advanced Editing Modes (`vivivi-modes`)
+### Phase 2: Advanced Editing Modes (`vivivi-modes`) [v0.2.0-alpha]
 - [x] **[Common (ViVi / OpenViVi)]** Keisen key handling (`Ctrl+Arrow` draw/join, `Shift+Arrow` erase).
 - [x] **[Common (ViVi / OpenViVi)]** Box-internal text alignment (left, center, right).
 - [x] **[ViVi 3 / ViVi 4]** Inline CSV/TSV column calculation view.
 - [x] **[ViVi 3 / ViVi 4]** Transparent quote display and active-line raw view in CSV mode.
 
-### Phase 3: Frontend Implementation (`vivivi-app`)
+### Phase 3: Frontend Implementation (`vivivi-app`) [v0.3.0-alpha]
 - [x] **[Original]** Terminal UI (Ratatui + crossterm) frontend implementation (interactive Vi editing & realtime render).
 - [x] **[OpenViVi]** File I/O and charset/newline auto-detection (UTF-8, Shift_JIS, EUC-JP / CRLF, LF).
 - [x] **[Common]** Syntax highlighting (Rust, C++, Python, JS, JSON), matching paren highlight, and paren jump (`%`).
@@ -114,7 +114,7 @@
 
 Focusing on features essential for primary/daily driver use (Gvim-compatible workflows) and advanced features from ViVi 3, ViVi 4, and OpenViVi.
 
-#### 4.1 Boss Top Priority: Daily Driver Features (Gvim-compatible & Layout)
+#### 4.1-4.3 Daily Driver Features & Advanced Typing Assistance [v0.4.0-alpha]
 - [x] **[Common (Gvim / ViVi)] Split & Vertical Split Windows (`:split`, `:vsplit`, `Ctrl-w`)**
   - Split views (horizontal & vertical) for the same or multiple buffers.
   - Window focus switching (`Ctrl-w h/j/k/l`) and window resizing.
@@ -158,7 +158,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 - [x] **[Common (ViVi / OpenViVi)] Keyboard Macro Record & Playback (`Ctrl-Alt-r` / `Ctrl-Alt-p`, `F9` / `F10`, `:macro`, `@q`)**
   - Interactive keystroke sequence recording and replay.
 
-#### 4.4 ViVi-Exclusive Vi Command Extensions & Navigation (ViVi 3 / ViVi 4 Compatible)
+#### 4.4 ViVi-Exclusive Vi Command Extensions & Navigation [v0.5.0-alpha]
 - [x] **[ViVi 3 / ViVi 4] Romaji Japanese Search (Migemo / `g/` Command)**
   - Incremental Japanese search directly via Romaji keyboard input without toggling IME (SKK dictionary / Migemo integration, `n`/`N` navigation).
 - [x] **[ViVi 3 / ViVi 4] fFtT Full-width Character Matching (`fFtT.txt` Mapping)**
@@ -174,7 +174,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 - [x] **[Common (ViVi / OpenViVi)] Tag Jump (`Ctrl-]`, `Ctrl-[`, `Alt-]`, `Alt-[`)**
   - Code navigation to function/variable/local declarations via `tags` files and AST analysis with history stack.
 
-#### 4.5 Tooling, File Management & Projects (ViVi 3 / ViVi 4 Compatible)
+#### 4.5 Tooling, File Management & Projects [v0.6.0-alpha]
 - [x] **[Custom] Help System Infrastructure (Markdown Topic Docs & In-App Viewer `:help` / `F1`)**
   - Topic-based Markdown help documentation organized in `doc/help/`, viewable directly in-app via `:help [topic]` or `F1` (with scrolling, Markdown styling, and full modal display).
 - [x] **[Common (ViVi / OpenViVi)] Project-wide Grep Search (`:grep`)**
@@ -201,7 +201,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - Standalone PDF 1.4 direct generation (supports page sizing, line numbers, headers/footers).
   - **Markdown Print Preview**: Modal paginated print preview with headers and footers.
 
-#### 4.6 TUI/UX Editing & Visual Enhancements (Phase 4.6)
+#### 4.6 TUI/UX Editing & Visual Enhancements [v0.7.0-alpha]
 - [x] **[OpenViVi] Modified / Saved Line Gutter Indicators (Change Markers)**
   - Visual gutter indicators and highlighting for unsaved modified lines (yellow) and saved lines (green) in TUI line number area.
 - [x] **[OpenViVi] Recent Files & Favorite Files Management**
@@ -209,7 +209,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 - [x] **[Gvim / Custom] Invisible / Whitespace Character Visualization (`:set list` / `listchars`)**
   - Toggle visual markers for fullwidth spaces (`□`), tabs (`▸---`), and end-of-line symbols (`$`).
 
-#### 4.7 Immediate Feedback Issues
+#### 4.7 Immediate Feedback Issues [v0.8.0-alpha]
 - [x] **Fix keisen protected edit when inserting Japanese / full-width characters**
   - In keisen protected edit mode, inserting a 2-column wide Japanese/full-width character consumes 2 trailing spaces (or 1 full-width space) to prevent pushing the right box border.
 - [x] **Keisen protected edit for Normal mode `x` / `X` deletion**
@@ -228,7 +228,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 - [x] **Romaji search (Migemo) Kanji matching with embedded SKK dictionary**
   - Embedded standard SKK dictionary entries (`BUILTIN_SKK_ENTRIES`) directly into the binary for zero-configuration, instant offline Kanji matching. Added `:migemo <query>` ex command and automatic viewport scroll tracking to matched occurrences.
 
-#### 4.8 ViVi / OpenViVi Advanced Editing Power Tools & Hardening (Phase 4.8)
+#### 4.8 Advanced Editing Power Tools & Hardening [v0.9.0-alpha: Alpha Final]
 - [x] **[Common (ViVi / OpenViVi)] Multi-Tab Buffer Management (Tab Bar UI)**
   - Top tab bar displaying active buffers with independent per-tab split window layouts (`:split`, `:vsplit`)
   - Key controls & commands: `gt`, `gT`, `[count]gt`, `:tabnew [file]`, `:tabclose` (`:tabc`), `:tabnext`, `:tabprev`
@@ -260,10 +260,22 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - **XML (`.xml`)**: Tag names, attribute names, attribute values, `<?xml ...?>` declarations, `<!-- ... -->` comments, `<![CDATA[...]]>`
   - **bat / cmd (`.bat`, `.cmd`)**: Batch commands (`echo`, `set`, `goto`, `call`, `if`, `for`, `pause`, `rem`), env variables (`%VAR%`), labels (`:label`), comments (`rem`, `::`)
   - Status bar language badges (`[Go]`, `[Ruby]`, `[TOML]`, `[PowerShell]`, `[YAML]`, `[XML]`, `[Batch]`)
+- [x] **[Design & Maintainability] Large-Scale Module Split Refactoring**
+  - Modularized all large components (`app/`, `event/`, `syntax/`, `keisen/`, `engine/exec.rs`, `undo/`), achieving sub-1,000 lines across 100% of production source files.
 
 ---
 
-### Phase 5: Future Enhancements & Desktop GUI (egui) / High-Res Graphics (Future)
+## 3. Currently in Progress: Beta Testing & Practical Verification (v0.9.0-beta)
+- [ ] **[Verification & Dogfooding] Boss's Hands-on Manual Testing (`MANUAL_TEST_GUIDE.md`)**
+  - Daily coding and production usage, discovering friction points, edge-cases, and bugs.
+- [ ] **[Distribution & CI/CD] GitHub Actions Automated Release Pipeline (`.github/workflows/release.yml`)**
+  - Windows x86_64 portable zip & SHA256 checksum generation triggered on `v*` tags.
+- [ ] **[Packaging] Scoop Bucket Maintenance (`vivivi.json`) & Winget Integration**
+- [ ] **[General Availability Criteria] TUI Edition Official GA Release Sign-off (v1.0.0)**
+
+---
+
+## 4. Future Vision: Next-Gen Desktop GUI & Rich Graphics (v2.0.0 / Future)
 - [ ] **[OpenViVi (Qt Rewrite)] Desktop GUI (egui / eframe) Frontend**
   - Cross-platform desktop GUI frontend powered by OpenGL/wgpu backend alongside existing terminal TUI.
 - [ ] **[OpenViVi] Minimap Overview (egui-backed)**

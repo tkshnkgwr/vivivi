@@ -1,247 +1,201 @@
-# vivivi: Changelog (CHANGELOG)
+# vivivi: Changelog
 
-All notable changes to this project will be documented in this file.
-The format is based on [Keep a Changelog](https://keepachangelog.com/).
+All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased]
+## [0.9.0-beta] - 2026-10-16 (Testing / Dogfooding)
+
+### Changed
+- **Feature Freeze & Transition to Beta Testing**:
+  - Following the complete implementation of all planned features (Phases 1 through 4.8) and large-scale modularization refactoring, the development phase has officially transitioned from Alpha (feature addition) to Beta (validation, hardening, and dogfooding).
+  - Started manual testing and real-world daily usage verification based on `MANUAL_TEST_GUIDE.md`.
+
+---
+
+## [0.9.0-alpha] - 2026-10-16 (Alpha Final)
 
 ### Added
-- **`vivivi-core`**:
-  - Implemented `GapBuffer<T>` ported from OpenViVi ($O(1)$ local edits, dynamic resizing, gap movement).
-  - Implemented transactional `UndoMgr` (nested undo blocks, continuous typing merge, save point tracking).
-  - Implemented `TextBuffer` integrating `GapBuffer` and `UndoMgr`.
-  - Implemented character encoding and newline conversion module (`encoding.rs`) with BOM detection, UTF-8, Shift_JIS/CP932, EUC-JP, UTF-16LE/BE, and CRLF/LF/CR normalization.
-  - Implemented matching parentheses detection module (`paren.rs`) for `()`, `{}`, `[]`, `<>` with comment/string skipping and cursor pair detection.
-  - **Persistent Undo (`undo.rs`, `buffer.rs`)**:
-    - Standalone text-based serialization and deserialization, and disk file persistence (`undofile_path()`, `save_undofile()`, `load_undofile()`).
-- **`vivivi-vi`**:
-  - Defined Vi modes (Normal, Insert, Replace, Visual, VisualLine, VisualBlock, CommandLine).
-  - **Added Replace Mode (`Replace` / `R`)**:
-    - Enter replace mode from normal mode via capital `R` (`ViMode::Replace`).
-    - Fixed Vi mode state machine to reliably return to `ViMode::Normal` upon finishing searches (`/`, `?`) or ex commands (`:...`).
-  - Defined basic commands, motions, operators, and registers.
-  - Implemented cursor motions (`h`, `j`, `k`, `l`, `w`, `b`, `e`, `W`, `B`, `E`, `0`, `^`, `$`, `gg`, `G`, and `%` matching paren jump).
-  - Implemented operator execution engine (`d`, `y`, `c` + motion / `dd`, `yy`, `cc`, `D`, `C`, `Y`, `x`, `X`).
-  - Implemented register management system (unnamed register, `"a` - `"z`, uppercase append, line/char paste `p`, `P`).
-  - **Full Visual Block (BOX Selection) Support (`VisualBlock` / `Ctrl-v`)**:
-    - Block selection, block yank (`y`), block delete (`d`, `x`), and `RegisterContent::BlockWise` storage.
-    - Block multi-line insert (`I`, `A`): Enters insert mode at column boundary and batch-applies input across selected lines upon `Esc`.
-    - Smart block paste (`p`, `P`): Automatic space padding for shorter lines during block pasting.
-    - Visual selection case inversion (`~`).
-  - Implemented forward/backward search (`/`, `?`, `n`, `N`, `*`, `#`) with wraparound.
-  - Implemented ex command executor (`:w`, `:q`, `:s`, `:%s/before/after/g` regex substitution, `:line` jump).
-  - Stateful `CommandParser` (accumulating counts, register prefixes, 2-key commands in real time).
-  - **ViVi Vi Command Extensions & Navigation**:
-    - `fFtT` full-width auto-matching (`f`, `F`, `t`, `T`, `;`, `,`) and operator integration (`df)`, `ct]`).
-    - Word search under cursor (`*`, `#` exact match, `g*`, `g#` partial match, `g<` prefix match, `g=` suffix match).
-    - Numeric and alphabet increment/decrement (`#+`, `##`, `#-`) and boolean toggle (`#!`).
-    - Last edit location jump (`@`, `'@`, `` `@ ``) and above-line text replication (`=<char>`).
-    - Local and global marks (`ma`-`mz`, `mA`-`mZ`, jump `'a`, list `:marks`).
-    - Tag navigation (`Ctrl-]`, `Ctrl-t`, `Ctrl-[`, `:tag`, `:tags` with AST syntax analysis fallback).
-    - **Code Folding Commands & Keybindings (`command.rs`, `parser.rs`)**:
-      - `zc` (close fold under cursor), `zo` (open fold), `za` (toggle fold), `zM` (close all folds), `zR` (open all folds), `z<lvl>` (fold deeper than level).
-    - **Phase 4.5 Ex Commands Integration (`engine/ex.rs`)**:
-      - `:grep <pattern> [dir]`, `:cnext` / `:cn`, `:cprev` / `:cp` (in-project Grep and QuickFix navigation).
-      - `:todo` / `:undone` (extract ToDo/FIXME tags).
-      - `:fold <toggle|close|open|all|none>` (folding operations).
-      - `:filer [path]` (2-pane directory browser).
-      - `:difflog` / `:blame` (revision backup history, diff restoration, and lightweight blame).
-      - `:preview` / `:print` (A4 print preview modal).
-      - `:pdf [path]` (standalone zero-dependency PDF 1.4 direct export).
-      - `:maketags [dir]` (batch project tags file generation).
-      - `:undofile <save|load> [path]` (manual persistent undo operations).
-- **`vivivi-modes`**:
-  - **Expression Substitution Engine (`expr_subst.rs`)**:
-    - Dynamic arithmetic/script evaluation for `:s/pattern/expression/e` (`+`, `-`, `*`, `/`, `%`, `$0`-`$9` capture groups, `$i`/`$n` counter, `$line`, string concatenation).
-  - **Full-width Character Matching Mapping (`fftt.rs`)**:
-    - Transparent mapping and forward/backward search matching ASCII characters to full-width variants.
-  - Defined Inline CSV/TSV mode specifications based on ViVi 4.
-  - Ported Unicode box-drawing lookup table from OpenViVi's `keisen.cpp`.
-  - **Overhauled Keisen Geometric Corner-Joining Algorithm (Clean Box Corners)**:
-    - Introduced `update_keisen_cell` and `neighbor_connections` to inspect actual physical connections with neighboring cells in 4 directions, eliminating unwanted dangling stubs (T-junctions `┬`, `┤`, `┴`, `├`) and cleanly joining corners (`┌`, `┐`, `└`, `┘`).
-    - Added automatic buffer row expansion and trailing space padding when drawing vertical lines beyond the bottom line.
-  - Implemented keisen drawing/erasing/joining step logic (`step`) with automatic line expansion and perpendicular checking.
-  - Implemented box-internal text alignment algorithms (Left, Center, Right).
-  - Implemented inline CSV formatting (`format_line`) with quote hiding and active-line raw display.
-  - Implemented raw buffer cell range resolution (`cell_range_in_raw_line`).
-  - Implemented syntax highlighting tokenizer (`syntax.rs`) supporting Rust, C/C++, Python, JS/TS, JSON, and Markdown keywords, types, strings, numbers, and comments.
-  - **Character Conversion Module (`conv.rs`)**:
-    - Batch conversions: Full-width ⇄ Half-width alphanumeric, Hiragana ⇄ Katakana, Half-width Katakana ⇄ Full-width Katakana (with voiced sound mark synthesis/decomposition), Uppercase ⇄ Lowercase, and SwapCase.
-  - **Outline Analysis Module (`outline.rs`)**:
-    - Symbol hierarchy extraction for Markdown (`#` - `######`), Rust (`fn`, `struct`, `impl`, `enum`, `trait`, `mod`), C/C++, and Python.
-  - **Text Difference (DIFF) Engine (`diff.rs`)**:
-    - Longest Common Subsequence (LCS) algorithm, Unified Diff generation (`create_unified_diff`), patch application (`apply_unified_patch`), and 2-pane side-by-side view data generation (`create_side_by_side`).
-  - **Differential Revision Backup (DiffLog / `difflog.rs`)**:
-    - Per-save diff appending (`.difflog`), generation listing, full state restoration from initial revision (`restore_from_initial`), and per-line last modified revision calculation (lightweight blame: `compute_blame`).
-  - **Template Auto-Loading Module (`template.rs`)**:
-    - Extension-based `.template.<ext>` discovery, macro variable expansion (`%FileName%`, `%FileBase%`, `%Ext%`, `%Date%`, `%Time%`, `%UserName%`, `%Cursor%`).
-  - **In-Code ToDo Extractor (`todo.rs`)**:
-    - In-buffer and directory recursive scanning (`scan_buffer_todos`, `scan_dir_todos`), extracting `TODO`, `FIXME`, `BUG`, `UNDONE`, `HACK`, `NOTE`, `XXX`.
-  - **Code Folding Engine (`folding.rs`)**:
-    - Indentation hierarchy analysis (`compute_indent_folds`), fold toggling, hidden line resolution, and collapsed preview line generation.
-  - **Fast Project Grep Search Engine (`grep.rs`)**:
-    - Hidden/build directory exclusion, binary skipping, regex pattern matching, and QuickFix-style navigation session (`next`, `prev`, `select`).
-  - **2-Pane Directory Browser (Filer / `filer.rs`)**:
-    - Dual independent panes (`FilerPane`), Tab focus toggling, directory navigation, 1-key file select, copy, move, and delete operations.
-  - **Project Management Engine (`project.rs`)**:
-    - Multi-file project workspace handling and batch `tags` file generation (`:maketags`).
-  - **Print Preview & Direct PDF Export Engine (`print.rs`)**:
-    - Standard A4 pagination with line numbers, header, and footer, preview formatting, and zero-dependency standalone PDF 1.4 direct export (`export_to_pdf`).
-  - **Built-in SKK Dictionary for Romaji Japanese Search (Migemo / `migemo.rs`)**:
-    - Embedded static SKK dictionary `BUILTIN_SKK_ENTRIES` covering essential high-frequency Japanese vocabulary (search, Japan, Tokyo, world, settings, file, save, quit, delete, move, edit, function, variable, confirm, split, sage, boss, etc.) so that Kanji matching works out-of-the-box without external dictionary files.
-  - **Keisen Box Protection for vi `x` / `X` Character Deletions (`keisen.rs`)**:
-    - Automatically pad with spaces when deleting characters via `x` or `X` in Normal mode when Keisen protection is enabled, preserving geometric box layout.
-- **`vivivi-app`**:
-  - Implemented full-screen Terminal UI (TUI) frontend powered by `ratatui` (v0.29) and `crossterm` (v0.28).
-  - Terminal lifecycle management with Alternate Screen, Raw mode, and panic recovery hooks.
-  - Rendered editor buffer with line numbers, cursor row highlighting, scrolling, and inline CSV alignment view.
-  - Rendered real-time syntax highlighting and matching parenthesis highlighting.
-  - **Split & Multi-Window Views (Split / Vsplit)**:
-    - Horizontal split (`:split` / `:sp`), vertical split (`:vsplit` / `:vs`), window close (`:close` / `:c`), and single-window isolation (`:only`).
-    - Gvim-compatible `Ctrl-w` window keybindings (`Ctrl-w w`, `Ctrl-w s`, `Ctrl-w v`, `Ctrl-w c`, `Ctrl-w o`, `Ctrl-w h/j/k/l`).
-    - Multi-window layout rendering with active window borders and titles.
-  - **Outline Side Pane View**:
-    - Toggle outline display via `F8` key or `:outline` ex command.
-    - Side pane navigation with `Ctrl-o` focus, `j`/`k` item navigation, and `Enter` instant jump to target line.
-  - **Character Conversion Ex Commands**:
-    - Batch whole-buffer conversion via `:%zenkaku`, `:%hankaku`, `:%hiragana`, `:%katakana`, `:%hankata`, `:%zenkata`, `:%toupper`, `:%tolower`.
-  - **Text Alignment, Renumbering & Line Editing Assists**:
-    - Multi-line columnar alignment via `:align <target>` (`=`, `:`, `,`, `//`).
-    - Ordered list renumbering via `:renumber [start] [step]` / `:renum`.
-    - Batch head/tail insertion via `:insbeg`, `:insend`, and `:begend`.
-  - **High-Speed Input & Macro Assistance**:
-    - In-buffer cyclic dynamic word completion (dabbrev / `Ctrl-l`, `Ctrl-m`).
-    - Static abbreviation expansion (abbrev / `Ctrl-;`, `Alt-;`, `F4`, `:abbrev`).
-    - Dynamic macro (Masui Repeat / `Alt-m`, `Ctrl-Alt-m`, `:dmacro`) recurring pattern detection and replay.
-    - Lexical edit prediction (LexEdit / `Ctrl-j`, `:lexedit`) based on edit history.
-    - Zen-Coding (Emmet) expansion (`Ctrl-,`, `Alt-,`, `:zen`) for HTML shorthand.
-    - Full keyboard macro recording and replay (`Ctrl-Alt-r` / `Ctrl-Alt-p`, `F9` / `F10`, `:macro`).
-  - **Advanced Navigation, Search & Math**:
-    - Romaji Japanese incremental search (Migemo / `g/`) with SKK dictionary support.
-    - Box selection numeric calculation (`:calc`, `:sum`, `:total`) for count, sum, avg, stddev.
-    - Interactive clipboard history modal (`F6`, `:cbhist`).
-    - Built-in documentation viewer (`F1`, `:help [topic]`) and newly added topics (`expr_subst.md`, `vivi_cmd.md`).
-    - Expression substitution (`:s/.../.../e`, `:%s/.../.../e`) integrated into command-line UI.
-    - Full-width character matching, word searching, incrementing, marks, and tag navigation integrated into TUI.
-  - **AI Integration Architecture**:
-    - Interactive command dispatch slots for `:ai <instruction>` and `:ai commit`.
-    - Published zero-latency AI architecture specification (`docs/ja/AI_INTEGRATION_DESIGN.md`).
-  - **Tools & File Management TUI Integration (Phase 4.5)**:
-    - Auto-append DiffLog revisions (`.difflog`) and auto-save Persistent Undo (`.undofile`) on file save.
-    - Auto-apply templates (`.template.<ext>` macro substitution) and auto-restore Persistent Undo on file open.
-    - Full-screen print preview modal UI (`ui/preview.rs`) with keyboard navigation (`j`/`k`, `d`/`u`) and exit (`Esc`/`q`).
-    - *(Note: Desktop GUI (egui) and GUI-dependent features were migrated to Phase 5 per user instruction, focusing entirely on TUI and core tooling capabilities)*.
-  - Real-time Visual / VisualLine / VisualBlock selection background highlighting.
-  - Real-time status bar displaying Vi mode, keisen/CSV badges, filename, modified flag, encoding/newline/language badges, line/col, and percentage.
-  - Preserved original charset and newline sequence upon file save.
-  - Interactive command-line UI for ex commands (`:w`, `:q`, `:wq`, `:align`, `:%s`).
-  - Native hardware blinking cursor integration.
-  - **TUI/UX Editing & Visual Enhancements Integration (Phase 4.6)**:
-    - **Modified / Saved Line Gutter Indicators (Change Markers)**: Real-time gutter indicators beside line numbers showing unsaved modified lines (yellow `▌`) and saved lines (green `▌`) (`:set gutter` / `:set nogutter`).
-    - **Recent Files (MRU) & Favorite Files Modal**: Quick access to recent and pinned files (`F7` / `:recent` / `:mru`), instant buffer loading on `Enter`, bookmark toggling (`f`), and entry removal (`d`).
-    - **Invisible / Whitespace Character Visualization**: Toggle visible markers for full-width spaces (red highlighted `□`), tab indents (`▸---`), and end-of-line symbols (`$`) via `:set list` / `:set nolist`.
-    - **Integrated Tool Ex Commands**: Interactive dispatch for `:todo` / `:undone` (in-code ToDo extraction), `:diff` (pre-save unified diff), `:difflog` (revision history), `:filer` (2-pane directory browser), and `:preview` / `:print` (paginated print preview).
-  - **Built-in Documentation Expansion**:
-    - Created `doc/help/visual.md` covering visual and editing enhancements.
-    - Updated `doc/help/index.md` and ensured strict table column vertical alignment.
-  - **Mode-Dependent Terminal Cursor Style Synchronization**:
-    - Leveraged Crossterm's `SetCursorStyle` to dynamically synchronize native terminal cursor shape: Normal/Visual mode: Block (`SteadyBlock`), Insert mode: Bar (`SteadyBar`), Replace mode: Underline (`SteadyUnderScore`). Automatically resets to terminal default (`DefaultUserShape`) on exit and panic.
-  - **Interactive Replace Mode (`R`) Handling in TUI**:
-    - Character-by-character in-place replacement, line extension on end-of-line writes, transactional Undo integration, and `Esc` return to Normal mode.
-  - **Accurate Search Landing, Real-Time Highlighting (`hlsearch`) & Clearance (`:noh`)**:
-    - Fixed byte offset vs. character index mismatch during Romaji (Migemo) and regex searches, landing the cursor precisely on the first character of matched tokens.
-    - Added real-time orange background / bold black highlighting for all in-viewport search occurrences (`active_search_regex`).
-    - Added search highlight clearance via `:noh`, `:nohl`, `:nohlsearch`, `:set nohls`, `:set hls`, and Normal mode `Esc` key (`clear_search_highlight`).
-  - **Keisen Mode Key Modifier Guard (Fixing Bare Arrow Drawing Bug)**:
-    - Guaranteed that box drawing and erasing only occur when `Ctrl`/`Alt` or `Shift` modifier keys are pressed, allowing plain arrow keys and `h`/`j`/`k`/`l` to move the cursor normally even when Keisen mode is active.
-  - **Vim-Compatible Window Tree Hierarchy (`window.rs`, `app.rs`)**:
-    - Replaced flat window collection with a recursive binary tree (`WindowTreeNode::Leaf`, `WindowTreeNode::Split`).
-    - After `:split` horizontally, executing `:vsplit` inside the lower window only splits that child pane rather than rearranging the entire viewport into 3 columns.
-    - Geometric neighbor navigation (`navigate_window`) supporting `Ctrl-W h / j / k / l` and arrow keys based on bounding box geometry.
-    - Independent scroll offsets and buffer tracking per window.
-  - **Display Column (Visual Column) Based Horizontal Scrolling (`editor.rs`, `app.rs`)**:
-    - Overhauled horizontal scrolling and character clipping for long lines (>80 columns) to measure actual rendered visual width (handling 2-column East Asian characters and tabs) rather than raw character counts. The viewport smoothly tracks the cursor up to end-of-line (`$`) and synchronizes the hardware cursor position.
-  - **Outline Navigation Polish & Shortcut Unification (`outline.rs`, `event.rs`)**:
-    - Supported both `F2` (OpenViVi convention) and `F8` (modern convention) for toggling the outline pane.
-    - Automatically shift focus to the outline pane upon opening.
-    - Convenient switching between editor and outline panes via `Tab` / `Esc`.
-  - **Migemo Search Commands & Synchronized Viewport Jump (`event.rs`, `app.rs`)**:
-    - Added `:migemo <query>` / `:m <query>` command-line interface.
-    - Seamlessly scroll and position window cursor upon landing on search match locations.
-  - **Comprehensive Manual Testing Guide (`docs/en/MANUAL_TEST_GUIDE.md`, `docs/ja/MANUAL_TEST_GUIDE.md`)**:
-    - Structured step-by-step verification procedures covering window splitting, keisen protection, outline navigation, horizontal scrolling, Migemo, and encodings.
-  - **Multi-Level Outline Parsing & Content-Based Language Detection (`vivivi-modes/outline.rs`)**:
-    - Added `detect_language_from_content` to auto-detect file language from leading content lines when the buffer is unnamed or classified as `PlainText`.
-    - Implemented full multi-level Markdown heading extraction (H1 through H6) with nested visual indentation.
-    - Added transparent modifier parsing for Rust symbols (`pub(crate) fn`, `const fn`, `unsafe fn`, `pub type`, `macro_rules!`, etc.) to comprehensively list all symbols.
-  - **Automatic Vertical Scrolling in Outline Pane (`ui/outline.rs`)**:
-    - Synchronized vertical scroll offset with the active cursor selection, ensuring selected items remain in viewport view even in large files.
-  - **Vim-Compatible `Insert` Key Mode Switching & Toggle (`event.rs`)**:
-    - Pressing `Insert` in Normal mode enters Insert mode (equivalent to `i`).
-    - Pressing `Insert` in Insert mode switches to Replace mode.
-    - Pressing `Insert` in Replace mode returns to Insert mode, providing seamless Vim-compatible toggle behavior.
-  - **Language Synchronization on File Save & Manual Filetype Switching (`app.rs`, `event.rs`)**:
-    - Automatically update buffer syntax highlighting and outline language upon saving with `:w <path>`.
-    - Implemented dynamic filetype switching commands (`:set ft=<lang>` / `:set filetype=<lang>`).
-  - **Migemo Clean MIT Built-in Dictionary & Punctuation/Symbols (`migemo.rs`)**:
-    - Prioritized licensing safety by replacing built-in data with a cleanly authored, 100% MIT-compliant embedded dictionary (`builtin_mit_dict.txt`).
-    - Supported bracket query (`kakko`) matching Kanji (`括弧`) as well as all bracket symbols (`「` `」` `(` `)` `（` `）` `【` `】` `『` `』` `[` `]` `［` `］` `{` `}` `｛` `｝` `〈` `〉`, etc.).
-    - Supported arrow query (`yajirushi`) matching Kanji (`矢印`) and direction symbols (`→` `←` `↑` `↓` `⇒` `⇔` `->` `=>` `<-`).
-    - Added comprehensive editor vocabulary for circles (`maru`), dots (`ten`), wave dashes (`kara`/`nami`), and directions (`migi`/`hidari`/`ue`/`shita`).
-    - Added dynamic prefix match expansion for romaji queries with 2+ syllables, enhancing incremental typing experience.
-    - Added automatic discovery and transparent multi-encoding loading for external dictionaries (`%USERPROFILE%\.vivivi\SKK-JISYO.*` and current working directory).
-    - Added comprehensive Acknowledgments section in `README.md` and `README_JA.md` honoring the SKK Project, Migemo creator, and openViVi.
-  - **Comprehensive Help & Documentation Overhaul (`doc/help/`, `docs/`)**:
-    - Synchronized and updated built-in help files (`basic.md`, `index.md`, `keisen.md`, `migemo.md`, `outline.md`, `split.md`) and all design specifications across Japanese and English docs with latest capabilities.
-  - **Phase 4.8 Advanced Editing Power Tools & Hardening**:
-    - **Multi-Tab Buffer Management (Tab Bar UI)**:
-      - Implemented `TabPage` maintaining independent window split trees, active buffers, and cursor positions per tab.
-      - Automatically render a top-line tab bar when 2+ tabs are open, highlighting the active tab and indicating unsaved modifications (`[+]`).
-      - Full support for `gt`, `gT`, `[count]gt`, `:tabnew [file]`, `:tabclose` (`:tabc`), `:tabnext`, `:tabprev`, `:tabonly`.
-    - **Visual Block Column Operations**:
-      - Supported multi-line columnar operations on `Ctrl-v` rectangular selections: `I<text>Esc` (prepend column), `A<text>Esc` (append column), `c<text>Esc` (replace block), `r<char>` (fill block), and `d` / `x` (delete block and shift text).
-    - **Configuration File & Customization (`config.toml` / `vivivirc`)**:
-      - Automatic loading of settings from `%USERPROFILE%\.vivivi\config.toml` (or `~/.vivivi/config.toml`).
-      - Persistent options for editor settings (`tab_stop`, `number`, `relative_number`, `gutter`, `hlsearch`, `clipboard`, `theme`), invisible characters, and key remapping.
-      - Added dynamic runtime `:config` reload command, and `:set number`, `:set relativenumber`, `:set tabstop`, `:set clipboard` commands.
-    - **Explicit Encoding Reopening & Line Ending Format (:e ++enc, :set fenc, :set ff)**:
-      - `:e ++enc=sjis [file]`, `:e ++enc=euc-jp [file]`: Force reload file using specified character encoding.
-      - `:set fenc=utf-8 / sjis / euc-jp`: Dynamically change file encoding for next save.
-      - `:set ff=unix / dos`: Convert line endings (LF vs CRLF) on save.
-    - **Crash Recovery & Auto-Save Swap Files (.swp)**:
-      - Periodic background swap file checkpoints every 20 keystrokes and on `Esc` (`.<filename>.swp` format).
-      - Warning prompt upon launching if an existing swap file is detected after an unexpected exit or crash.
-      - Implemented `:recover` (restore unsaved buffer) and `:swap` (inspect swap file metadata) commands.
-      - Automatic cleanup of swap files upon successful save or clean exit.
-    - **System Clipboard Integration ("+y, "*p)**:
-      - Integrated `arboard` crate for cross-platform `SystemClipboard` provider.
-      - Supported `"+y` / `"*y` (yank directly to OS clipboard) and `"+p` / `"*p` (paste from OS clipboard).
-      - Added `:set clipboard=unnamed / unnamedplus / none` for transparent synchronization with standard Vi registers.
-    - **Syntax Highlighting Expansion (18 Languages Supported)**:
-      - Added syntax tokenizers and status bar badges for Go (`.go`), Ruby (`.rb`), TOML (`.toml`), PowerShell (`.ps1`), YAML (`.yaml`), XML (`.xml`), and Windows Batch (`.bat`, `.cmd`).
-    - **Built-in Help System Expansion**:
-      - Added `doc/help/tab.md`, `doc/help/config.md`, `doc/help/recovery.md`, `doc/help/clipboard.md`.
-      - Synchronized `doc/help/index.md`, `doc/help/syntax.md`, `doc/help/visual.md`, and `doc/help/basic.md`.
-  - Expanded unit and integration test suite (over 550 tests passing, 0 clippy warnings, fmt check passed).
+- **Phase 4.8 Advanced Editing Power Tools & Hardening**:
+  - **Multi-Tab Buffer Management (Tab Bar UI)**:
+    - Implemented `TabPage` maintaining independent window split trees, active buffers, and cursor positions per tab.
+    - Automatically render a top-line tab bar when 2+ tabs are open, highlighting the active tab.
+    - Full support for `gt`, `gT`, `[count]gt`, `:tabnew [file]`, `:tabclose` (`:tabc`), `:tabnext`, `:tabprev`, `:tabonly`.
+  - **Visual Block Column Operations**:
+    - Supported multi-line columnar operations on `Ctrl-v` rectangular selections: `I<text>Esc` (prepend column), `A<text>Esc` (append column), `c<text>Esc` (replace block), `r<char>` (fill block), and `d` / `x` (delete block and shift text).
+  - **Configuration File & Customization (`config.toml` / `vivivirc`)**:
+    - Automatic loading of settings from `%USERPROFILE%\.vivivi\config.toml` (or `~/.vivivi/config.toml`).
+    - Persistent options for editor settings (`tab_stop`, `number`, `relative_number`, `gutter`, `hlsearch`, `clipboard`, `theme`), invisible characters, and key remapping.
+    - Added dynamic runtime `:config` reload command, and `:set number`, `:set relativenumber`, `:set tabstop`, `:set clipboard` commands.
+  - **Explicit Encoding Reopening & Line Ending Format (:e ++enc, :set fenc, :set ff)**:
+    - `:e ++enc=sjis [file]`, `:e ++enc=euc-jp [file]`: Force reload file using specified character encoding.
+    - `:set fenc=utf-8 / sjis / euc-jp`: Dynamically change file encoding for next save.
+    - `:set ff=unix / dos`: Convert line endings (LF vs CRLF) on save.
+  - **Crash Recovery & Auto-Save Swap Files (.swp)**:
+    - Periodic background swap file checkpoints every 20 keystrokes and on `Esc` (`.<filename>.swp` format).
+    - Warning prompt upon launching if an existing swap file is detected after an unexpected exit or crash.
+    - Implemented `:recover` (restore unsaved buffer) and `:swap` (inspect swap file metadata) commands.
+    - Automatic cleanup of swap files upon successful save or clean exit.
+  - **System Clipboard Integration ("+y, "*p)**:
+    - Integrated `arboard` crate for cross-platform `SystemClipboard` provider.
+    - Supported `"+y` / `"*y` (yank directly to OS clipboard) and `"+p` / `"*p` (paste from OS clipboard).
+    - Added `:set clipboard=unnamed / unnamedplus / none` for transparent synchronization with standard Vi registers.
+  - **Syntax Highlighting Expansion (18 Languages Supported)**:
+    - Added syntax tokenizers and status bar badges for Go (`.go`), Ruby (`.rb`), TOML (`.toml`), PowerShell (`.ps1`), YAML (`.yaml`), XML (`.xml`), and Windows Batch (`.bat`, `.cmd`).
+  - **Built-in Help System Expansion**:
+    - Added `doc/help/tab.md`, `doc/help/config.md`, `doc/help/recovery.md`, `doc/help/clipboard.md`.
+    - Synchronized `doc/help/index.md`, `doc/help/syntax.md`, `doc/help/visual.md`, and `doc/help/basic.md`.
 
 ### Changed / Refactored
 - **Large-Scale Module Decomposition & Architecture Refactoring**:
   - Decomposed oversized source files (>1,000 lines) across all crates into focused submodules with clean separation of concerns, maintaining 100% backward compatibility of public APIs:
-    - `vivivi-app/src/tui/app.rs` (3,440 lines) $\to$ `tui/app/` (`mod.rs`, `tabs.rs`, `windows.rs`, `files.rs`, `tools.rs`, `tests.rs`): Separated app state management, tab operations, window layouts, file I/O, built-in tools (binary viewer, help, outline).
-    - `vivivi-app/src/tui/event.rs` (1,696 lines) $\to$ `tui/event/` (`mod.rs`, `modes.rs`, `ex.rs`): Separated main event loop, per-mode key handlers, and ex command execution loops.
-    - `vivivi-modes/src/syntax.rs` (1,563 lines) $\to$ `syntax/` (`mod.rs`, `keywords.rs`, `tests.rs`): Separated syntax parsing/tokenization engine from language keyword tables (Rust/Python/Go/etc.).
-    - `vivivi-modes/src/keisen.rs` (1,240 lines) $\to$ `keisen/` (`mod.rs`, `draw.rs`, `protect.rs`, `tests.rs`): Separated box-drawing state machine, cross/arrow/branch logic, and character protection algorithms.
-    - `vivivi-vi/src/engine/mod.rs` (1,182 lines) $\to$ `engine/` (`mod.rs`, `exec.rs`): Separated ViEngine core state machine from command execution dispatch (`execute`, tag jump, toggles).
-    - `vivivi-core/src/undo.rs` (960 lines) $\to$ `undo/` (`mod.rs`, `serialize.rs`, `tests.rs`): Separated undo/redo transaction engine from undofile serialization/deserialization.
-  - Every production source file (excluding test files) across the entire workspace is now strictly under 1,000 lines (most under 800 lines), significantly boosting readability and maintainability. All 354+ unit, integration, and doc tests pass with 0 warnings.
-- **Code Modularization & Source Decomposition Refactoring**:
-  - Decomposed oversized `vivivi-vi`'s `engine.rs` (1,441 lines) into focused submodules under `engine/` (`motion.rs`, `operate.rs`, `visual.rs`, `ex.rs`, `mod.rs`, `tests.rs`), keeping all files between 150-350 lines.
-  - Decomposed `vivivi-app`'s `tui/ui.rs` (514 lines) into structured modules under `ui/` (`editor.rs`, `outline.rs`, `status.rs`, `mod.rs`), improving extensibility for future Grep panes and DIFF views.
-  - Extracted editor window state (`SplitAxis`, `EditorWindow`) from `app.rs` into `tui/window.rs`.
-  - All source files across the entire workspace now strictly remain well under 500 lines, dramatically improving readability and maintainability.
-- **Window Hierarchy Tree Structure & Test Optimization**:
-  - Restructured window management into a recursive tree (`WindowTreeNode`) and integrated geometric proximity navigation.
-  - Expanded and optimized test suites (all 208 tests pass, doctest parsing optimized, 0 clippy warnings, clean formatting).
+    - `vivivi-app/src/tui/app.rs` (3,440 lines) $\to$ `tui/app/` (`mod.rs`, `tabs.rs`, `windows.rs`, `files.rs`, `tools.rs`, `tests.rs`).
+    - `vivivi-app/src/tui/event.rs` (1,696 lines) $\to$ `tui/event/` (`mod.rs`, `modes.rs`, `ex.rs`).
+    - `vivivi-modes/src/syntax.rs` (1,563 lines) $\to$ `syntax/` (`mod.rs`, `keywords.rs`, `tests.rs`).
+    - `vivivi-modes/src/keisen.rs` (1,240 lines) $\to$ `keisen/` (`mod.rs`, `draw.rs`, `protect.rs`, `tests.rs`).
+    - `vivivi-vi/src/engine/mod.rs` (1,182 lines) $\to$ `engine/` (`mod.rs`, `exec.rs`).
+    - `vivivi-core/src/undo.rs` (960 lines) $\to$ `undo/` (`mod.rs`, `serialize.rs`, `tests.rs`).
+  - Every production source file (excluding test files) across the entire workspace is now strictly under 1,000 lines (most under 800 lines). All 354+ tests pass.
 
+---
+
+## [0.8.0-alpha] - 2026-10-15
+
+### Added
+- **Vim-Compatible Window Hierarchy Tree Layout (`window.rs`, `app.rs`)**:
+  - Recursive tree structure `WindowTreeNode` for nested window splits.
+  - Geometric proximity navigation for `Ctrl-W h / j / k / l` and arrow keys.
+  - Independent scroll offsets and buffer views per window.
+- **Visual Column-Based Horizontal Scrolling (`editor.rs`, `app.rs`)**:
+  - Accurate scrolling calculation based on terminal visual columns rather than char counts, handling fullwidth East Asian characters seamlessly.
+- **Outline Navigation Overhaul (`outline.rs`, `event.rs`)**:
+  - Unified `F2` and `F8` shortcuts, automatic focus transfer on toggle, bidirectional `Tab`/`Esc` switching.
+  - Multi-level header extraction (H1-H6), content-based language auto-detection, and auto-scroll tracking.
+- **Vim-Compatible `Insert` Key Mode Toggle (`event.rs`)**:
+  - Toggle seamlessly between Normal, Insert, and Replace modes via `Insert` key.
+- **Migemo Romaji Japanese Search Built-in Clean MIT Dictionary (`migemo.rs`)**:
+  - Built-in clean MIT-licensed dictionary covering punctuation and symbols (`kakko`, `yajirushi`, `maru`, `ten`, etc.).
+  - Automatic discovery and transparent loading of external SKK dictionaries.
+- **Manual Test Guide (`docs/ja/MANUAL_TEST_GUIDE.md`, `docs/en/MANUAL_TEST_GUIDE.md`)**:
+  - Comprehensive guide for real-world verification of splits, keisen, outline, horizontal scroll, and Migemo.
+
+---
+
+## [0.7.0-alpha] - 2026-10-14
+
+### Added
+- **TUI/UX Visual Assistance (Phase 4.6)**:
+  - **Change Markers (Gutter Highlighting)**: Visual indicator (`▌`) on line number gutter distinguishing unsaved vs saved edits (`:set gutter`).
+  - **MRU & Favorites Modal**: `F7` / `:recent` dialog for opening recent and favorite files.
+  - **Invisible Character Visualization**: `:set list` displaying fullwidth spaces, tabs, and newline symbols.
+- **Geometric Keisen Corner Connection Algorithm**:
+  - Reconstructed corner joins based on neighbor connectivity, completely eliminating frayed corner artifacts.
+- **Terminal Cursor Style Synchronization**:
+  - Dynamic cursor shape sync: SteadyBlock for Normal/Visual, SteadyBar for Insert, SteadyUnderScore for Replace.
+- **Replace Mode (`R`) TUI Handling**:
+  - In-place character overwrite, line auto-expansion, and undo block integration.
+- **Search Highlighting (`hlsearch`) & Clearance (`:noh`, Double-Esc)**:
+  - Real-time highlight of matching words, `:noh` command, and quick double `Esc` clearing.
+- **Keisen Mode Modifier Key Guard**:
+  - Keisen drawing/erasing restricted to `Ctrl`/`Alt`/`Shift` + arrows, keeping bare arrow keys and `hjkl` for normal navigation.
+
+---
+
+## [0.6.0-alpha] - 2026-10-14
+
+### Added
+- **Tooling & File Management TUI Integration (Phase 4.5)**:
+  - **DiffLog (`.difflog`)**: Incremental backup on save, historical version restoration, and line-level blame.
+  - **Persistent Undo (`undofile`)**: Multi-session undo stack serialization and transparent recovery.
+  - **Print Preview & Standalone PDF 1.4 Direct Export (`print.rs`)**: A4 pagination, formatted preview, and zero-dependency PDF generation.
+  - **Template Auto-Loading (`.template.<ext>`)**: Macro expansion on creating new files.
+  - **In-Code ToDo Extraction (`todo.rs`)**: Scanning comments for `TODO`/`FIXME` and jumping to locations.
+  - **Code Folding (`folding.rs`)**: Indentation-based folding hierarchy and commands (`zc`, `zo`, `za`, `zM`, `zR`, `z<lvl>`).
+  - **Project-Wide Grep (`grep.rs`)**: Recursive fast scanning, regex matching, and QuickFix navigation (`:cnext`, `:cprev`).
+  - **2-Pane Filer (`filer.rs`)**: Dual-pane directory tree, Tab switching, single-key operations.
+  - **Project Management (`project.rs`)**: Integrated workspace tree and batch `:maketags` generation.
+
+---
+
+## [0.5.0-alpha] - 2026-10-14
+
+### Added
+- **Expression Substitution Engine (`expr_subst.rs`)**:
+  - `:s/pattern/expression/e` arithmetic evaluation, capture variable `$0`-$9 expansion, `$i` numbering, and `$line` integration.
+- **ViVi-Specific Vi Extensions (Phase 4.4)**:
+  - **Transparent Fullwidth Character Matching (`fftt.rs`)**: Semi-automatic mapping between ASCII and fullwidth symbols.
+  - **Word Boundary Search**: `*`, `#` exact word matches; `g*`, `g#` partial matches; `g<`, `g=` prefix/suffix matches.
+  - **Number / Letter Increment & Decrement**: `#+`, `##`, `#-` increments, and `#!` boolean toggles.
+  - **Jump to Last Edit Location**: `@`, `'@`, `` `@ `` instant jump, and `=<char>` copy from line above.
+  - **Mark Navigation**: Local marks `ma`-`mz`, persistent global marks `mA`-`mZ`, and `:marks` dialog.
+  - **Tag Navigation**: `Ctrl-]`, `Ctrl-t`, `Ctrl-[`, `:tag`, `:tags` with tags file and syntax fallback.
+
+---
+
+## [0.4.0-alpha] - 2026-10-14
+
+### Added
+- **Gvim Compatibility & Production Layout (Phase 4.1 - 4.3)**:
+  - **Split Screen Multi-View**: `:split`, `:vsplit`, `:close`, `:only`, and `Ctrl-w` window keybindings.
+  - **Visual Block Operations**: `Ctrl-v` rectangular selection, yank (`y`), delete (`d`, `x`), prepend (`I`), append (`A`), and smart block paste.
+  - **Outline Analysis Pane**: Markdown header trees, Rust function/struct trees, and instant jump.
+  - **Character Conversion Ex Commands**: `:%zenkaku`, `:%hankaku`, `:%hiragana`, `:%katakana`, `:%toupper`, `:%tolower`.
+  - **Text Alignment, Renumbering, & Line Operations**: `:align <target>`, `:renumber [start] [step]`, `:insbeg`, `:insend`, `:begend`.
+  - **Typing Assistance & Macros**: Dynamic word completion (dabbrev), static abbreviations (abbrev), dynamic macros (Masui repeat), LexEdit, Zen-Coding (Emmet), keyboard macros.
+  - **Box Calculation**: Sum, average, and standard deviation over rectangular blocks (`:calc`, `:sum`, `:total`).
+  - **Clipboard History**: `F6` / `:cbhist` dialog.
+  - **Built-in Help Viewer**: `F1`, `:help [topic]`.
+
+---
+
+## [0.3.0-alpha] - 2026-10-13
+
+### Added
+- **TUI Frontend Implementation (`vivivi-app`)**:
+  - Fullscreen terminal management via `ratatui` (v0.29) and `crossterm` (v0.28).
+  - Alternate screen, raw mode, and panic-safe recovery hooks.
+  - Real-time editor buffer rendering, status line, and command-line prompt.
+- **Encoding & Line Ending Detection (`encoding.rs`)**:
+  - BOM recognition, UTF-8, Shift_JIS/CP932, EUC-JP, UTF-16LE/BE.
+  - Automatic detection and conversion between CRLF, LF, and CR line endings.
+- **Matching Parenthesis Search (`paren.rs`)**:
+  - Comment/string-skipping search for `()`, `{}`, `[]`, `<>`, and `%` jump.
+- **Syntax Highlighting Engine (`syntax.rs`)**:
+  - Colorized keywords, types, strings, and comments for Rust, C/C++, Python, JS, and JSON.
+
+---
+
+## [0.2.0-alpha] - 2026-10-13
+
+### Added
+- **Vi Command Engine Foundation (`vivivi-vi`)**:
+  - Mode state machine (Normal, Insert, Visual, VisualLine, CommandLine).
+  - Motions (`h/j/k/l`, `w/b/e`, `0/^/$`, `gg/G`).
+  - Operators and actions (`d/c/y/p/P`, `dd/yy/cc`, `D/C/Y`, `x/X`).
+  - Register management (unnamed, `"a`-`"z`, uppercase append).
+  - Search (`/`, `?`, `n`, `N`) and basic ex commands (`:w`, `:q`, `:wq`, `:s`, `:%s`).
+  - Stateful `CommandParser`.
+- **Extended Modes Foundation (`vivivi-modes`)**:
+  - Unicode box-drawing mode (`Ctrl+arrow` to draw/join, `Shift+arrow` to erase).
+  - Text alignment inside box frames (left, center, right).
+  - Inline CSV/TSV mode (auto-aligned columns, transparent quote handling).
+
+---
+
+## [0.1.0-alpha] - 2026-10-13
+
+### Added
+- **Core Data Structures (`vivivi-core`)**:
+  - OpenViVi-compliant `GapBuffer<T>` ($O(1)$ local edits, dynamic capacity doubling, gap sliding).
+  - Transactional `UndoMgr` (atomic undo blocks, continuous typing merge, save point tracking).
+  - Unified `TextBuffer` integrating `GapBuffer` and `UndoMgr`.
+
+---
+
+## [0.0.1-alpha] - 2026-10-13
+
+### Added
+- **Initial Environment Setup**:
+  - Multi-crate workspace setup (`vivivi-core`, `vivivi-vi`, `vivivi-modes`, `vivivi-app`).
+  - AI pair programming rules and skills infrastructure (`.agents/`, `GEMINI.md`, `RULES.md`).
+  - Bilingual documentation structure (`docs/ja/`, `docs/en/`).

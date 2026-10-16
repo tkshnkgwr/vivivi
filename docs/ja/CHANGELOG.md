@@ -1,248 +1,207 @@
 # vivivi: 変更履歴 (CHANGELOG)
 
-本プロジェクトのすべての主要な変更を記録します。フォーマットは [Keep a Changelog](https://keepachangelog.com/) に準拠しています。
+本プロジェクトのすべての主要な変更を記録します。フォーマットは [Keep a Changelog](https://keepachangelog.com/) に準拠し、バージョン番号は [セマンティックバージョニング (SemVer)](https://semver.org/) を採用しています。
 
 ---
 
-## [Unreleased]
+## [0.9.0-beta] - 2026-10-16 (Testing / Dogfooding)
+
+### Changed
+- **機能凍結（Feature Freeze）とベータ版テストへの移行**:
+  - 全計画機能（Phase 1〜4.8）の実装完了およびモジュール分割リファクタリングの完了に伴い、開発フェーズを「α版（機能構築）」から「β版（実用検証・熟成）」へ移行。
+  - ボスの日常実務におけるドッグフーディングおよび手動テストガイド（`MANUAL_TEST_GUIDE.md`）に基づく品質・安定性・操作感の検証を開始。
+
+---
+
+## [0.9.0-alpha] - 2026-10-16 (Alpha Final)
 
 ### Added
-- **`vivivi-core`**:
-  - OpenViVi準拠の `GapBuffer<T>` 実装（$O(1)$ 局所編集・動的容量倍増・ギャップスライド）。
-  - トランザクション対応 `UndoMgr` 実装（Undoブロック、連続タイピング自動マージ、保存点追跡）。
-  - `GapBuffer` と `UndoMgr` を統合した `TextBuffer` 実装。
-  - 文字コード自動判別・相互変換モジュール（`encoding.rs`）の実装（BOM判定、UTF-8, Shift_JIS/CP932, EUC-JP, UTF-16LE/BE 対応、CRLF/LF/CR 改行コードの自動判別と相互変換）。
-  - 対応括弧探索モジュール（`paren.rs`）の実装（`()`, `{}`, `[]`, `<>` の文字列・コメントスキップ探索、カーソル位置対応ペア検出）。
-  - **永続Undo（Persistent Undo / undofile）の実装（`undo.rs`, `buffer.rs`）**:
-    - テキストベースのシリアライズ・デシリアライズ、およびファイル保存・復元（`undofile_path()`, `save_undofile()`, `load_undofile()`）。
-- **`vivivi-vi`**:
-  - Viモード定義（Normal, Insert, Replace, Visual, VisualLine, VisualBlock, CommandLine）。
-  - **置換モード (`Replace` / `R`) の追加**:
-    - ノーマルモードで `R` 打鍵により置換モード（`ViMode::Replace`）へ遷移。
-    - 検索コマンド（`/`, `?`）およびexコマンド（`:...`）完了時に確実に `ViMode::Normal` へ復帰するよう是正。
-  - 基本コマンド・モーション・オペレータ定義。
-  - 各種カーソルモーション実装（`h`, `j`, `k`, `l`, `w`, `b`, `e`, `W`, `B`, `E`, `0`, `^`, `$`, `gg`, `G`、対応括弧ジャンプ `%`）。
-  - オペレータ実行機構（`d`, `y`, `c` + motion / `dd`, `yy`, `cc`, `D`, `C`, `Y`, `x`, `X`）。
-  - レジスタ管理システム（無名レジスタ、`"a`〜`"z`、大文字アペンド、行/文字指向判定、`p`, `P` 貼り付け）。
-  - **BOX選択・矩形編集の完全対応（VisualBlock）**:
-    - `Ctrl-v` による矩形選択、矩形ヤンク（`y`）、矩形削除（`d`, `x`）および `RegisterContent::BlockWise` 格納。
-    - 矩形一括挿入（`I`, `A`）: 矩形先頭/末尾からInsertモードへ突入し、`Esc` 復帰時に選択全行の同列位置へ入力文字列を一括反映。
-    - スマート矩形ペースト（`p`, `P`）: 行末スペース自動補填による矩形貼り付け。
-    - ビジュアル選択範囲の大文字・小文字反転（`~`）。
-  - 前方・後方パターン検索（`/`, `?`, `n`, `N`, `*`, `#`、ラップアラウンド対応）。
-  - exコマンド実行機構（`:w`, `:q`, `:s`, `:%s/before/after/g` 正規表現置換、`:行番号` ジャンプ）。
-  - ステートフルな `CommandParser`（カウント数値、レジスタ指定、2打鍵プレフィックスのリアルタイム解析）。
-  - **ViVi独自vi拡張コマンド・ナビゲーション機能の実装**:
-    - `fFtT` 全角文字自動マッチ（`f`, `F`, `t`, `T`, `;`, `,`）およびオペレータ連携。
-    - 単語前後検索（`*`, `#` 完全一致、`g*`, `g#` 部分一致、`g<` 前方一致、`g=` 後方一致）。
-    - 数値・英字インクリメント/デクリメント（`#+`, `##`, `#-`）および真偽値トグル（`#!`）。
-    - 直前編集位置・行ジャンプ（`@`, `'@`, `` `@ ``）および直前行文字列複製（`=<char>`）。
-    - マーク管理（ローカル `ma`〜`mz`、永続グローバル `mA`〜`mZ`、ジャンプ `'a`、一覧 `:marks`）。
-    - タグジャンプ（`Ctrl-]`, `Ctrl-t`, `Ctrl-[`, `:tag`, `:tags`、`tags` ファイル＆AST構文解析フォールバック）。
-    - **コード折り畳み（Folding）コマンド & キーバインド（`command.rs`, `parser.rs`）**:
-      - `zc`（カーソル行のブロックを閉じる）、`zo`（開く）、`za`（開閉トグル）、`zM`（全ブロック折り畳み）、`zR`（全展開）、`z<lvl>`（指定インデント深度以下を折り畳み）。
-    - **フェーズ4.5 exコマンドの完全統合（`engine/ex.rs`）**:
-      - `:grep <pattern> [dir]`、`:cnext` / `:cn`、`:cprev` / `:cp`（プロジェクト内Grep・QuickFixナビゲーション）。
-      - `:todo` / `:undone`（コード内ToDo/FIXME抽出）。
-      - `:fold <toggle|close|open|all|none>`（折り畳み操作）。
-      - `:filer [path]`（2ペイン ディレクトリビュー起動）。
-      - `:difflog` / `:blame`（世代バックアップ一覧・差分復元・簡易blame表示）。
-      - `:preview` / `:print`（A4印刷プレビュー表示）。
-      - `:pdf [path]`（自己完結型 PDF 1.4 直接エクスポート）。
-      - `:maketags [dir]`（プロジェクト内tagsファイル一括生成）。
-      - `:undofile <save|load> [path]`（永続Undo手動入出力）。
-- **`vivivi-modes`**:
-  - **式置換エンジン（`expr_subst.rs`）の実装**:
-    - `:s/pattern/expression/e` での置換後文字列の動的数式評価（四則演算、`$0`〜`$9` キャプチャ展開、`$i`/`$n` 連番、`$line` 行番号、文字列結合）。
-  - **全角文字透過マッチ（`fftt.rs`）の実装**:
-    - 半角英数記号入力時に対応する全角文字（括弧・数字・記号）へ自動マッチする判定ロジックおよび前方／後方走査。
-  - ViVi 4準拠のインラインCSV/TSVモード定義。
-  - OpenViVi `keisen.cpp` からのUnicode罫線自動結合テーブル移植。
-  - **罫線モード角結合アルゴリズムの幾何学的刷新（糸のほつれ完全解消）**:
-    - `update_keisen_cell` および `neighbor_connections` を新設し、上下左右の隣接セルの実際の接続状況を幾何学的に検査。曲がり角で不要な突き出し成分（T字路 `┬`, `┤`, `┴`, `├`）を自動消去し、四角形描画時に綺麗な角（`┌`, `┐`, `└`, `┘`）を形成。
-    - 下方向への縦罫線描画時に最下行を超える場合の自動行拡張・改行補填。
-  - 罫線モードのキー操作描画・消去・自動結合ロジック（`step`）の実装（進行方向・直角方向の線判定、改行・余白の自動拡張補完）。
-  - 罫線枠内文字列の整列アルゴリズム（左揃え、中央揃え、右揃え）の実装。
-  - インラインCSV表示フォーマッター（`format_line`）およびクォート透過表示・アクティブ行の生テキスト表示。
-  - 生バッファ内のセル文字範囲特定（`cell_range_in_raw_line`）の実装。
-  - 構文解析・シンタックスハイライト・トークナイザー（`syntax.rs`）の実装（Rust, C/C++, Python, JS/TS, JSON, Markdown の予約語・型・文字列・数値・コメント色分け）。
-  - **文字変換モジュール（`conv.rs`）の実装**:
-    - 全角英数記号 ⇄ 半角英数記号、ひらがな ⇄ 全角カタカナ、全角カタカナ ⇄ 半角カタカナ（濁点結合・分解対応）、大文字 ⇄ 小文字、ケース反転。
-  - **アウトライン解析モジュール（`outline.rs`）の実装**:
-    - Markdown（`#` 〜 `######` 見出し階層）、Rust（`fn`, `struct`, `impl`, `enum`, `trait`, `mod`）、C/C++、Pythonのシンボルツリー解析。
-  - **テキスト差分（DIFF）エンジン（`diff.rs`）の実装**:
-    - LCS（最長共通部分列）アルゴリズム、Unified Diff生成（`create_unified_diff`）・パッチ適用（`apply_unified_patch`）、左右2画面同期ビューデータ（`create_side_by_side`）の生成。
-  - **世代バックアップエンジン（DiffLog / `difflog.rs`）の実装**:
-    - 保存ごとの差分追記（`.difflog`）、世代一覧取得、任意世代の完全復元（`restore_from_initial`）、行別最終更新世代算出（簡易blame: `compute_blame`）。
-  - **テンプレート自動読み込みモジュール（`template.rs`）の実装**:
-    - ファイル拡張子に対応する `.template.<ext>` の探索、マクロ変数（`%FileName%`, `%FileBase%`, `%Ext%`, `%Date%`, `%Time%`, `%UserName%`, `%Cursor%` 等）の自動展開。
-  - **コード内 ToDo 抽出エンジン（`todo.rs`）の実装**:
-    - バッファ内およびディレクトリ再帰走査（`scan_buffer_todos`, `scan_dir_todos`）、キーワード（`TODO`, `FIXME`, `BUG`, `UNDONE`, `HACK`, `NOTE`, `XXX`）の抽出。
-  - **コード折り畳みエンジン（`folding.rs`）の実装**:
-    - インデント階層解析（`compute_indent_folds`）、ブロック開閉・全開閉、非表示行判定、プレビュー表示行生成。
-  - **プロジェクト内高速 Grep 検索エンジン（`grep.rs`）の実装**:
-    - 隠しディレクトリやビルド成果物の除外、バイナリスキップ、正規表現パターン走査、QuickFix型ナビゲーションセッション（`next`, `prev`, `select`）。
-  - **2ペイン ディレクトリビュー（ファイラー / `filer.rs`）の実装**:
-    - 左右独立ペイン（`FilerPane`）、Tabフォーカス切替、ディレクトリ移動、1キーファイル選択・コピー・移動・削除操作。
-  - **プロジェクト管理エンジン（`project.rs`）の実装**:
-    - 複数ファイル統合管理、一括tagsファイル生成（`:maketags`）。
-  - **印刷プレビュー & PDF直接出力エンジン（`print.rs`）の実装**:
-    - A4標準ページ分割（行番号・ヘッダー・フッター付与）、プレビューテキスト整形、外部ライブラリ不要の自己完結型 PDF 1.4 直接出力エンジン（`export_to_pdf`）。
-  - **Migemo（ローマ字日本語検索）独自MIT辞書の内蔵 & 外部SKK辞書探索連携（`migemo.rs`）**:
-    - GPL辞書のバイナリ静的埋め込みを完全排除し、独自作成のクリーンなMIT辞書（括弧・矢印・丸・点・波線等の約物記号、エディタ頻出語彙、大賢者、ボス等）を内蔵することで、バイナリ全体を純粋な MIT License として保護。
-    - 外部の公式SKK辞書（`%USERPROFILE%\.vivivi\SKK-JISYO.L` 等）を自動探索し、マルチエンコーディング（EUC-JP, UTF-8, Shift_JIS）で透過読み込みして約10万語規模の本格検索をシームレスに実現。
-  - **罫線保護モードの vi `x` / `X` 削除保護（`keisen.rs`）**:
-    - ノーマルモードでの `x`（1文字削除）および `X`（直前文字削除）時にも枠線の幾何形状を崩さず、空白文字で自動補填して罫線を完全維持。
-- **`vivivi-app`**:
-  - `ratatui` (v0.29) と `crossterm` (v0.28) によるフルスクリーンTUIフロントエンド実装。
-  - 代替スクリーン（Alternate Screen）とRawモードによる端末制御およびパニック耐性復元フック。
-  - エディタバッファ（行番号・カーソル行ハイライト・スクロール・CSV整列ビュー対応）の描画。
-  - シンタックスハイライト描画および対応括弧ペアのハイライト描画。
-  - **画面分割・マルチビュー（Split / Vsplit）の実装**:
-    - 水平分割（`:split` / `:sp`）、垂直分割（`:vsplit` / `:vs`）、ウィンドウ閉鎖（`:close` / `:c`）、単一ウィンドウ化（`:only`）。
-    - Gvim互換の `Ctrl-w` ウィンドウキーバインド（`Ctrl-w w`, `Ctrl-w s`, `Ctrl-w v`, `Ctrl-w c`, `Ctrl-w o`, `Ctrl-w h/j/k/l`）。
-    - 複数エディタウィンドウの上下・左右並行分割描画およびアクティブウィンドウ枠線表示。
-  - **アウトライン解析サイドペインの実装**:
-    - `F8` キーまたは `:outline` によるアウトライン表示トグル。
-    - `Ctrl-o` でのサイドペインフォーカス、`j`/`k` 選択と `Enter` による該当行即時ジャンプ。
-  - **文字変換 ex コマンドの実装**:
-    - `:%zenkaku`, `:%hankaku`, `:%hiragana`, `:%katakana`, `:%hankata`, `:%zenkata`, `:%toupper`, `:%tolower` によるバッファ全文一括変換。
-  - **テキストアライン・リナンバ・行編集支援の実装**:
-    - `:align <target>` による複数行・選択範囲のカラム垂直整列（`=` や `:` 等）。
-    - `:renumber [start] [step]` による箇条書き連番の自動再ナンバリング。
-    - `:insbeg`, `:insend`, `:begend` による行頭・行末文字列一括挿入。
-  - **高速入力・マクロ機能の実装**:
-    - 動的単語補完（dabbrev / `Ctrl-l`, `Ctrl-m`）によるバッファ内単語巡回補完。
-    - 静的略語展開（abbrev / `Ctrl-;`, `Alt-;`, `F4`, `:abbrev`）による定型スニペット展開。
-    - ダイナミックマクロ（増井式リピート / `Alt-m`, `Ctrl-Alt-m`, `:dmacro`）による無記録反復自動実行。
-    - 字句編集予測（LexEdit / `Ctrl-j`, `:lexedit`）による単語置換履歴からの次編集予測・即時適用。
-    - Zen-Coding (Emmet) 展開（`Ctrl-,`, `Alt-,`, `:zen`）によるHTMLタグ構造展開。
-    - キーボードマクロ（`Ctrl-Alt-r` / `Ctrl-Alt-p`, `F9` / `F10`, `:macro`）のワンタッチ記録・高速再生。
-  - **高度検索・BOX集計・ヘルプ**:
-    - ローマ字日本語検索（Migemo / `g/`）および SKK 辞書展開連携。
-    - 矩形選択数値集計（`:calc`, `:sum`, `:total`）による合計・平均・標準偏差計算。
-    - クリップボード履歴ダイアログ（`F6`, `:cbhist`）。
-    - 内蔵ヘルプビューア（`F1`, `:help [topic]`）およびトピック追加（`expr_subst.md`, `vivi_cmd.md`）。
-    - 式置換（`:s/.../.../e`, `:%s/.../.../e`）のTUIコマンドライン実行統合。
-    - 独自vi拡張コマンド（全角マッチ、単語検索、増減、マーク、タグジャンプ）のTUI・キーイベント統合。
-  - **AI連携アーキテクチャの先行統合**:
-    - `:ai <指示>` および `:ai commit` のディスパッチスロット実装。
-    - 非同期ゼロレイテンシ設計書（`docs/ja/AI_INTEGRATION_DESIGN.md`）の策定。
-  - **ツール機能・ファイル管理 TUI 統合（フェーズ4.5）**:
-    - ファイル保存時の DiffLog 世代差分自動追記（`.difflog`）および永続Undo自動保存（`.undofile`）。
-    - ファイルオープン時のテンプレート自動適用（`.template.<ext>` マクロ展開）および永続Undo自動復元。
-    - 印刷プレビュー全画面モーダルUI描画（`ui/preview.rs`）およびキーボードスクロール（`j`/`k`, `d`/`u`）・終了（`Esc`/`q`）操作。
-    - （※Desktop GUI (egui) およびGUI前提機能はユーザー指示によりフェーズ5へ移行し、TUIとコアツール機能に特化）
-  - Visual / VisualLine / VisualBlock 選択範囲のリアルタイム背景色ハイライト描画。
-  - リアルタイム・ステータスバー（Viモード・罫線/CSVバッジ・ファイル名・変更フラグ・文字コード/改行/言語バッジ・行/列・進捗%）の描画。
-  - ファイル保存時の元の文字コード・改行コード維持保存。
-  - コマンドライン入力UI（`:w`, `:q`, `:wq`, `:align`, `:%s` 等の対話実行）。
-  - ネイティブターミナルカーソルのハードウェア点滅連動。
-  - **TUI/UX編集・視覚支援機能 TUI 統合（フェーズ4.6）**:
-    - **変更行ガター強調表示 (Change Markers)**: 行番号右隣に未保存変更行（黄色の `▌`）および保存済み変更行（緑色の `▌`）をリアルタイム表示（`:set gutter` / `:set nogutter`）。
-    - **最近使ったファイル (MRU) & お気に入り (Favorites) モーダル**: `F7` または `:recent` / `:mru` で履歴・お気に入り（★）を一覧表示、`Enter` で即時オープン、`f` でお気に入り登録/解除、`d` で履歴削除。
-    - **不可視文字・空白文字の可視化**: `:set list` / `:set nolist` で全角スペース（赤色強調 `□`）、タブ（`▸---`）、行末記号（`$`）を表示し、日本語・コード編集ミスを未然防止。
-    - **TUIツールExコマンド統合**: `:todo` / `:undone`（ToDo抽出）、`:diff`（保存前差分）、`:difflog`（世代履歴）、`:filer`（2ペインファイラー）、`:preview` / `:print`（印刷プレビュー）のExコマンド接続。
+- **Phase 4.8 高度エディタ機能 & 堅牢化の全面実装**:
+  - **マルチタブ管理 (Tab Bar UI)**:
+    - 独立した画面分割構造・カレントバッファ・カーソル位置を保持する `TabPage` 実装。
+    - 2つ以上のタブオープン時に画面最上部にタブバーを自動描画し、アクティブタブを強調表示。
+    - `gt`, `gT`, `[count]gt`, `:tabnew [file]`, `:tabclose` (`:tabc`), `:tabnext`, `:tabprev`, `:tabonly` の完全サポート。
+  - **矩形選択一括編集 (Visual Block Operations)**:
+    - `Ctrl-v` 矩形選択に対する `I<text>Esc`（左端一括挿入）、`A<text>Esc`（右端一括追加）、`c<text>Esc`（一括置換）、`r<char>`（一括塗りつぶし）、`d` / `x`（一括削除と文字詰め）を実装。
+  - **設定ファイルと永続カスタマイズ (`config.toml` / `vivivirc`)**:
+    - `%USERPROFILE%\.vivivi\config.toml`（または `~/.vivivi/config.toml`）からの自動設定ロード。
+    - エディタ設定（`tab_stop`, `number`, `relative_number`, `gutter`, `hlsearch`, `clipboard`, `theme`）、不可視文字設定、キーマップ（Normal/Insert）の永続化。
+    - 起動中の `:config` 再読込コマンド、および `:set number`, `:set relativenumber`, `:set tabstop`, `:set clipboard` コマンドの実装。
+  - **文字コード・改行明示変換 (:e ++enc, :set fenc, :set ff)**:
+    - `:e ++enc=sjis [file]`, `:e ++enc=euc-jp [file]`: 文字コードを指定した再読込。
+    - `:set fenc=utf-8 / sjis / euc-jp`: ファイル保存文字コードの動的指定。
+    - `:set ff=unix / dos`: 保存時の改行コード（LF / CRLF）変換指定。
+  - **クラッシュリカバリ・スワップファイル (.swp)**:
+    - 20打鍵ごとおよびEscキー復帰時におけるバックグラウンドスワップ自動保存（`.<filename>.swp` 形式）。
+    - 異常終了後の次回起動時におけるスワップファイル検出と警告プロンプト表示。
+    - `:recover`（未保存データの完全復元）および `:swap`（スワップ詳細情報確認）コマンドの実装。
+    - 保存時および未変更終了時におけるスワップファイルの安全な自動消去。
+  - **システム共有クリップボード連携 ("+y, "*p)**:
+    - `arboard` クレートを用いた `SystemClipboard` プロバイダの実装。
+    - `"+y`, `"*y` によるOSクリップボードへの直接ヤンク、`"+p`, `"*p` による直接貼り付け。
+    - `:set clipboard=unnamed / unnamedplus / none` による通常ヤンク/プットとOSクリップボードの透過同期。
+  - **シンタックスハイライト対応言語の拡充 (全18言語対応)**:
+    - Go (`.go`), Ruby (`.rb`), TOML (`.toml`), PowerShell (`.ps1`, `.psm1`, `.psd1`), YAML (`.yaml`, `.yml`), XML (`.xml`), Windows Batch (`.bat`, `.cmd`) の構文解析トークナイザーとステータスバーバッジ表示を実装。
   - **内蔵ヘルプシステムの拡充**:
-    - `doc/help/visual.md`（視覚・編集支援機能ヘルプ）を新規作成。
-    - `doc/help/index.md` の目次更新およびMarkdownテーブル垂直整列。
-  - **モード別カーソル形状連動（Terminal Cursor Style）**:
-    - Crossterm の `SetCursorStyle` を用いて、Normal/Visualモード: ブロック（`SteadyBlock`）、Insertモード: 縦棒（`SteadyBar`）、Replaceモード: 下線（`SteadyUnderScore`）へと端末カーソル形状を動的に同期連動。アプリ終了時・パニック復元時にも端末デフォルトカーソル形状（`DefaultUserShape`）へ自動復帰。
-  - **置換モード (`R`) のTUI編集ハンドリング**:
-    - カーソル位置文字の1文字上書き、行末自動拡張、Undo統合、`Esc` でのNormalモード復帰。
-  - **検索キーワード先頭着地 & 検索ハイライト (`hlsearch`) & 消去 (`:noh`)**:
-    - ローマ字日本語（Migemo）検索および正規表現検索において、バイトオフセットと文字インデックスのズレを解消し、ヒットしたキーワードの先頭文字に正確に着地。
-    - 画面上のすべての一致箇所をリアルタイムにオレンジ背景・黒太字でハイライト表示（`active_search_regex`）。
-    - `:noh`, `:nohl`, `:nohlsearch`, `:set nohls`, `:set hls` コマンド、およびノーマルモード `Esc` での一時ハイライト消去（`clear_search_highlight`）を実装。
-  - **罫線モードのキー修飾キーガード（十字キー単独描画バグの是正）**:
-    - 罫線モード有効時でも `Ctrl`/`Alt`（描画）または `Shift`（消去）の修飾キーがある場合のみ罫線操作とし、素の矢印キー（十字キー）や `h`/`j`/`k`/`l` は通常カーソル移動として動作するよう修正。
-  - **Vim互換ウィンドウ階層ツリーレイアウト（`window.rs`, `app.rs`）**:
-    - 再帰的な二分木構造 `WindowTreeNode`（Leaf / Split）によるウィンドウ管理へ刷新。
-    - `:split` で上下分割後に下ペインで `:vsplit` を実行しても全体が縦3列にならず、下ペインのみが左右に分割される直感的なネスト分割を実現。
-    - 幾何学的近傍判定（重心座標と境界判定）による `Ctrl-W h / j / k / l` および矢印キーでの隣接ウィンドウ移動（`navigate_window`）。
-    - ウィンドウごとの独立したスクロールオフセットおよびバッファ表示。
-  - **表示カラム（Visual Column）基準の水平スクロール（`editor.rs`, `app.rs`）**:
-    - 全角文字（2幅）やタブ文字を含む80文字超の長行において、文字数ではなく実際の表示幅に基づく水平スクロール計算と文字クリッピングへ刷新。行末（`$`）移動時にも画面が滑らかに追従し、ターミナル物理カーソルが正確に同期。
-  - **アウトライン表示の操作性向上 & キー操作統一（`outline.rs`, `event.rs`）**:
-    - ショートカットキーとして `F2`（OpenViVi準拠）と `F8`（モダン準拠）の両方に対応。
-    - アウトライン起動直後に自動でアウトライン側へフォーカスを遷移。
-    - `Tab` / `Esc` によるエディタ ⇄ アウトラインの相互切り替え。
-  - **Migemoコマンドおよび検索ジャンプ（`event.rs`, `app.rs`）**:
-    - `:migemo <query>` / `:m <query>` コマンドによるローマ字日本語検索。
-    - 検索キーワードへの着地時にウィンドウカーソルと画面スクロールを即時同期。
-  - **実機手動テストガイドの整備（`docs/ja/MANUAL_TEST_GUIDE.md`, `docs/en/MANUAL_TEST_GUIDE.md`）**:
-    - 画面分割、罫線保護、アウトライン、水平スクロール、Migemo、文字コード等の動作確認手順を網羅した包括的なテストガイドを作成。
-  - **アウトライン解析エンジンの多階層対応 & 言語自動推測（`vivivi-modes/outline.rs`）**:
-    - 新規・無名バッファ等で言語が `PlainText` と判定された場合でも、バッファ先頭行からシグネチャを検出して言語を自動判定する `detect_language_from_content` を実装。
-    - Markdown見出しの全階層抽出（H1〜H6）およびインデント階層表示に対応。
-    - Rustシンボルの修飾子透過解析を実装し、`pub(crate) fn`, `const fn`, `unsafe fn`, `pub type`, `macro_rules!` などの修飾子付きシンボルを漏れなく網羅。
-  - **アウトラインペインのカーソル追従自動縦スクロール（`ui/outline.rs`）**:
-    - 多数のシンボルや見出しが存在する場合でも、選択カーソル位置に応じてペイン内表示を自動スクロールし、常に選択項目が可視領域内に収まるよう改善。
-  - **Vim互換 `Insert` キーによるモード切替・トグル（`event.rs`）**:
-    - Normalモードで `Insert` キー押下時にInsertモードへ遷移（`i` と同等）。
-    - Insertモードで `Insert` キー押下時にReplace（置換・上書き）モードへ切り替え。
-    - Replaceモードで `Insert` キー押下時にInsertモードへ復帰するトグル動作を実現。
-  - **ファイル保存時の言語同期 & 手動言語切替（`app.rs`, `event.rs`）**:
-    - `:w <path>` による新規ファイル名保存時の構文ハイライト・アウトライン言語同期。
-    - `:set ft=<lang>` / `:set filetype=<lang>` によるファイルタイプ動的切り替えコマンドを実装。
-  - **Migemo（ローマ字日本語検索）独自MIT内蔵辞書 & 約物記号対応（`migemo.rs`）**:
-    - ライセンス安全性を最優先し、バイナリ埋め込み辞書を独自作成のクリーンなMIT適合辞書（`builtin_mit_dict.txt`）へ刷新。
-    - 「かっこ（`kakko`）」による括弧漢字（`括弧`）および各種約物記号（`「` `」` `(` `)` `（` `）` `【` `】` `『` `』` `[` `]` `［` `］` `{` `}` `｛` `｝` `〈` `〉` 等）の一括マッチに対応。
-    - 「やじるし（`yajirushi`）」による矢印漢字（`矢印`）および各種矢印記号（`→` `←` `↑` `↓` `⇒` `⇔` `->` `=>` `<-`）の一括マッチに対応。
-    - 「まる（`maru`）」「てん（`ten`）」「から／なみ（`kara`/`nami`）」「みぎ／ひだり／うえ／した」等、エディタ編集で頻出する記号・方向語彙を完備。
-    - ひらがな2文字以上のプレフィックスに対する前方一致漢字候補の動的展開（インクリメンタル検索向上）。
-    - 外部SKK辞書（`%USERPROFILE%\.vivivi\SKK-JISYO.*` やカレントディレクトリ）の起動時自動探索・透過マージ機能（`load_standard_external_dicts`）を実装（UTF-8, EUC-JP, Shift_JIS自動判別）。
-    - `README.md` / `README_JA.md` にSKKプロジェクト、Migemo考案者、openViViへの謝辞・クレジットセクションを追加。
-  - **ヘルプおよびドキュメントの全面刷新（`doc/help/`, `docs/`）**:
-    - `doc/help/` 配下のヘルプ（`basic.md`, `index.md`, `keisen.md`, `migemo.md`, `outline.md`, `split.md`）および `docs/ja/`, `docs/en/` 配下の全設計・仕様書を最新機能（階層分割、罫線x削除保護、アウトライン、長行スクロール等）に合わせて同期・最新化。
-  - **Phase 4.8 高度エディタ機能 & 堅牢化の全面実装**:
-    - **マルチタブ管理 (Tab Bar UI)**:
-      - 独立した画面分割構造・カレントバッファ・カーソル位置を保持する `TabPage` 実装。
-      - 2つ以上のタブオープン時に画面最上部にタブバーを自動描画し、アクティブタブを強調表示。
-      - `gt`, `gT`, `[count]gt`, `:tabnew [file]`, `:tabclose` (`:tabc`), `:tabnext`, `:tabprev`, `:tabonly` の完全サポート。
-    - **矩形選択一括編集 (Visual Block Operations)**:
-      - `Ctrl-v` 矩形選択に対する `I<text>Esc`（左端一括挿入）、`A<text>Esc`（右端一括追加）、`c<text>Esc`（一括置換）、`r<char>`（一括塗りつぶし）、`d` / `x`（一括削除と文字詰め）を実装。
-    - **設定ファイルと永続カスタマイズ (`config.toml` / `vivivirc`)**:
-      - `%USERPROFILE%\.vivivi\config.toml`（または `~/.vivivi/config.toml`）からの自動設定ロード。
-      - エディタ設定（`tab_stop`, `number`, `relative_number`, `gutter`, `hlsearch`, `clipboard`, `theme`）、不可視文字設定、キーマップ（Normal/Insert）の永続化。
-      - 起動中の `:config` 再読込コマンド、および `:set number`, `:set relativenumber`, `:set tabstop`, `:set clipboard` コマンドの実装。
-    - **文字コード・改行明示変換 (:e ++enc, :set fenc, :set ff)**:
-      - `:e ++enc=sjis [file]`, `:e ++enc=euc-jp [file]`: 文字コードを指定した再読込。
-      - `:set fenc=utf-8 / sjis / euc-jp`: ファイル保存文字コードの動的指定。
-      - `:set ff=unix / dos`: 保存時の改行コード（LF / CRLF）変換指定。
-    - **クラッシュリカバリ・スワップファイル (.swp)**:
-      - 20打鍵ごとおよびEscキー復帰時におけるバックグラウンドスワップ自動保存（`.<filename>.swp` 形式）。
-      - 異常終了後の次回起動時におけるスワップファイル検出と警告プロンプト表示。
-      - `:recover`（未保存データの完全復元）および `:swap`（スワップ詳細情報確認）コマンドの実装。
-      - 保存時および未変更終了時におけるスワップファイルの安全な自動消去。
-    - **システム共有クリップボード連携 ("+y, "*p)**:
-      - `arboard` クレートを用いた `SystemClipboard` プロバイダの実装。
-      - `"+y`, `"*y` によるOSクリップボードへの直接ヤンク、`"+p`, `"*p` による直接貼り付け。
-      - `:set clipboard=unnamed / unnamedplus / none` による通常ヤンク/プットとOSクリップボードの透過同期。
-    - **シンタックスハイライト対応言語の拡充 (全18言語対応)**:
-      - Go (`.go`), Ruby (`.rb`), TOML (`.toml`), PowerShell (`.ps1`, `.psm1`, `.psd1`), YAML (`.yaml`, `.yml`), XML (`.xml`), Windows Batch (`.bat`, `.cmd`) の構文解析トークナイザーとステータスバーバッジ表示を実装。
-    - **内蔵ヘルプシステムの拡充**:
-      - `doc/help/tab.md`, `doc/help/config.md`, `doc/help/recovery.md`, `doc/help/clipboard.md` を新設。
-      - `doc/help/index.md`, `doc/help/syntax.md`, `doc/help/visual.md`, `doc/help/basic.md` を最新機能に同期。
-  - ユニット/統合テスト拡充（全550件超のテスト合格、clippy警告ゼロ、fmtパス）。
+    - `doc/help/tab.md`, `doc/help/config.md`, `doc/help/recovery.md`, `doc/help/clipboard.md` を新設。
+    - `doc/help/index.md`, `doc/help/syntax.md`, `doc/help/visual.md`, `doc/help/basic.md` を最新機能に同期。
 
 ### Changed / Refactored
 - **大規模モジュール分割リファクタリング（肥大化ソースコードの責務分離・可読性向上）**:
-  - 開発の進展に伴い1,000行を超えて肥大化していた全モジュールを対象に、公開APIや機能の完全な後方互換性を維持したまま責務ごとにサブモジュールへ構造分割：
-    - `vivivi-app/src/tui/app.rs` (3,440行) $\to$ `tui/app/` (`mod.rs`, `tabs.rs`, `windows.rs`, `files.rs`, `tools.rs`, `tests.rs`): アプリ状態管理、タブ制御、画面分割、ファイルI/O、内蔵ツール（バイナリ・ヘルプ・アウトライン）を完全分離。
+  - 1,000行を超えて肥大化していた全モジュールを対象に、公開APIや機能の完全な後方互換性を維持したまま責務ごとにサブモジュールへ構造分割：
+    - `vivivi-app/src/tui/app.rs` (3,440行) $\to$ `tui/app/` (`mod.rs`, `tabs.rs`, `windows.rs`, `files.rs`, `tools.rs`, `tests.rs`): アプリ状態管理、タブ制御、画面分割、ファイルI/O、内蔵ツールを完全分離。
     - `vivivi-app/src/tui/event.rs` (1,696行) $\to$ `tui/event/` (`mod.rs`, `modes.rs`, `ex.rs`): イベントループディスパッチ、モード別キーハンドラ、exコマンド実行ループを分離。
-    - `vivivi-modes/src/syntax.rs` (1,563行) $\to$ `syntax/` (`mod.rs`, `keywords.rs`, `tests.rs`): 構文解析・トークナイザロジックと各言語（Rust/Python/Go等）のキーワード定義テーブルを分離。
-    - `vivivi-modes/src/keisen.rs` (1,240行) $\to$ `keisen/` (`mod.rs`, `draw.rs`, `protect.rs`, `tests.rs`): 罫線ステートマシン、十字/矢印/分岐描画ロジック、文字保護・置換ロジックを分離。
-    - `vivivi-vi/src/engine/mod.rs` (1,182行) $\to$ `engine/` (`mod.rs`, `exec.rs`): ViEngine コア状態機械（モード遷移・マクロ記録・プロパティ）と、コマンド実行ディスパッチ（`execute`・タグジャンプ・トグル）を分離。
-    - `vivivi-core/src/undo.rs` (960行) $\to$ `undo/` (`mod.rs`, `serialize.rs`, `tests.rs`): アンドゥ/リドゥトランザクション管理本体と、undofile 永続化（シリアライズ/デシリアライズ・構文パース）を分離。
-  - テスト専用ファイルを除くすべてのプロダクションソースコードで1,000行未満（最大でも800〜900行程度）を達成し、保守性・可読性・拡張性を大幅に向上。全354件超の単体・結合・doctest全件PASS。
-- **モジュール分割・ファイル肥大化解消リファクタリング**:
-  - 1,000行を超えていた `vivivi-vi` の `engine.rs` (1,441行) を機能責務ごとに `engine/` ディレクトリ配下（`motion.rs`, `operate.rs`, `visual.rs`, `ex.rs`, `mod.rs`, `tests.rs`）へ分割（各ファイル150〜350行へスリム化）。
-  - `vivivi-app` の `tui/ui.rs` (514行) を `ui/` ディレクトリ配下（`editor.rs`, `outline.rs`, `status.rs`, `mod.rs`）へ分割し、今後のGrepペイン・DIFF画面等の拡張性を強化。
-  - `vivivi-app` のウィンドウ管理（`SplitAxis`, `EditorWindow`）を `tui/window.rs` へ分離。
-  - プロジェクト全体の全ソースコードが500行以下に収まり、保守性と可読性を向上。
-- **ウィンドウ管理の階層ツリー構造化とテストスイート拡充**:
-  - ウィンドウ管理をフラット配列から再帰ツリー構造（`WindowTreeNode`）へ再構築し、幾何学的近傍判定ナビゲーションを導入。
-  - テストスイート拡充（全208テスト合格、doctestパース最適化、clippy警告ゼロ、fmtクリーン）。
+    - `vivivi-modes/src/syntax.rs` (1,563行) $\to$ `syntax/` (`mod.rs`, `keywords.rs`, `tests.rs`): 構文解析ロジックと言語キーワード定義テーブルを分離。
+    - `vivivi-modes/src/keisen.rs` (1,240行) $\to$ `keisen/` (`mod.rs`, `draw.rs`, `protect.rs`, `tests.rs`): 罫線ステートマシン、描画ロジック、文字保護ロジックを分離。
+    - `vivivi-vi/src/engine/mod.rs` (1,182行) $\to$ `engine/` (`mod.rs`, `exec.rs`): コア状態機械とコマンド実行ディスパッチを分離。
+    - `vivivi-core/src/undo.rs` (960行) $\to$ `undo/` (`mod.rs`, `serialize.rs`, `tests.rs`): トランザクション管理本体とundofile永続化を分離。
+  - テスト専用ファイルを除く全プロダクションコードで1,000行未満（最大800〜900行）を達成。全354件超のテスト合格。
 
+---
 
+## [0.8.0-alpha] - 2026-10-15
+
+### Added
+- **Vim互換ウィンドウ階層ツリーレイアウト (`window.rs`, `app.rs`)**:
+  - 二分木構造 `WindowTreeNode` による再帰的分割管理。
+  - 幾何学的近傍判定による `Ctrl-W h / j / k / l` および矢印キーでの直感的なウィンドウ移動。
+  - ウィンドウごとの独立スクロールオフセットおよび独立バッファ表示。
+- **表示幅（Visual Column）基準の水平スクロール (`editor.rs`, `app.rs`)**:
+  - 全角文字（2幅）やタブ文字を含む80文字超長行での滑らかな自動追従とターミナル物理カーソル同期。
+- **アウトライン表示の操作性向上 & キー操作統一 (`outline.rs`, `event.rs`)**:
+  - `F2`（OpenViVi準拠）と `F8`（モダン準拠）の両対応、起動直後の自動フォーカス、`Tab`/`Esc` 相互切替。
+  - 多階層見出し対応（H1〜H6）および言語自動判定（`detect_language_from_content`）、カーソル追従自動縦スクロール。
+- **Vim互換 `Insert` キーによるモード切替・トグル (`event.rs`)**:
+  - NormalモードでInsert、InsertモードでReplace、ReplaceモードでInsertへとトグル遷移。
+- **Migemo（ローマ字日本語検索）独自MIT辞書の内蔵 & 約物記号対応 (`migemo.rs`)**:
+  - クリーンな独自MIT辞書内蔵による約物記号（`kakko`, `yajirushi`, `maru`, `ten` 等）一括マッチ。
+  - 外部公式SKK辞書の自動探索・透過マルチエンコーディング読み込み。
+- **実機手動テストガイドの整備 (`docs/ja/MANUAL_TEST_GUIDE.md`, `docs/en/MANUAL_TEST_GUIDE.md`)**:
+  - 画面分割、罫線保護、アウトライン、水平スクロール、Migemo、文字コード等の包括的テスト手順書を作成。
+
+---
+
+## [0.7.0-alpha] - 2026-10-14
+
+### Added
+- **TUI/UX編集・視覚支援機能 (Phase 4.6)**:
+  - **変更行ガター強調表示 (Change Markers)**: 行番号右隣に未保存変更行（黄色の `▌`）および保存済み変更行（緑色の `▌`）を表示（`:set gutter`）。
+  - **最近使ったファイル (MRU) & お気に入り (Favorites) モーダル**: `F7` または `:recent` で一覧表示、ワンキーオープン、お気に入り登録。
+  - **不可視文字・空白文字の可視化**: `:set list` で全角スペース（赤色 `□`）、タブ（`▸---`）、改行記号（`$`）を表示。
+- **罫線モード角結合アルゴリズムの刷新**:
+  - 上下左右の隣接セルの接続状況を幾何学的に検査し、不要な突き出し成分を自動消去して綺麗な角（`┌`, `┐`, `└`, `┘`）を形成。
+- **モード別カーソル形状連動 (Terminal Cursor Style)**:
+  - Normal/Visual: ブロック（`SteadyBlock`）、Insert: 縦棒（`SteadyBar`）、Replace: 下線（`SteadyUnderScore`）。
+- **置換モード (`R`) のTUI編集ハンドリング**:
+  - カーソル下文字の上書き、行末自動拡張、Undo統合。
+- **検索ハイライト (`hlsearch`) & 消去 (`:noh`, `Esc` 2回連打)**:
+  - 一致箇所のリアルタイム色反転、`:noh` コマンド、ノーマルモードでのダブルEsc消去。
+- **罫線モードのキー修飾キーガード**:
+  - `Ctrl`/`Alt`（描画）または `Shift`（消去）時のみ罫線操作とし、素の矢印キーや `h/j/k/l` は通常カーソル移動として保護。
+
+---
+
+## [0.6.0-alpha] - 2026-10-14
+
+### Added
+- **ツール機能・ファイル管理 TUI 統合 (Phase 4.5)**:
+  - **世代バックアップ (DiffLog / `.difflog`)**: 保存ごとの差分蓄積、任意世代復元、行別更新世代表示（簡易blame）。
+  - **永続Undo (Persistent Undo / `undofile`)**: 終了後もUndoスタックを保持し次回起動時に自動復元。
+  - **印刷プレビュー & 自己完結型 PDF 1.4 直接出力 (`print.rs`)**: A4ページ分割、プレビュー表示、PDF直接出力。
+  - **テンプレート自動読み込み (`.template.<ext>`)**: 新規作成時のマクロ展開テンプレート自動挿入。
+  - **コード内 ToDo 抽出 (`todo.rs`)**: ソース内コメントの ToDo/FIXME 自動収集と該当行ワンキージャンプ。
+  - **コード折り畳みエンジン (`folding.rs`)**: インデント階層解析と開閉コマンド（`zc`, `zo`, `za`, `zM`, `zR`, `z<lvl>`）。
+  - **プロジェクト内高速 Grep 検索 (`grep.rs`)**: 再帰走査、正規表現マッチ、QuickFixセッション（`:cnext`, `:cprev`）。
+  - **2ペイン ディレクトリビュー (ファイラー / `filer.rs`)**: 左右独立ペイン、Tab切替、1キーファイル操作。
+  - **プロジェクト管理 (`project.rs`)**: 統合ツリー管理、一括tags生成（`:maketags`）。
+
+---
+
+## [0.5.0-alpha] - 2026-10-14
+
+### Added
+- **式置換エンジン (`expr_subst.rs`)**:
+  - `:s/pattern/expression/e` での動的数式評価（四則演算、`$0`〜`$9` キャプチャ展開、`$i`/`$n` 連番、`$line` 行番号）。
+- **ViVi独自vi拡張コマンド・ナビゲーション (Phase 4.4)**:
+  - **全角文字透過マッチ (`fftt.rs`)**: 半角英数記号入力時に対応する全角文字（括弧・数字・記号）へ自動マッチ。
+  - **単語前後検索**: `*`, `#` 完全一致、`g*`, `g#` 部分一致、`g<` 前方一致、`g=` 後方一致。
+  - **数値・英字増減**: `#+`, `##`, `#-` によるインクリメント/デクリメント、および `#!` による真偽値トグル。
+  - **直前編集復帰**: `@`, `'@`, `` `@ `` による直前編集位置ジャンプ、および `=<char>` による前行文字列複製。
+  - **マーク管理**: ローカル `ma`〜`mz`、永続グローバル `mA`〜`mZ`、ジャンプ `'a`、一覧 `:marks`。
+  - **タグジャンプ**: `Ctrl-]`, `Ctrl-t`, `Ctrl-[`, `:tag`, `:tags`（`tags` ファイル＆AST構文解析フォールバック）。
+
+---
+
+## [0.4.0-alpha] - 2026-10-14
+
+### Added
+- **Gvim常用機能・実務レイアウト (Phase 4.1〜4.3)**:
+  - **画面分割・マルチビュー**: `:split`, `:vsplit`, `:close`, `:only`, `Ctrl-w` ウィンドウキーバインド。
+  - **BOX選択・矩形編集の完全対応**: `Ctrl-v` による矩形選択、ヤンク（`y`）、削除（`d`, `x`）、一括挿入（`I`, `A`）、スマート矩形ペースト。
+  - **アウトライン解析サイドペイン**: Markdown見出しツリー、Rust関数の関数・構造体ツリー解析と即時ジャンプ。
+  - **文字変換 ex コマンド**: `:%zenkaku`, `:%hankaku`, `:%hiragana`, `:%katakana`, `:%toupper`, `:%tolower` 等の一括変換。
+  - **テキストアライン・リナンバ・行編集支援**: `:align <target>`, `:renumber [start] [step]`, `:insbeg`, `:insend`, `:begend`。
+  - **高速入力・マクロ機能**:
+    - 動的単語補完 (dabbrev / `Ctrl-l`, `Ctrl-m`)
+    - 静的略語展開 (abbrev / `Ctrl-;`, `Alt-;`, `F4`, `:abbrev`)
+    - ダイナミックマクロ (増井式リピート / `Alt-m`, `Ctrl-Alt-m`, `:dmacro`)
+    - 字句編集予測 (LexEdit / `Ctrl-j`, `:lexedit`)
+    - Zen-Coding (Emmet / `Ctrl-,`, `Alt-,`, `:zen`)
+    - キーボードマクロ (`Ctrl-Alt-r` / `Ctrl-Alt-p`, `F9` / `F10`, `:macro`)
+  - **BOX選択数値集計**: 矩形範囲の合計・平均・標準偏差計算（`:calc`, `:sum`, `:total`）。
+  - **クリップボード履歴**: `F6` / `:cbhist` ダイアログ。
+  - **内蔵ヘルプビューア**: `F1`, `:help [topic]`。
+
+---
+
+## [0.3.0-alpha] - 2026-10-13
+
+### Added
+- **TUIフロントエンドの実装 (`vivivi-app`)**:
+  - `ratatui` (v0.29) と `crossterm` (v0.28) によるフルスクリーン端末制御。
+  - 代替スクリーンとRawモード制御、パニック耐性復元フック。
+  - エディタバッファ描画、リアルタイムステータスバー、コマンドライン入力UI。
+- **文字コード・改行自動判別モジュール (`encoding.rs`)**:
+  - BOM判定、UTF-8, Shift_JIS/CP932, EUC-JP, UTF-16LE/BE 対応。
+  - CRLF, LF, CR 改行コードの自動判別と相互変換。
+- **対応括弧探索モジュール (`paren.rs`)**:
+  - `()`, `{}`, `[]`, `<>` の文字列・コメントスキップ探索、`%` ジャンプ。
+- **基本シンタックスハイライト (`syntax.rs`)**:
+  - Rust, C/C++, Python, JS, JSON のキーワード・型・文字列・コメント色分け。
+
+---
+
+## [0.2.0-alpha] - 2026-10-13
+
+### Added
+- **Viコマンドエンジン基礎 (`vivivi-vi`)**:
+  - モード定義（Normal, Insert, Visual, VisualLine, CommandLine）。
+  - カーソルモーション（`h/j/k/l`, `w/b/e`, `0/^/$`, `gg/G`）。
+  - オペレータと削除・変更・ヤンク・貼り付け（`d/c/y/p/P`, `dd/yy/cc`, `D/C/Y`, `x/X`）。
+  - レジスタ管理（無名レジスタ, `"a`〜`"z`, 大文字アペンド, 行/文字指向判定）。
+  - パターン検索（`/`, `?`, `n`, `N`）および基本exコマンド（`:w`, `:q`, `:wq`, `:s`, `:%s`）。
+  - ステートフルな `CommandParser`。
+- **独自拡張モード基礎 (`vivivi-modes`)**:
+  - Unicode罫線モード（`Ctrl+矢印` で描画・十字自動結合、`Shift+矢印` で消去）。
+  - 罫線枠内文字列の整列アルゴリズム（左・中央・右揃え）。
+  - インラインCSV/TSVモード（カラム幅自動整列、クォート透過編集、アクティブ行の生テキスト表示）。
+
+---
+
+## [0.1.0-alpha] - 2026-10-13
+
+### Added
+- **コアデータ構造基盤 (`vivivi-core`)**:
+  - OpenViVi準拠の `GapBuffer<T>` 実装（$O(1)$ 局所編集・動的容量倍増・ギャップスライド）。
+  - トランザクション対応 `UndoMgr` 実装（Undoブロック、連続タイピング自動マージ、保存点追跡）。
+  - `GapBuffer` と `UndoMgr` を統合した `TextBuffer` 実装。
+
+---
+
+## [0.0.1-alpha] - 2026-10-13
+
+### Added
+- **初期開発環境整備**:
+  - マルチクレートワークスペース構成の整備（`vivivi-core`, `vivivi-vi`, `vivivi-modes`, `vivivi-app`）。
+  - エージェント運用基盤（`.agents/`, `GEMINI.md`, `RULES.md`）の導入。
+  - 日英バイリンガルドキュメント体系の立ち上げ（`docs/ja/`, `docs/en/`）。
