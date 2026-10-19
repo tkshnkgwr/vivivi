@@ -269,7 +269,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 
 ---
 
-## 3. Currently in Progress: Beta Testing & Practical Verification (v0.9.0-beta)
+## 3. Currently in Progress: Beta Testing & Practical Verification (v0.9.1-beta)
 - [ ] **[Verification & Dogfooding] Boss's Hands-on Manual Testing (`MANUAL_TEST_GUIDE.md`)**
   - Daily coding and production usage, discovering friction points, edge-cases, and bugs.
   - [x] **Dynamic Option Control**: Implemented `:se nu` / `:se nonu` / `:se wrap` / `:se nowrap` and status query commands (`:se nu?`, `:se wrap?`).
