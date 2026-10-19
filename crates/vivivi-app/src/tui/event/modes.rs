@@ -74,6 +74,27 @@ pub(crate) fn handle_insert_mode(app: &mut App, key: KeyEvent) {
                 app.cursor.pos.col += 1;
             }
         }
+        KeyCode::Tab => {
+            let c = '\t';
+            app.vi.record_inserted_char(c);
+            app.dynamic_macro.record_char(c);
+
+            if app.keisen_mode.is_active {
+                if !vivivi_modes::KeisenMode::insert_char_protected(
+                    &mut app.buffer,
+                    &mut app.cursor.pos,
+                    c,
+                ) {
+                    app.status_message =
+                        Some("罫線保護: 枠内に余白がないため挿入できません".to_string());
+                }
+            } else {
+                let cur = app.cursor_pos();
+                let pos = app.buffer.cursor_to_position(cur);
+                app.buffer.insert_char(pos, c);
+                app.cursor.pos.col += 1;
+            }
+        }
         KeyCode::Enter => {
             app.dynamic_macro.record_char('\n');
             let cur = app.cursor_pos();
@@ -83,6 +104,7 @@ pub(crate) fn handle_insert_mode(app: &mut App, key: KeyEvent) {
             app.cursor.pos.col = 0;
         }
         KeyCode::Backspace => {
+            app.vi.record_inserted_backspace();
             if app.keisen_mode.is_active {
                 vivivi_modes::KeisenMode::delete_char_protected(
                     &mut app.buffer,
@@ -201,6 +223,29 @@ pub(crate) fn handle_replace_mode(app: &mut App, key: KeyEvent) {
                 app.buffer.insert_char(pos, c);
             } else {
                 // 行末以降なら追加挿入
+                app.buffer.insert_char(pos, c);
+            }
+            app.buffer.close_undo_block();
+            app.cursor.pos.col += 1;
+        }
+        KeyCode::Tab => {
+            let c = '\t';
+            app.vi.record_inserted_char(c);
+            app.dynamic_macro.record_char(c);
+
+            let cur = app.cursor_pos();
+            let line_len = app
+                .buffer
+                .get_line(cur.line)
+                .map(|l| l.chars().count())
+                .unwrap_or(0);
+
+            let pos = app.buffer.cursor_to_position(cur);
+            app.buffer.open_undo_block();
+            if cur.col < line_len {
+                app.buffer.delete_text(pos, 1, false);
+                app.buffer.insert_char(pos, c);
+            } else {
                 app.buffer.insert_char(pos, c);
             }
             app.buffer.close_undo_block();

@@ -18,84 +18,84 @@ cargo build --release
 
 ## 1. Startup, File I/O, and Status Display
 
-| No. | Test Item | Action / Key Sequence | Expected Result | Checked |
-| :-- | :-------- | :-------------------- | :-------------- | :-----: |
-| 1-1 | Untitled Launch | Run without arguments (`vivivi.exe`) | Opens an empty buffer with `[無題]` displayed on the status line | [ ] |
-| 1-2 | Open Existing File | Run with file argument (`vivivi.exe Cargo.toml`) | Correctly renders file contents with line numbers and filename | [ ] |
-| 1-3 | Encoding Auto-Detection | Open Shift_JIS or EUC-JP text file | Japanese text renders clearly without encoding artifacts | [ ] |
-| 1-4 | Save File (`:w`) | Edit text and run `:w <filename>` | Buffer written to specified path; confirmation shown in status | [ ] |
-| 1-5 | Save and Quit (`:wq`) | Edit text and run `:wq` | Buffer saved and editor gracefully exits back to the terminal | [ ] |
-| 1-6 | Unsaved Quit Guard | Edit text and run `:q` without saving | Blocks exit with warning: `E37: 前回の変更が保存されていません` | [ ] |
-| 1-7 | Force Quit (`:q!`) | Run `:q!` on dirty buffer | Discards changes and exits immediately | [ ] |
+| No. | Test Item               | Action / Key Sequence                            | Expected Result                                                  | Checked |
+| :-- | :---------------------- | :----------------------------------------------- | :--------------------------------------------------------------- | :-----: |
+| 1-1 | Untitled Launch         | Run without arguments (`vivivi.exe`)             | Opens an empty buffer with `[無題]` displayed on the status line |   [ ]   |
+| 1-2 | Open Existing File      | Run with file argument (`vivivi.exe Cargo.toml`) | Correctly renders file contents with line numbers and filename   |   [ ]   |
+| 1-3 | Encoding Auto-Detection | Open Shift_JIS or EUC-JP text file               | Japanese text renders clearly without encoding artifacts         |   [ ]   |
+| 1-4 | Save File (`:w`)        | Edit text and run `:w <filename>`                | Buffer written to specified path; confirmation shown in status   |   [ ]   |
+| 1-5 | Save and Quit (`:wq`)   | Edit text and run `:wq`                          | Buffer saved and editor gracefully exits back to the terminal    |   [ ]   |
+| 1-6 | Unsaved Quit Guard      | Edit text and run `:q` without saving            | Blocks exit with warning: `E37: 前回の変更が保存されていません`  |   [ ]   |
+| 1-7 | Force Quit (`:q!`)      | Run `:q!` on dirty buffer                        | Discards changes and exits immediately                           |   [ ]   |
 
 ---
 
 ## 2. Vi Basic Operations, Modes, and Cursor Shapes
 
-| No. | Test Item | Action / Key Sequence | Expected Result | Checked |
-| :-- | :-------- | :-------------------- | :-------------- | :-----: |
-| 2-1 | Motions | In Normal mode, press `h`, `j`, `k`, `l`, `w`, `b`, `0`, `$`, `gg`, `G` | Smooth cursor motion without boundary crashes | [ ] |
-| 2-2 | Insert Mode Entry/Exit | Type text after `i`, `a`, `I`, `A`, `o`, `O`, then press `Esc` | Text inserted accurately; `Esc` returns to Normal mode | [ ] |
-| 2-3 | Cursor Shape Switching | Switch between Normal (`Esc`) $\to$ Insert (`i`) $\to$ Replace (`R`) | Normal: █ (Block) / Insert: ▎ (Bar) / Replace:   (Underline) | [ ] |
-| 2-4 | Deletion | Execute `x`, `dw`, `dd` | Characters/words/lines deleted and shifted cleanly | [ ] |
-| 2-5 | Yank and Put | Press `yy` to copy line, then `p` or `P` to paste | Pastes line directly above or below cursor position | [ ] |
-| 2-6 | Undo and Redo | Edit text, then press `u` to undo and `Ctrl-r` to redo | Restores previous states accurately per keystroke/typing burst | [ ] |
-| 2-7 | Replace Mode (`R`) | Press `R` in Normal mode, type over existing text | Overwrites existing characters; `Esc` exits to Normal mode | [ ] |
+| No. | Test Item              | Action / Key Sequence                                                   | Expected Result                                                | Checked |
+| :-- | :--------------------- | :---------------------------------------------------------------------- | :------------------------------------------------------------- | :-----: |
+| 2-1 | Motions                | In Normal mode, press `h`, `j`, `k`, `l`, `w`, `b`, `0`, `$`, `gg`, `G` | Smooth cursor motion without boundary crashes                  |   [ ]   |
+| 2-2 | Insert Mode Entry/Exit | Type text after `i`, `a`, `I`, `A`, `o`, `O`, then press `Esc`          | Text inserted accurately; `Esc` returns to Normal mode         |   [ ]   |
+| 2-3 | Cursor Shape Switching | Switch between Normal (`Esc`) $\to$ Insert (`i`) $\to$ Replace (`R`)    | Normal: █ (Block) / Insert: ▎ (Bar) / Replace:   (Underline)   |   [ ]   |
+| 2-4 | Deletion               | Execute `x`, `dw`, `dd`                                                 | Characters/words/lines deleted and shifted cleanly             |   [ ]   |
+| 2-5 | Yank and Put           | Press `yy` to copy line, then `p` or `P` to paste                       | Pastes line directly above or below cursor position            |   [ ]   |
+| 2-6 | Undo and Redo          | Edit text, then press `u` to undo and `Ctrl-r` to redo                  | Restores previous states accurately per keystroke/typing burst |   [ ]   |
+| 2-7 | Replace Mode (`R`)     | Press `R` in Normal mode, type over existing text                       | Overwrites existing characters; `Esc` exits to Normal mode     |   [ ]   |
 
 ---
 
 ## 3. Search, Navigation, and Highlighting
 
-| No. | Test Item | Action / Key Sequence | Expected Result | Checked |
-| :-- | :-------- | :-------------------- | :-------------- | :-----: |
-| 3-1 | Slash Search | Press `/`, enter search pattern, press `Enter` | Real-time inverted color highlight on all matches in viewport | [ ] |
-| 3-2 | Search Navigation | Press `n` (next) and `N` (previous) | Jumps sequentially between search matches | [ ] |
-| 3-3 | Clear Highlights | Run `:noh` or `:nohlsearch` | Viewport search highlights cleared immediately | [ ] |
-| 3-4 | Word Under Cursor | Press `*` or `g*` over a word | Immediately searches word and jumps to next match | [ ] |
-| 3-5 | Migemo Romaji Search | Press `g/`, type Romaji query (e.g. `kensaku`) | Incrementally matches and jumps to corresponding Kanji/Kana | [ ] |
+| No. | Test Item            | Action / Key Sequence                          | Expected Result                                               | Checked |
+| :-- | :------------------- | :--------------------------------------------- | :------------------------------------------------------------ | :-----: |
+| 3-1 | Slash Search         | Press `/`, enter search pattern, press `Enter` | Real-time inverted color highlight on all matches in viewport |   [ ]   |
+| 3-2 | Search Navigation    | Press `n` (next) and `N` (previous)            | Jumps sequentially between search matches                     |   [ ]   |
+| 3-3 | Clear Highlights     | Run `:noh` or `:nohlsearch`                    | Viewport search highlights cleared immediately                |   [ ]   |
+| 3-4 | Word Under Cursor    | Press `*` or `g*` over a word                  | Immediately searches word and jumps to next match             |   [ ]   |
+| 3-5 | Migemo Romaji Search | Press `g/`, type Romaji query (e.g. `kensaku`) | Incrementally matches and jumps to corresponding Kanji/Kana   |   [ ]   |
 
 ---
 
 ## 4. OpenViVi / Modern Visual Enhancements
 
-| No. | Test Item | Action / Key Sequence | Expected Result | Checked |
-| :-- | :-------- | :-------------------- | :-------------- | :-----: |
-| 4-1 | Gutter Change Marker (Modified) | Edit a line (insert or delete characters) | Yellow indicator bar (`▌`) appears in the leftmost gutter | [ ] |
-| 4-2 | Gutter Change Marker (Saved) | Save buffer via `:w` after editing | Yellow indicator transitions to green bar (`▌`) | [ ] |
-| 4-3 | Recent Files Dialog (`F7`) | Press `F7` or run `:recent` | Popup modal dialog lists recent files; select with `j`/`k` and `Enter` | [ ] |
-| 4-4 | Show Invisible Characters | Run `:set list` | Renders full-width space as `□`, tab as `▸---`, EOL as `$` | [ ] |
-| 4-5 | Hide Invisible Characters | Run `:set nolist` | Reverts to standard blank rendering | [ ] |
+| No. | Test Item                       | Action / Key Sequence                     | Expected Result                                                                                                                 | Checked |
+| :-- | :------------------------------ | :---------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------ | :-----: |
+| 4-1 | Gutter Change Marker (Modified) | Edit a line (insert or delete characters) | Yellow indicator bar (`▌`) appears in the leftmost gutter                                                                       |   [ ]   |
+| 4-2 | Gutter Change Marker (Saved)    | Save buffer via `:w` after editing        | Yellow indicator transitions to green bar (`▌`)                                                                                 |   [ ]   |
+| 4-3 | Recent Files Dialog (`F7`)      | Press `F7` or run `:recent`               | Popup modal dialog lists recent files; select with `j`/`k` and `Enter`                                                          |   [ ]   |
+| 4-4 | Show Invisible Characters       | Run `:set list`                           | Renders full-width space with 2-cell wine-red background highlight (preserving full character width), tab as `▸---`, EOL as `$` |   [ ]   |
+| 4-5 | Hide Invisible Characters       | Run `:set nolist`                         | Reverts to standard blank rendering (background highlight removed)                                                              |   [ ]   |
 
 ---
 
 ## 5. ViVi Signature Editing Power Tools
 
-| No. | Test Item | Action / Key Sequence | Expected Result | Checked |
-| :-- | :-------- | :-------------------- | :-------------- | :-----: |
-| 5-1 | Keisen Box-Drawing Mode | Press `Alt+k` or run `:keisen`, then press arrow keys | Draws line borders along arrow directions | [ ] |
-| 5-2 | Auto Border Joining | Cross lines or turn corners | Automatically transforms intersections into `┌`, `┐`, `┘`, `└`, `┼`, `┬` | [ ] |
-| 5-3 | In-Box Text Alignment | Inside box, run `:align center` or `:align left` | Text centered or left-aligned within box margins | [ ] |
-| 5-4 | Renumbering | Select ordered list (1., 2.) and run `:renum 1 1` | Automatically renumbers prefixes starting at 1 with step 1 | [ ] |
-| 5-5 | Head/Tail Batch Insertion | Run `:insbeg // ` or `:insend ;` | Prepends or appends target string across range | [ ] |
-| 5-6 | Character Conversion | Run `:zenkaku`, `:hankaku`, `:hiragana`, `:katakana` | Accurate bidirectional character case and script conversion | [ ] |
-| 5-7 | Zen-Coding (Emmet) | Run `:zen ul>li*3` | Expands to `<ul>\n  <li></li>\n  <li></li>\n  <li></li>\n</ul>` | [ ] |
-| 5-8 | Dynamic Completion | Type word prefix and press `Ctrl-L` | Completes candidate word from buffer history | [ ] |
+| No. | Test Item                 | Action / Key Sequence                                 | Expected Result                                                          | Checked |
+| :-- | :------------------------ | :---------------------------------------------------- | :----------------------------------------------------------------------- | :-----: |
+| 5-1 | Keisen Box-Drawing Mode   | Press `Alt+k` or run `:keisen`, then press arrow keys | Draws line borders along arrow directions                                |   [ ]   |
+| 5-2 | Auto Border Joining       | Cross lines or turn corners                           | Automatically transforms intersections into `┌`, `┐`, `┘`, `└`, `┼`, `┬` |   [ ]   |
+| 5-3 | In-Box Text Alignment     | Inside box, run `:align center` or `:align left`      | Text centered or left-aligned within box margins                         |   [ ]   |
+| 5-4 | Renumbering               | Select ordered list (1., 2.) and run `:renum 1 1`     | Automatically renumbers prefixes starting at 1 with step 1               |   [ ]   |
+| 5-5 | Head/Tail Batch Insertion | Run `:insbeg // ` or `:insend ;`                      | Prepends or appends target string across range                           |   [ ]   |
+| 5-6 | Character Conversion      | Run `:zenkaku`, `:hankaku`, `:hiragana`, `:katakana`  | Accurate bidirectional character case and script conversion              |   [ ]   |
+| 5-7 | Zen-Coding (Emmet)        | Run `:zen ul>li*3`                                    | Expands to `<ul>\n  <li></li>\n  <li></li>\n  <li></li>\n</ul>`          |   [ ]   |
+| 5-8 | Dynamic Completion        | Type word prefix and press `Ctrl-L`                   | Completes candidate word from buffer history                             |   [ ]   |
 
 ---
 
 ## 6. Window Splitting, Tools, and Workspaces
 
-| No. | Test Item | Action / Key Sequence | Expected Result | Checked |
-| :-- | :-------- | :-------------------- | :-------------- | :-----: |
-| 6-1 | Horizontal Split (`:sp`) | Run `:split` or `:sp`, scroll one window | Splits horizontally; other window retains independent scroll position | [ ] |
-| 6-2 | Vertical Split (`:vs`) | Run `:vsplit` or `:vs`, scroll one window | Splits vertically; other window retains independent scroll position | [ ] |
-| 6-3 | Close Window (`:close`) | In split view, run `:close` or `:c` | Closes active window and expands remaining window | [ ] |
-| 6-4 | Only Window (`:only`) | In multi-split view, run `:only` | Closes all other splits except the active window | [ ] |
-| 6-5 | Outline View (`:outline`) | In Markdown or Rust file, run `:outline` | Sidebar tree lists headings/symbols for fast jumping | [ ] |
-| 6-6 | Print Preview (`:preview`) | Run `:preview` or `:print` | Modal A4 paginated preview with header/footer (`q` to return) | [ ] |
-| 6-7 | 2-Pane Filer (`:filer`) | Run `:filer` | Dual-pane directory navigator opens; `Tab` toggles focus | [ ] |
-| 6-8 | Workspace Grep (`:grep`) | Run `:grep fn` | Displays matches list; jump via `:cnext` and `:cprev` | [ ] |
-| 6-9 | Help System (`F1`) | Press `F1` or run `:help` | Fullscreen modal help viewer displays topic docs (`j`/`k` scroll) | [ ] |
+| No. | Test Item                                | Action / Key Sequence                              | Expected Result                                                             | Checked |
+| :-- | :--------------------------------------- | :------------------------------------------------- | :-------------------------------------------------------------------------- | :-----: |
+| 6-1 | Horizontal Split (`:sp`)                 | Run `:split` or `:sp`, scroll one window           | Splits horizontally; other window retains independent scroll position       |   [ ]   |
+| 6-2 | Vertical Split (`:vs`)                   | Run `:vsplit` or `:vs`, scroll one window          | Splits vertically; other window retains independent scroll position         |   [ ]   |
+| 6-3 | Close Window (`:close`)                  | In split view, run `:close` or `:c`                | Closes active window and expands remaining window                           |   [ ]   |
+| 6-4 | Only Window (`:only`)                    | In multi-split view, run `:only`                   | Closes all other splits except the active window                            |   [ ]   |
+| 6-5 | Outline View (`:outline`)                | In Markdown or Rust file, run `:outline`           | Sidebar tree lists headings/symbols for fast jumping                        |   [ ]   |
+| 6-6 | Print Preview & PDF (`:preview`, `:pdf`) | Run `:preview` then `p`, or run `:pdf`             | Paginated modal opens; `p` or `:pdf` exports a valid PDF 1.4 file           |   [ ]   |
+| 6-7 | 2-Pane Filer (`:filer`)                  | Run `:filer` and use `Tab`/`j`/`k`/`Enter`/`Space` | Dual-pane modal opens; `Tab` switches pane, `Enter` opens/enters, `q` exits |   [ ]   |
+| 6-8 | Workspace Grep (`:grep`)                 | Run `:grep fn`                                     | Displays matches list; jump via `:cnext` and `:cprev`                       |   [ ]   |
+| 6-9 | Help System (`F1`)                       | Press `F1` or run `:help`                          | Fullscreen modal help viewer displays topic docs (`j`/`k` scroll)           |   [ ]   |
 
 ---
 

@@ -109,11 +109,11 @@ pub(crate) fn execute_ex_command(app: &mut App, cmd: &str) {
             app.clear_search_highlight();
             app.status_message = Some("検索ハイライトを消去しました (:nohlsearch)".to_string());
         }
-        "set nohls" | "set nohlsearch" => {
+        "set nohls" | "se nohls" | "set nohlsearch" | "se nohlsearch" => {
             app.clear_search_highlight();
             app.status_message = Some("検索ハイライト: OFF (:set nohlsearch)".to_string());
         }
-        "set hls" | "set hlsearch" => {
+        "set hls" | "se hls" | "set hlsearch" | "se hlsearch" => {
             app.is_search_highlight_visible = true;
             app.status_message = Some("検索ハイライト: ON (:set hlsearch)".to_string());
         }
@@ -395,17 +395,24 @@ pub(crate) fn execute_ex_command(app: &mut App, cmd: &str) {
             }
         }
 
-        // --- 保存時文字コード切替 (:set fenc=<enc>, :set fileencoding=<enc>, :set fenc?, :set fenc) ---
-        "set fenc?" | "set fileencoding?" | "set fenc" | "set fileencoding" => {
+        // --- 保存時文字コード切替 (:set fenc=<enc>, :se fenc=<enc>, :set fileencoding=<enc>, :set fenc?, :set fenc) ---
+        "set fenc?" | "se fenc?" | "set fileencoding?" | "se fileencoding?" | "set fenc"
+        | "se fenc" | "set fileencoding" | "se fileencoding" => {
             app.status_message = Some(format!(
                 "現在のファイルエンコーディング (fenc): {}",
                 app.encoding.name()
             ));
         }
-        _ if trimmed.starts_with("set fenc=") || trimmed.starts_with("set fileencoding=") => {
+        _ if trimmed.starts_with("set fenc=")
+            || trimmed.starts_with("se fenc=")
+            || trimmed.starts_with("set fileencoding=")
+            || trimmed.starts_with("se fileencoding=") =>
+        {
             let enc_str = trimmed
                 .strip_prefix("set fenc=")
+                .or_else(|| trimmed.strip_prefix("se fenc="))
                 .or_else(|| trimmed.strip_prefix("set fileencoding="))
+                .or_else(|| trimmed.strip_prefix("se fileencoding="))
                 .unwrap_or("")
                 .trim();
             if let Some(enc) = vivivi_core::CharEncoding::parse_enc(enc_str) {
@@ -421,14 +428,21 @@ pub(crate) fn execute_ex_command(app: &mut App, cmd: &str) {
             }
         }
 
-        // --- 保存時改行コード切替 (:set ff=<format>, :set fileformat=<format>, :set ff?, :set ff) ---
-        "set ff?" | "set fileformat?" | "set ff" | "set fileformat" => {
+        // --- 保存時改行コード切替 (:set ff=<format>, :se ff=<format>, :set fileformat=<format>, :set ff?, :set ff) ---
+        "set ff?" | "se ff?" | "set fileformat?" | "se fileformat?" | "set ff" | "se ff"
+        | "set fileformat" | "se fileformat" => {
             app.status_message = Some(format!("現在の改行形式 (ff): {}", app.newline.name()));
         }
-        _ if trimmed.starts_with("set ff=") || trimmed.starts_with("set fileformat=") => {
+        _ if trimmed.starts_with("set ff=")
+            || trimmed.starts_with("se ff=")
+            || trimmed.starts_with("set fileformat=")
+            || trimmed.starts_with("se fileformat=") =>
+        {
             let ff_str = trimmed
                 .strip_prefix("set ff=")
+                .or_else(|| trimmed.strip_prefix("se ff="))
                 .or_else(|| trimmed.strip_prefix("set fileformat="))
+                .or_else(|| trimmed.strip_prefix("se fileformat="))
                 .unwrap_or("")
                 .trim();
             if let Some(nl) = vivivi_core::NewlineType::parse_ff(ff_str) {
@@ -441,8 +455,9 @@ pub(crate) fn execute_ex_command(app: &mut App, cmd: &str) {
             }
         }
 
-        // --- システムクリップボード同期 (:set clipboard=<opt>, :set cb=<opt>, :set clipboard?, :set cb?) ---
-        "set clipboard?" | "set cb?" | "set clipboard" | "set cb" => {
+        // --- システムクリップボード同期 (:set clipboard=<opt>, :se cb=<opt>, :set clipboard?, :set cb?) ---
+        "set clipboard?" | "se clipboard?" | "set cb?" | "se cb?" | "set clipboard"
+        | "se clipboard" | "set cb" | "se cb" => {
             let current = match app.vi.clipboard_option() {
                 vivivi_vi::ClipboardOption::None => "none",
                 vivivi_vi::ClipboardOption::Unnamed => "unnamed",
@@ -450,10 +465,16 @@ pub(crate) fn execute_ex_command(app: &mut App, cmd: &str) {
             };
             app.status_message = Some(format!("現在のクリップボード設定 (clipboard): {current}"));
         }
-        _ if trimmed.starts_with("set clipboard=") || trimmed.starts_with("set cb=") => {
+        _ if trimmed.starts_with("set clipboard=")
+            || trimmed.starts_with("se clipboard=")
+            || trimmed.starts_with("set cb=")
+            || trimmed.starts_with("se cb=") =>
+        {
             let cb_str = trimmed
                 .strip_prefix("set clipboard=")
+                .or_else(|| trimmed.strip_prefix("se clipboard="))
                 .or_else(|| trimmed.strip_prefix("set cb="))
+                .or_else(|| trimmed.strip_prefix("se cb="))
                 .unwrap_or("")
                 .trim();
             let opt = vivivi_vi::ClipboardOption::parse(cb_str);
@@ -468,31 +489,88 @@ pub(crate) fn execute_ex_command(app: &mut App, cmd: &str) {
             ));
         }
 
-        // --- 行番号表示切替 (:set number / :set nonumber / :set nu / :set nonu) ---
-        "number" | "set number" | "nu" | "set nu" => {
+        // --- 行番号表示切替 (:set number / :set nonumber / :set nu / :set nonu / :se nu / :se nonu) ---
+        "number" | "set number" | "se number" | "nu" | "set nu" | "se nu" => {
             app.show_line_numbers = true;
-            app.status_message = Some("行番号表示: ON".to_string());
+            app.status_message = Some("行番号表示: ON (:set number)".to_string());
         }
-        "nonumber" | "set nonumber" | "nonu" | "set nonu" => {
+        "nonumber" | "set nonumber" | "se nonumber" | "nonu" | "set nonu" | "se nonu" => {
             app.show_line_numbers = false;
-            app.status_message = Some("行番号表示: OFF".to_string());
+            app.status_message = Some("行番号表示: OFF (:set nonumber)".to_string());
+        }
+        "number?" | "set number?" | "se number?" | "nu?" | "set nu?" | "se nu?" => {
+            let state = if app.show_line_numbers {
+                "number"
+            } else {
+                "nonumber"
+            };
+            app.status_message = Some(format!(
+                "{state} (行番号表示: {})",
+                if app.show_line_numbers { "ON" } else { "OFF" }
+            ));
         }
 
-        // --- 相対行番号表示切替 (:set relativenumber / :set norelativenumber / :set rnu / :set nornu) ---
-        "relativenumber" | "set relativenumber" | "rnu" | "set rnu" => {
+        // --- テキスト折り返し切替 (:set wrap / :set nowrap / :se wrap / :se nowrap) ---
+        "wrap" | "set wrap" | "se wrap" => {
+            app.wrap = true;
+            app.scroll.1 = 0;
+            app.status_message = Some("テキスト折り返し: ON (:set wrap)".to_string());
+        }
+        "nowrap" | "set nowrap" | "se nowrap" => {
+            app.wrap = false;
+            app.status_message = Some("テキスト折り返し: OFF (:set nowrap)".to_string());
+        }
+        "wrap?" | "set wrap?" | "se wrap?" => {
+            let state = if app.wrap { "wrap" } else { "nowrap" };
+            app.status_message = Some(format!(
+                "{state} (テキスト折り返し: {})",
+                if app.wrap { "ON" } else { "OFF" }
+            ));
+        }
+
+        // --- 相対行番号表示切替 (:set relativenumber / :set norelativenumber / :set rnu / :set nornu / :se rnu / :se nornu) ---
+        "relativenumber" | "set relativenumber" | "se relativenumber" | "rnu" | "set rnu"
+        | "se rnu" => {
             app.relative_number = true;
-            app.status_message = Some("相対行番号表示: ON".to_string());
+            app.status_message = Some("相対行番号表示: ON (:set relativenumber)".to_string());
         }
-        "norelativenumber" | "set norelativenumber" | "nornu" | "set nornu" => {
+        "norelativenumber"
+        | "set norelativenumber"
+        | "se norelativenumber"
+        | "nornu"
+        | "set nornu"
+        | "se nornu" => {
             app.relative_number = false;
-            app.status_message = Some("相対行番号表示: OFF".to_string());
+            app.status_message = Some("相対行番号表示: OFF (:set norelativenumber)".to_string());
+        }
+        "relativenumber?"
+        | "set relativenumber?"
+        | "se relativenumber?"
+        | "rnu?"
+        | "set rnu?"
+        | "se rnu?" => {
+            let state = if app.relative_number {
+                "relativenumber"
+            } else {
+                "norelativenumber"
+            };
+            app.status_message = Some(format!(
+                "{state} (相対行番号表示: {})",
+                if app.relative_number { "ON" } else { "OFF" }
+            ));
         }
 
-        // --- タブ幅切替 (:set tabstop=<N>, :set ts=<N>) ---
-        _ if trimmed.starts_with("set tabstop=") || trimmed.starts_with("set ts=") => {
+        // --- タブ幅切替 (:set tabstop=<N>, :se tabstop=<N>, :set ts=<N>, :se ts=<N>) ---
+        _ if trimmed.starts_with("set tabstop=")
+            || trimmed.starts_with("se tabstop=")
+            || trimmed.starts_with("set ts=")
+            || trimmed.starts_with("se ts=") =>
+        {
             let val = trimmed
                 .strip_prefix("set tabstop=")
+                .or_else(|| trimmed.strip_prefix("se tabstop="))
                 .or_else(|| trimmed.strip_prefix("set ts="))
+                .or_else(|| trimmed.strip_prefix("se ts="))
                 .unwrap_or("")
                 .trim();
             if let Ok(w) = val.parse::<usize>() {
@@ -506,13 +584,14 @@ pub(crate) fn execute_ex_command(app: &mut App, cmd: &str) {
             }
         }
 
-        // --- 設定ファイル再読込・パス確認 (:config, :set config) ---
-        "config" | "set config" => {
+        // --- 設定ファイル再読込・パス確認 (:config, :set config, :se config) ---
+        "config" | "set config" | "se config" => {
             let path = crate::config::AppConfig::default_config_path();
             let new_config = crate::config::AppConfig::load_or_default(Some(&path));
             app.show_line_numbers = new_config.editor.line_number;
             app.relative_number = new_config.editor.relative_number;
             app.tab_width = new_config.editor.tab_width;
+            app.wrap = new_config.editor.wrap;
             app.change_tracker.enabled = new_config.gutter.enabled;
             app.list_chars_config.enabled = new_config.invisible.enabled;
             app.list_chars_config.zenkaku_space =
@@ -525,33 +604,39 @@ pub(crate) fn execute_ex_command(app: &mut App, cmd: &str) {
             app.status_message = Some(format!("設定を再読込しました: {}", path.display()));
         }
 
-        // --- 不可視文字可視化 (:set list / :set nolist / :list / :nolist) ---
-        "list" | "set list" => {
+        // --- 不可視文字可視化 (:set list / :set nolist / :se list / :se nolist / :list / :nolist) ---
+        "list" | "set list" | "se list" => {
             app.list_chars_config.enabled = true;
             app.status_message =
                 Some("不可視文字表示 (全角スペース□ / タブ▸--- / 改行$): ON".to_string());
         }
-        "nolist" | "set nolist" => {
+        "nolist" | "set nolist" | "se nolist" => {
             app.list_chars_config.enabled = false;
             app.status_message = Some("不可視文字表示: OFF".to_string());
         }
 
-        // --- 変更行ガター強調 (:set gutter / :set nogutter / :gutter / :nogutter) ---
-        "gutter" | "set gutter" => {
+        // --- 変更行ガター強調 (:set gutter / :set nogutter / :se gutter / :se nogutter / :gutter / :nogutter) ---
+        "gutter" | "set gutter" | "se gutter" => {
             app.change_tracker.enabled = true;
             app.status_message =
                 Some("変更行ガター強調表示 (黄:未保存, 緑:保存済): ON".to_string());
         }
-        "nogutter" | "set nogutter" => {
+        "nogutter" | "set nogutter" | "se nogutter" => {
             app.change_tracker.enabled = false;
             app.status_message = Some("変更行ガター強調表示: OFF".to_string());
         }
 
-        // --- 言語構文・ファイルタイプ切替 (:set ft=<lang>, :set filetype=<lang>) ---
-        _ if trimmed.starts_with("set ft=") || trimmed.starts_with("set filetype=") => {
+        // --- 言語構文・ファイルタイプ切替 (:set ft=<lang>, :se ft=<lang>, :set filetype=<lang>, :se filetype=<lang>) ---
+        _ if trimmed.starts_with("set ft=")
+            || trimmed.starts_with("se ft=")
+            || trimmed.starts_with("set filetype=")
+            || trimmed.starts_with("se filetype=") =>
+        {
             let lang_str = trimmed
                 .strip_prefix("set ft=")
+                .or_else(|| trimmed.strip_prefix("se ft="))
                 .or_else(|| trimmed.strip_prefix("set filetype="))
+                .or_else(|| trimmed.strip_prefix("se filetype="))
                 .unwrap_or("")
                 .trim()
                 .to_ascii_lowercase();
@@ -661,29 +746,18 @@ pub(crate) fn execute_ex_command(app: &mut App, cmd: &str) {
             }
         }
 
-        // --- インラインファイラー (:filer, :explore) ---
+        // --- 2ペイン インラインファイラー (:filer [path], :explore [path]) ---
         "filer" | "explore" => {
-            let cur_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-            let filer = vivivi_modes::TwoPaneFiler::new(cur_dir);
-            let mut lines = vec![
-                format!(
-                    "# 2ペイン ファイラープレビュー (作業ディレクトリ: {})",
-                    filer.left.current_dir.display()
-                ),
-                "".to_string(),
-                "## ファイル一覧:".to_string(),
-            ];
-            for ent in &filer.left.entries {
-                let prefix = if ent.is_dir { "[DIR] " } else { "      " };
-                lines.push(format!("* {prefix}{}", ent.name));
-            }
-            app.preview_lines = lines;
-            app.show_preview = true;
-            app.preview_scroll = 0;
-            app.status_message = Some(format!(
-                "ファイラー: {} 件 (Escで閉じる)",
-                filer.left.entries.len()
-            ));
+            app.open_filer(None);
+        }
+        _ if trimmed.starts_with("filer ") || trimmed.starts_with("explore ") => {
+            let path_str = trimmed
+                .strip_prefix("filer ")
+                .or_else(|| trimmed.strip_prefix("explore "))
+                .unwrap_or("")
+                .trim();
+            let path = std::path::Path::new(path_str);
+            app.open_filer(Some(path));
         }
 
         // --- 印刷プレビュー (:preview, :print) ---
@@ -692,15 +766,31 @@ pub(crate) fn execute_ex_command(app: &mut App, cmd: &str) {
             let file_name = app
                 .file_path
                 .as_ref()
-                .and_then(|p| p.to_str())
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
                 .unwrap_or("Untitled");
+            let date_str = crate::tui::app::current_date_str();
             let settings = vivivi_modes::PrintSettings::default();
-            let pages = vivivi_modes::paginate_text(&content, file_name, "2026-10-14", &settings);
+            let pages = vivivi_modes::paginate_text(&content, file_name, &date_str, &settings);
             let preview_text = vivivi_modes::format_preview_text(&pages);
             app.preview_lines = preview_text.lines().map(|s| s.to_string()).collect();
             app.show_preview = true;
             app.preview_scroll = 0;
-            app.status_message = Some("印刷プレビュー (Escで閉じる)".to_string());
+            app.status_message =
+                Some("印刷プレビュー [p:PDF保存, j/k:スクロール, q/Esc:閉じる]".to_string());
+        }
+
+        // --- PDF直接出力 (:pdf [path]) ---
+        cmd if cmd == "pdf" || cmd.starts_with("pdf ") => {
+            let path_arg = trimmed.strip_prefix("pdf").unwrap_or("").trim();
+            let target = if path_arg.is_empty() {
+                None
+            } else {
+                Some(path_arg)
+            };
+            if let Err(e) = app.export_pdf(target) {
+                app.status_message = Some(format!("PDF出力エラー: {e}"));
+            }
         }
 
         _ => {

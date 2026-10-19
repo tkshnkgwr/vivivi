@@ -65,9 +65,13 @@ pub enum Motion {
     },
     /// 直前の行内文字検索を繰り返す (`;` 同方向, `,` 逆方向)
     RepeatFindChar { reverse: bool, count: usize },
+    /// 次の段落へ移動 (`}`)
+    ParagraphForward(usize),
+    /// 前の段落へ移動 (`{`)
+    ParagraphBackward(usize),
 }
 
-/// オペレータ（削除、ヤンク、変更などの操作種別）。
+/// オペレータ（削除、ヤンク、変更、インデントなどの操作種別）。
 ///
 /// # Examples
 ///
@@ -85,6 +89,21 @@ pub enum Operator {
     Yank,
     /// 変更（削除してInsertモードへ移行） (`c`)
     Change,
+    /// インデント追加 (`>`)
+    ShiftRight,
+    /// インデント削除 (`<`)
+    ShiftLeft,
+}
+
+/// 画面スクロール配置の目標位置。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScrollTarget {
+    /// カーソル行を画面最上部へ (`zt`)
+    Top,
+    /// カーソル行を画面中央へ (`zz`)
+    Center,
+    /// カーソル行を画面最下部へ (`zb`)
+    Bottom,
 }
 
 /// 単語検索の一致条件種別。
@@ -236,6 +255,10 @@ pub enum ViCommand {
     ExecuteMacro(char),
     /// コード折り畳み操作 (`zc`, `zo`, `za`, `zM`, `zR`, `z<lvl>`)
     Fold(FoldAction),
+    /// 画面位置のスクロール調整 (`zz`, `zt`, `zb`)
+    ScrollAdjust(ScrollTarget),
+    /// 直前の変更操作を繰り返す (`.`)
+    RepeatLastChange,
 }
 
 /// コード折り畳みのアクション種別。

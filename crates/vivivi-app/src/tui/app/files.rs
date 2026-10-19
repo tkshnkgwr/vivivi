@@ -73,11 +73,12 @@ impl App {
             if path.exists()
                 && let Ok(old_content) = std::fs::read_to_string(&path)
             {
+                let ts = crate::tui::app::current_datetime_str();
                 let _ = vivivi_modes::DiffLog::record_generation(
                     &path,
                     &old_content,
                     &content,
-                    "2026-10-14 14:00:00",
+                    &ts,
                     "auto-save",
                 );
             }

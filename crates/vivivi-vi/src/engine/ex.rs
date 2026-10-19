@@ -278,33 +278,6 @@ impl ViEngine {
                 "印刷プレビューを生成しました (全 {} ページ)",
                 pages.len()
             ));
-        } else if let Some(pdf_path) = cmd.strip_prefix("pdf") {
-            // PDF出力 (:pdf [file.pdf])
-            let out_file = pdf_path.trim();
-            let target_pdf = if out_file.is_empty() {
-                if self.current_file_path.is_empty() {
-                    "document.pdf".to_string()
-                } else {
-                    format!("{}.pdf", self.current_file_path)
-                }
-            } else {
-                out_file.to_string()
-            };
-            let settings = vivivi_modes::PrintSettings::default();
-            let pages = vivivi_modes::paginate_text(
-                &buffer.to_string(),
-                &self.current_file_path,
-                "2026-10-14",
-                &settings,
-            );
-            match vivivi_modes::export_to_pdf(&pages, &target_pdf) {
-                Ok(()) => {
-                    result.message = Some(format!("PDFを出力しました: {target_pdf}"));
-                }
-                Err(e) => {
-                    result.message = Some(format!("PDF出力エラー: {e}"));
-                }
-            }
         } else if cmd == "maketags" || cmd == "tags gen" {
             // プロジェクト内tags一括生成
             let pm = vivivi_modes::ProjectManager::new(".");

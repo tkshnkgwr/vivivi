@@ -290,6 +290,20 @@ impl CommandParser {
                     self.reset();
                     return Some(ViCommand::VisualSwapCase);
                 }
+                '>' => {
+                    self.reset();
+                    return Some(ViCommand::VisualOperate {
+                        op: Operator::ShiftRight,
+                        register: None,
+                    });
+                }
+                '<' => {
+                    self.reset();
+                    return Some(ViCommand::VisualOperate {
+                        op: Operator::ShiftLeft,
+                        register: None,
+                    });
+                }
                 'r' => {
                     self.reset();
                     self.state = ParserState::WaitingForVisualReplaceChar;
@@ -473,6 +487,13 @@ impl CommandParser {
             ParserState::WaitingForZ => {
                 self.state = ParserState::Idle;
                 match ch {
+                    'z' => Some(ViCommand::ScrollAdjust(
+                        crate::command::ScrollTarget::Center,
+                    )),
+                    't' => Some(ViCommand::ScrollAdjust(crate::command::ScrollTarget::Top)),
+                    'b' => Some(ViCommand::ScrollAdjust(
+                        crate::command::ScrollTarget::Bottom,
+                    )),
                     'c' => Some(ViCommand::Fold(crate::command::FoldAction::Close)),
                     'o' => Some(ViCommand::Fold(crate::command::FoldAction::Open)),
                     'a' => Some(ViCommand::Fold(crate::command::FoldAction::Toggle)),
@@ -514,10 +535,14 @@ impl CommandParser {
                 let count = *count;
                 let register = *register;
 
-                // オペレータ連打（例: dd, yy, cc）は行操作
+                // オペレータ連打（例: dd, yy, cc, >>, <<）は行操作
                 let is_double_op = matches!(
                     (op, ch),
-                    (Operator::Delete, 'd') | (Operator::Yank, 'y') | (Operator::Change, 'c')
+                    (Operator::Delete, 'd')
+                        | (Operator::Yank, 'y')
+                        | (Operator::Change, 'c')
+                        | (Operator::ShiftRight, '>')
+                        | (Operator::ShiftLeft, '<')
                 );
 
                 if is_double_op {
@@ -644,11 +669,13 @@ impl CommandParser {
                     return Some(ViCommand::EnterMode(ViMode::CommandLine));
                 }
 
-                // オペレータ (`d`, `c`, `y`)
+                // オペレータ (`d`, `c`, `y`, `>`, `<`)
                 if let Some(op) = match ch {
                     'd' => Some(Operator::Delete),
                     'c' => Some(Operator::Change),
                     'y' => Some(Operator::Yank),
+                    '>' => Some(Operator::ShiftRight),
+                    '<' => Some(Operator::ShiftLeft),
                     _ => None,
                 } {
                     self.state = ParserState::WaitingForMotion {
@@ -710,6 +737,7 @@ impl CommandParser {
                     }
                     'J' => return Some(ViCommand::JoinLines { count }),
                     '~' => return Some(ViCommand::SwapCase),
+                    '.' => return Some(ViCommand::RepeatLastChange),
                     'n' => return Some(ViCommand::SearchNext),
                     'N' => return Some(ViCommand::SearchPrev),
                     '*' => {
@@ -783,6 +811,8 @@ impl CommandParser {
                 Some(Motion::DocumentEnd(target_line))
             }
             '%' => Some(Motion::MatchingParen),
+            '{' => Some(Motion::ParagraphBackward(count)),
+            '}' => Some(Motion::ParagraphForward(count)),
             _ => None,
         }
     }

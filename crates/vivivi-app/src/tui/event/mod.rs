@@ -158,6 +158,11 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
                 app.show_preview = false;
                 app.status_message = Some("印刷プレビューを閉じました".to_string());
             }
+            KeyCode::Char('p') | KeyCode::Char('P') => {
+                if let Err(e) = app.export_pdf(None) {
+                    app.status_message = Some(format!("PDF出力エラー: {e}"));
+                }
+            }
             KeyCode::Down | KeyCode::Char('j') => {
                 app.preview_scroll += 1;
             }
@@ -171,6 +176,129 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
                 app.preview_scroll = app.preview_scroll.saturating_sub(10);
             }
             _ => {}
+        }
+        return;
+    }
+
+    // 2ペインファイラー表示中のキーハンドリング
+    if app.show_filer {
+        let mut to_open = None;
+        if let Some(ref mut filer) = app.filer {
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    app.close_filer();
+                    app.status_message = Some("ファイラーを閉じました".to_string());
+                    return;
+                }
+                KeyCode::Tab => {
+                    filer.switch_pane();
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    filer.active_pane_mut().cursor_down();
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    filer.active_pane_mut().cursor_up();
+                }
+                KeyCode::PageDown => {
+                    for _ in 0..10 {
+                        filer.active_pane_mut().cursor_down();
+                    }
+                }
+                KeyCode::PageUp => {
+                    for _ in 0..10 {
+                        filer.active_pane_mut().cursor_up();
+                    }
+                }
+                KeyCode::Char('f') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    for _ in 0..10 {
+                        filer.active_pane_mut().cursor_down();
+                    }
+                }
+                KeyCode::Char('b') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    for _ in 0..10 {
+                        filer.active_pane_mut().cursor_up();
+                    }
+                }
+                KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    for _ in 0..10 {
+                        filer.active_pane_mut().cursor_down();
+                    }
+                }
+                KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    for _ in 0..10 {
+                        filer.active_pane_mut().cursor_up();
+                    }
+                }
+                KeyCode::Home | KeyCode::Char('g') => {
+                    filer.active_pane_mut().cursor = 0;
+                }
+                KeyCode::End | KeyCode::Char('G') => {
+                    let total = filer.active_pane().entries.len();
+                    filer.active_pane_mut().cursor = total.saturating_sub(1);
+                }
+                KeyCode::Char(' ') => {
+                    filer.active_pane_mut().toggle_select();
+                }
+                KeyCode::Backspace | KeyCode::Char('h') | KeyCode::Left => {
+                    filer.active_pane_mut().up_dir();
+                }
+                KeyCode::Enter | KeyCode::Right => match filer.active_pane_mut().enter() {
+                    Ok(Some(path)) => {
+                        to_open = Some(path);
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        app.status_message = Some(format!("エラー: {e}"));
+                    }
+                },
+                KeyCode::Char('c') => match filer.copy_to_other() {
+                    Ok(cnt) => {
+                        app.status_message =
+                            Some(format!("{cnt} 件のファイルを反対画面へコピーしました"));
+                    }
+                    Err(e) => {
+                        app.status_message = Some(format!("コピー失敗: {e}"));
+                    }
+                },
+                KeyCode::Char('m') => match filer.move_to_other() {
+                    Ok(cnt) => {
+                        app.status_message =
+                            Some(format!("{cnt} 件のファイルを反対画面へ移動しました"));
+                    }
+                    Err(e) => {
+                        app.status_message = Some(format!("移動失敗: {e}"));
+                    }
+                },
+                KeyCode::Char('d') | KeyCode::Delete | KeyCode::Char('x') => {
+                    match filer.delete_selected() {
+                        Ok(0) => {
+                            app.status_message = Some(
+                                "削除対象がありません（親ディレクトリ「..」は削除できません）"
+                                    .to_string(),
+                            );
+                        }
+                        Ok(cnt) => {
+                            app.status_message = Some(format!("{cnt} 件のファイルを削除しました"));
+                        }
+                        Err(e) => {
+                            app.status_message = Some(format!("削除失敗: {e}"));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        } else {
+            app.show_filer = false;
+            return;
+        }
+
+        if let Some(path) = to_open {
+            app.close_filer();
+            if let Err(e) = app.open_file(path.clone()) {
+                app.status_message = Some(format!("ファイル読込エラー: {e}"));
+            } else {
+                app.status_message = Some(format!("ファイルを開きました: {}", path.display()));
+            }
         }
         return;
     }
@@ -446,7 +574,7 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
     }
 }
 
-mod ex;
+pub(crate) mod ex;
 mod modes;
 
 pub(crate) use modes::{

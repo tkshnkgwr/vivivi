@@ -127,6 +127,10 @@ pub struct App {
     pub preview_lines: Vec<String>,
     pub preview_scroll: usize,
 
+    // --- 2ペイン ファイラー (:filer) ---
+    pub show_filer: bool,
+    pub filer: Option<vivivi_modes::TwoPaneFiler>,
+
     // --- 変更行ガター追跡 (Change Markers) ---
     pub change_tracker: ChangeTracker,
 
@@ -143,6 +147,7 @@ pub struct App {
     pub show_line_numbers: bool,
     pub relative_number: bool,
     pub tab_width: usize,
+    pub wrap: bool,
 
     // --- クラッシュリカバリ・スワップファイル (.swp) ---
     pub key_stroke_count: usize,
@@ -212,6 +217,7 @@ impl App {
         let show_line_numbers = config.editor.line_number;
         let relative_number = config.editor.relative_number;
         let tab_width = config.editor.tab_width;
+        let wrap = config.editor.wrap;
 
         let mut vi = ViEngine::new();
         vi.set_clipboard_provider(crate::tui::clipboard::SystemClipboard::new_shared());
@@ -326,6 +332,9 @@ impl App {
             preview_lines: Vec::new(),
             preview_scroll: 0,
 
+            show_filer: false,
+            filer: None,
+
             change_tracker,
             recent_manager,
             show_recent_modal: false,
@@ -336,6 +345,7 @@ impl App {
             show_line_numbers,
             relative_number,
             tab_width,
+            wrap,
             key_stroke_count: 0,
             has_swap_warning,
 
@@ -444,6 +454,22 @@ impl App {
             }
 
             let res = self.vi.execute(&cmd, &mut self.buffer, &mut self.cursor);
+            if let Some(adjust) = res.scroll_adjust {
+                match adjust {
+                    vivivi_vi::ScrollTarget::Top => {
+                        self.scroll.0 = self.cursor.pos.line;
+                    }
+                    vivivi_vi::ScrollTarget::Center => {
+                        let view_height = 24usize;
+                        let half = view_height / 2;
+                        self.scroll.0 = self.cursor.pos.line.saturating_sub(half);
+                    }
+                    vivivi_vi::ScrollTarget::Bottom => {
+                        let view_height = 24usize;
+                        self.scroll.0 = (self.cursor.pos.line + 1).saturating_sub(view_height);
+                    }
+                }
+            }
             if let Some(win) = self.windows.get_mut(self.active_window) {
                 win.cursor = self.cursor.clone();
                 win.scroll = self.scroll;
@@ -511,7 +537,8 @@ impl App {
                 break;
             }
             if ch == '\t' {
-                visual_x += 4 - (visual_x % 4);
+                let tab_w = self.tab_width.max(1);
+                visual_x += tab_w - (visual_x % tab_w);
             } else {
                 visual_x += unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
             }
@@ -544,12 +571,16 @@ impl App {
             self.scroll.0 = cur.line - view_height + 1;
         }
 
-        // 水平スクロール（全角・タブ幅を考慮した表示カラム幅基準）
-        let cur_visual_col = self.visual_col_at(cur.line, cur.col);
-        if cur_visual_col < self.scroll.1 {
-            self.scroll.1 = cur_visual_col;
-        } else if cur_visual_col >= self.scroll.1 + view_width {
-            self.scroll.1 = cur_visual_col - view_width + 1;
+        // 水平スクロール（nowrap時のみ適用、wrap時は常に0）
+        if self.wrap {
+            self.scroll.1 = 0;
+        } else {
+            let cur_visual_col = self.visual_col_at(cur.line, cur.col);
+            if cur_visual_col < self.scroll.1 {
+                self.scroll.1 = cur_visual_col;
+            } else if cur_visual_col >= self.scroll.1 + view_width {
+                self.scroll.1 = cur_visual_col - view_width + 1;
+            }
         }
 
         // アクティブウィンドウの状態と同期
@@ -631,4 +662,101 @@ impl App {
         };
         self.cursor.pos.col = self.cursor.pos.col.min(max_col);
     }
+
+    /// 2ペインファイラーを開きます (`:filer`)。
+    pub fn open_filer(&mut self, path: Option<&std::path::Path>) {
+        let target_dir = if let Some(p) = path {
+            if p.is_dir() {
+                p.to_path_buf()
+            } else {
+                p.parent()
+                    .unwrap_or(std::path::Path::new("."))
+                    .to_path_buf()
+            }
+        } else if let Some(ref fp) = self.file_path {
+            fp.parent()
+                .unwrap_or(std::path::Path::new("."))
+                .to_path_buf()
+        } else {
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+        };
+
+        let filer = vivivi_modes::TwoPaneFiler::new(&target_dir);
+        self.filer = Some(filer);
+        self.show_filer = true;
+        self.status_message = Some(
+            "2ペイン ファイラー起動 (Tab: 左右切替, Enter: 開く/入る, q/Esc: 閉じる)".to_string(),
+        );
+    }
+
+    /// 2ペインファイラーを閉じます。
+    pub fn close_filer(&mut self) {
+        self.show_filer = false;
+        self.filer = None;
+    }
+
+    /// 現在のバッファ内容をA4サイズのPDFファイルとして出力します。
+    ///
+    /// # 引数
+    /// - `target_path`: 保存先ファイルパス（指定なしの場合はバッファファイル名`.pdf`、または `Untitled.pdf`）
+    ///
+    /// # 戻り値
+    /// 成功した場合は保存先 `PathBuf`、失敗時はエラーメッセージ。
+    pub fn export_pdf(&mut self, target_path: Option<&str>) -> Result<PathBuf, String> {
+        let content = self.buffer.to_string();
+        let doc_name = self
+            .file_path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str())
+            .unwrap_or("Untitled");
+
+        let out_path = if let Some(p) = target_path.filter(|s| !s.trim().is_empty()) {
+            PathBuf::from(p.trim())
+        } else if let Some(ref fp) = self.file_path {
+            fp.with_extension("pdf")
+        } else {
+            PathBuf::from("Untitled.pdf")
+        };
+
+        let date_str = current_date_str();
+        let settings = vivivi_modes::PrintSettings::default();
+        let pages = vivivi_modes::paginate_text(&content, doc_name, &date_str, &settings);
+        vivivi_modes::export_to_pdf(&pages, &out_path)?;
+
+        let display_path = out_path.display().to_string();
+        self.status_message = Some(format!("PDFを出力しました: {display_path}"));
+        Ok(out_path)
+    }
+}
+
+/// 現在日時（UTC）を YYYY-MM-DD HH:MM:SS 形式の文字列で取得します。
+pub fn current_datetime_str() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let days = (secs / 86400) as i64;
+    let day_secs = secs % 86400;
+    let hour = day_secs / 3600;
+    let min = (day_secs % 3600) / 60;
+    let sec = day_secs % 60;
+
+    let z = days + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = (z - era * 146097) as u32;
+    let yoe = (doe - doe / 1024 + doe / 1461 - doe / 142401) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{y:04}-{m:02}-{d:02} {hour:02}:{min:02}:{sec:02}")
+}
+
+/// 現在日付（UTC）を YYYY-MM-DD 形式の文字列で取得します。
+pub fn current_date_str() -> String {
+    current_datetime_str()[..10].to_string()
 }

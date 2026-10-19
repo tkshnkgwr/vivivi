@@ -4,9 +4,24 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
-## [0.9.0-beta] - 2026-10-16 (Testing / Dogfooding)
+## [0.9.0-beta] - 2026-10-19 (Testing / Dogfooding)
 
-### Changed
+### Added
+- **Dynamic Line Number & Line Wrap Control Commands**:
+  - Implemented `:se nu` / `:se nonu` / `:set nu` / `:set nonu` (line numbering), `:se rnu` / `:se nornu` (relative line numbering).
+  - Implemented `:se wrap` / `:se nowrap` / `:set wrap` / `:set nowrap` (line wrapping at terminal edge vs. default horizontal scrolling).
+  - Implemented configuration query commands (`:se nu?`, `:se wrap?`, `:se rnu?`, etc.).
+  - Added and persisted `wrap = false` option under `[editor]` in `config.toml`.
+- **Tab Key Input in Insert & Replace Modes**:
+  - Handled `KeyCode::Tab` in `handle_insert_mode` and `handle_replace_mode` to reliably insert and replace tab character `\t`.
+
+### Fixed / Improved
+- **Full-Width (Zenkaku) Space Visualization**:
+  - Replaced ambiguous-width `□` substitution with native `\u{3000}` (preserving exact 2-column display width) highlighted with a refined wine-red background (`Color::Rgb(120, 35, 35)`) under `:set list`.
+  - Fixed rendering order bug where current line background was overwriting full-width space highlight colors.
+- **Tab Character Rendering & Visual Cursor Synchronization**:
+  - Expanded `\t` into accurate space count matching `tab_width` setting in normal view mode.
+  - Synchronized hardcoded tab width `4` in `visual_col_at` with dynamic runtime `tab_width` setting.
 - **Feature Freeze & Transition to Beta Testing**:
   - Following the complete implementation of all planned features (Phases 1 through 4.8) and large-scale modularization refactoring, the development phase has officially transitioned from Alpha (feature addition) to Beta (validation, hardening, and dogfooding).
   - Started manual testing and real-world daily usage verification based on `MANUAL_TEST_GUIDE.md`.

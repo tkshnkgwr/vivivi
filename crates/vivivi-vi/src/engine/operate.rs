@@ -67,10 +67,66 @@ impl ViEngine {
                 cursor.pos = buffer.position_to_cursor(from);
                 self.mode = ViMode::Insert;
             }
+            Operator::ShiftRight | Operator::ShiftLeft => {
+                let start_line = cursor.pos.line.min(target_cursor.pos.line);
+                let end_line =
+                    (cursor.pos.line.max(target_cursor.pos.line) + 1).min(buffer.line_count());
+                if op == Operator::ShiftRight {
+                    Self::indent_lines_right(buffer, start_line, end_line);
+                } else {
+                    Self::indent_lines_left(buffer, start_line, end_line);
+                }
+                cursor.pos.col = self.find_first_non_blank(buffer, cursor.pos.line);
+            }
         }
     }
 
-    /// 行単位オペレータの実行 (`dd`, `yy`, `cc`)
+    /// 指定行範囲を右にインデント（4スペース追加）します。
+    pub(crate) fn indent_lines_right(buffer: &mut TextBuffer, start_line: usize, end_line: usize) {
+        buffer.open_undo_block();
+        for l in start_line..end_line {
+            let line_text = buffer.line_text(l).unwrap_or_default();
+            if !line_text.is_empty() {
+                let pos = buffer.line_start_position(l);
+                buffer.insert_text(pos, "    ");
+            }
+        }
+        buffer.close_undo_block();
+    }
+
+    /// 指定行範囲を左にアンインデント（最大4スペースまたはタブ1つ削除）します。
+    pub(crate) fn indent_lines_left(buffer: &mut TextBuffer, start_line: usize, end_line: usize) {
+        buffer.open_undo_block();
+        for l in start_line..end_line {
+            let line_text = buffer.line_text(l).unwrap_or_default();
+            if line_text.is_empty() {
+                continue;
+            }
+            let pos = buffer.line_start_position(l);
+            let mut to_remove = 0;
+            let mut spaces = 0;
+            for ch in line_text.chars() {
+                if ch == '\t' {
+                    to_remove += 1;
+                    break;
+                } else if ch == ' ' {
+                    to_remove += 1;
+                    spaces += 1;
+                    if spaces == 4 {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+            if to_remove > 0 {
+                buffer.delete_text(pos, to_remove, false);
+            }
+        }
+        buffer.close_undo_block();
+    }
+
+    /// 行単位オペレータの実行 (`dd`, `yy`, `cc`, `>>`, `<<`)
     pub(crate) fn execute_operate_line(
         &mut self,
         op: Operator,
@@ -89,8 +145,10 @@ impl ViEngine {
             return;
         }
 
-        let text = buffer.get_text(start_pos, len);
-        self.registers.set(reg, RegisterContent::LineWise(text));
+        if matches!(op, Operator::Yank | Operator::Delete | Operator::Change) {
+            let text = buffer.get_text(start_pos, len);
+            self.registers.set(reg, RegisterContent::LineWise(text));
+        }
 
         match op {
             Operator::Yank => {
@@ -110,6 +168,14 @@ impl ViEngine {
                 buffer.close_undo_block();
                 cursor.pos.col = 0;
                 self.mode = ViMode::Insert;
+            }
+            Operator::ShiftRight => {
+                Self::indent_lines_right(buffer, start_line, end_line);
+                cursor.pos.col = self.find_first_non_blank(buffer, cursor.pos.line);
+            }
+            Operator::ShiftLeft => {
+                Self::indent_lines_left(buffer, start_line, end_line);
+                cursor.pos.col = self.find_first_non_blank(buffer, cursor.pos.line);
             }
         }
     }

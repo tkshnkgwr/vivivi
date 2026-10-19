@@ -28,7 +28,7 @@ pub struct ListCharsConfig {
     pub tab: (char, char),
     /// 半角スペース記号。デフォルト: '·'
     pub space: char,
-    /// 全角スペース記号。デフォルト: "□" (U+25A1)
+    /// 全角スペース記号。デフォルト: "　" (\u{3000}。全角幅を維持しエディタ側で背景ハイライト表示)
     pub zenkaku_space: &'static str,
     /// 行末改行記号。デフォルト: '$'
     pub eol: char,
@@ -42,7 +42,7 @@ impl Default for ListCharsConfig {
             enabled: false,
             tab: ('▸', '-'),
             space: '·',
-            zenkaku_space: "□",
+            zenkaku_space: "　",
             eol: '$',
             show_all_spaces: false,
         }
@@ -139,13 +139,21 @@ pub fn format_line_invisibles(
                 col += spaces_count;
             }
             '\u{3000}' => {
-                // 全角スペース (幅2): '□'
-                for z_ch in config.zenkaku_space.chars() {
+                // 全角スペース (幅2): デフォルトは全角スペース自体のまま背景ハイライト（記号指定時はその文字）
+                if config.zenkaku_space.is_empty() {
                     result.push(InvisibleChar {
-                        ch: z_ch,
+                        ch: '\u{3000}',
                         is_invisible: true,
                         is_zenkaku_space: true,
                     });
+                } else {
+                    for z_ch in config.zenkaku_space.chars() {
+                        result.push(InvisibleChar {
+                            ch: z_ch,
+                            is_invisible: true,
+                            is_zenkaku_space: true,
+                        });
+                    }
                 }
                 col += 2;
             }
@@ -208,10 +216,22 @@ mod tests {
 
         let chars = format_line_invisibles("テスト　コード", 4, &config);
         let s: String = chars.iter().map(|c| c.ch).collect();
-        assert_eq!(s, "テスト□コード$");
+        // デフォルトでは全角幅を維持するため U+3000 のまま + EOL($)
+        assert_eq!(s, "テスト　コード$");
 
         let zenkaku_items: Vec<_> = chars.iter().filter(|c| c.is_zenkaku_space).collect();
         assert_eq!(zenkaku_items.len(), 1);
+        assert_eq!(zenkaku_items[0].ch, '\u{3000}');
+
+        // カスタム記号指定の場合
+        let custom_config = ListCharsConfig {
+            enabled: true,
+            zenkaku_space: "□",
+            ..Default::default()
+        };
+        let custom_chars = format_line_invisibles("テスト　コード", 4, &custom_config);
+        let custom_s: String = custom_chars.iter().map(|c| c.ch).collect();
+        assert_eq!(custom_s, "テスト□コード$");
     }
 
     #[test]

@@ -34,6 +34,9 @@ pub struct EditorConfig {
     /// 大文字が含まれる場合は区別（デフォルト: true）
     #[serde(default = "default_true")]
     pub smartcase: bool,
+    /// 行の自動折り返しを行うかどうか（デフォルト: false = nowrap）
+    #[serde(default)]
+    pub wrap: bool,
 }
 
 fn default_tab_width() -> usize {
@@ -63,6 +66,7 @@ impl Default for EditorConfig {
             clipboard: "none".to_string(),
             ignorecase: true,
             smartcase: true,
+            wrap: false,
         }
     }
 }
@@ -73,7 +77,7 @@ pub struct InvisibleConfig {
     /// 不可視文字表示を有効にするか（デフォルト: false）
     #[serde(default)]
     pub enabled: bool,
-    /// 全角スペース表示記号（デフォルト: "□"）
+    /// 全角スペース表示記号（デフォルト: "　"、幅2マスを維持し背景ハイライト表示）
     #[serde(default = "default_zenkaku")]
     pub zenkaku_space: String,
     /// 半角スペース表示記号（デフォルト: '·'）
@@ -85,7 +89,7 @@ pub struct InvisibleConfig {
 }
 
 fn default_zenkaku() -> String {
-    "□".to_string()
+    "　".to_string()
 }
 fn default_space_char() -> char {
     '·'
@@ -98,7 +102,7 @@ impl Default for InvisibleConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            zenkaku_space: "□".to_string(),
+            zenkaku_space: "　".to_string(),
             space: '·',
             eol: '$',
         }

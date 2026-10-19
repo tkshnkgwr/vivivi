@@ -146,7 +146,17 @@ fn test_format_zenkaku_space_and_eol() {
 
     let chars = format_line_invisibles("テスト　コード", 4, &config);
     let s: String = chars.iter().map(|c| c.ch).collect();
-    assert_eq!(s, "テスト□コード$");
+    assert_eq!(s, "テスト　コード$");
+
+    // カスタム指定時は指定記号
+    let custom_config = ListCharsConfig {
+        enabled: true,
+        zenkaku_space: "□",
+        ..Default::default()
+    };
+    let custom_chars = format_line_invisibles("テスト　コード", 4, &custom_config);
+    let custom_s: String = custom_chars.iter().map(|c| c.ch).collect();
+    assert_eq!(custom_s, "テスト□コード$");
 }
 
 // ==========================================

@@ -14,11 +14,20 @@ mod tests;
 
 pub use visual::BlockInsertSession;
 
-use crate::command::{Operator, ViCommand};
+use crate::command::{Operator, ScrollTarget, ViCommand};
 use crate::mode::ViMode;
 use crate::parser::CommandParser;
 use crate::register::RegisterMgr;
 use vivivi_core::CursorPosition;
+
+/// ドットリピート (`.`) で反復実行可能な変更操作。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RepeatableChange {
+    /// 挿入系コマンド（開始コマンド、挿入テキスト）
+    Insert { cmd: ViCommand, text: String },
+    /// コマンド単体（削除・置換・インデント・貼り付け等）
+    Command(ViCommand),
+}
 
 /// exコマンドやエディタ制御の実行結果を表す構造体。
 ///
@@ -49,6 +58,8 @@ pub struct ViExecutionResult {
     pub open_file_requested: Option<String>,
     /// プレビュー表示要求（印刷プレビュー等）
     pub preview_requested: Option<String>,
+    /// 画面位置のスクロール調整要求 (`zz`, `zt`, `zb`)
+    pub scroll_adjust: Option<ScrollTarget>,
 }
 
 /// Vi コマンドのパース、モード管理、およびバッファ操作を統合実行するエンジン本体。
@@ -105,6 +116,12 @@ pub struct ViEngine {
     pub filer: Option<vivivi_modes::TwoPaneFiler>,
     /// 世代バックアップログ
     pub difflog: Option<vivivi_modes::DiffLog>,
+    /// 現在の挿入セッションを開始したコマンド (ドットリピート用)
+    pub current_insert_cmd: Option<ViCommand>,
+    /// 現在の挿入セッションで入力された文字列 (ドットリピート用)
+    pub current_insert_chars: Vec<char>,
+    /// 直前の変更操作 (ドットリピート用)
+    pub last_change: Option<RepeatableChange>,
 }
 
 impl ViEngine {
@@ -140,6 +157,9 @@ impl ViEngine {
             todo_items: Vec::new(),
             filer: None,
             difflog: None,
+            current_insert_cmd: None,
+            current_insert_chars: Vec::new(),
+            last_change: None,
         }
     }
 
@@ -245,7 +265,18 @@ impl ViEngine {
 
         if let Some(ref c) = cmd {
             match c {
-                ViCommand::EnterMode(new_mode) => self.mode = *new_mode,
+                ViCommand::EnterMode(new_mode) => {
+                    self.mode = *new_mode;
+                    if *new_mode == ViMode::Normal
+                        && let Some(insert_cmd) = self.current_insert_cmd.take()
+                    {
+                        let text: String = self.current_insert_chars.drain(..).collect();
+                        self.last_change = Some(RepeatableChange::Insert {
+                            cmd: insert_cmd,
+                            text,
+                        });
+                    }
+                }
                 ViCommand::InsertBefore
                 | ViCommand::InsertAfter
                 | ViCommand::InsertLineStart
@@ -264,16 +295,10 @@ impl ViEngine {
                     op: Operator::Change,
                     ..
                 }
-                | ViCommand::ChangeToEol(_)
-                | ViCommand::VisualOperate {
-                    op: Operator::Change,
-                    ..
-                } => {
+                | ViCommand::ChangeToEol(_) => {
                     self.mode = ViMode::Insert;
                 }
-                ViCommand::VisualOperate { .. }
-                | ViCommand::VisualSwapCase
-                | ViCommand::ExCommand(_)
+                ViCommand::ExCommand(_)
                 | ViCommand::SearchForward(_)
                 | ViCommand::SearchBackward(_) => {
                     self.mode = ViMode::Normal;
@@ -286,7 +311,7 @@ impl ViEngine {
 
     /// 挿入モード中にタイプされた文字を記録します。
     ///
-    /// 矩形ビジュアル一括挿入の適用や、キーボードマクロ記録時のキー列追跡に使用されます。
+    /// 矩形ビジュアル一括挿入の適用、キーボードマクロ、およびドットリピート（`.`）に使用されます。
     ///
     /// # Examples
     ///
@@ -302,6 +327,19 @@ impl ViEngine {
         }
         if let Some(session) = &mut self.block_insert_session {
             session.typed_chars.push(ch);
+        }
+        if self.current_insert_cmd.is_some() {
+            self.current_insert_chars.push(ch);
+        }
+    }
+
+    /// 挿入モード中に Backspace が押下された際、記録文字バッファから1文字取り消します。
+    pub fn record_inserted_backspace(&mut self) {
+        if let Some(session) = &mut self.block_insert_session {
+            session.typed_chars.pop();
+        }
+        if self.current_insert_cmd.is_some() {
+            self.current_insert_chars.pop();
         }
     }
 }

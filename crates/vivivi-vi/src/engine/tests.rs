@@ -655,3 +655,166 @@ fn test_basic_editing_commands() {
     assert_eq!(buf.line_text(1).unwrap(), "");
     assert_eq!(buf.line_text(2).unwrap(), "third line");
 }
+
+#[test]
+fn test_indent_operators() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("first\nsecond\nthird");
+    let mut cur = TextCursor::new(0, 0);
+
+    // 1. '>>' で 0行目をインデント
+    let cmd = vi.feed_char('>');
+    assert!(cmd.is_none());
+    let cmd = vi.feed_char('>');
+    assert_eq!(
+        cmd,
+        Some(ViCommand::OperateLine {
+            op: Operator::ShiftRight,
+            count: 1,
+            register: None,
+        })
+    );
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(0).unwrap(), "    first");
+
+    // 2. '<<' で 0行目をアンインデント
+    let cmd = vi.feed_char('<');
+    assert!(cmd.is_none());
+    let cmd = vi.feed_char('<');
+    assert_eq!(
+        cmd,
+        Some(ViCommand::OperateLine {
+            op: Operator::ShiftLeft,
+            count: 1,
+            register: None,
+        })
+    );
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(0).unwrap(), "first");
+
+    // 3. '2>>' で 2行分一括インデント
+    vi.feed_char('2');
+    vi.feed_char('>');
+    let cmd = vi.feed_char('>');
+    assert_eq!(
+        cmd,
+        Some(ViCommand::OperateLine {
+            op: Operator::ShiftRight,
+            count: 2,
+            register: None,
+        })
+    );
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(0).unwrap(), "    first");
+    assert_eq!(buf.line_text(1).unwrap(), "    second");
+    assert_eq!(buf.line_text(2).unwrap(), "third");
+
+    // 4. ビジュアルモード（V: VisualLine）での '>' と '<'
+    vi.set_mode(ViMode::VisualLine);
+    cur.pos.line = 1;
+    cur.anchor = Some(CursorPosition::new(2, 0));
+    let cmd = vi.feed_char('>');
+    assert_eq!(
+        cmd,
+        Some(ViCommand::VisualOperate {
+            op: Operator::ShiftRight,
+            register: None,
+        })
+    );
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(vi.mode(), ViMode::Normal);
+    assert_eq!(buf.line_text(1).unwrap(), "        second");
+    assert_eq!(buf.line_text(2).unwrap(), "    third");
+}
+
+#[test]
+fn test_paragraph_motion() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("line1\nline2\n\nline3\nline4\n\nline5");
+    let mut cur = TextCursor::new(0, 0);
+
+    // 1. '}' で次の空行（2行目）へ移動
+    let cmd = vi.feed_char('}');
+    assert_eq!(cmd, Some(ViCommand::Move(Motion::ParagraphForward(1))));
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(cur.pos.line, 2);
+
+    // 2. 再度 '}' でその次の空行（5行目）へ移動
+    let cmd = vi.feed_char('}');
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(cur.pos.line, 5);
+
+    // 3. '{' で前の空行（2行目）へ移動
+    let cmd = vi.feed_char('{');
+    assert_eq!(cmd, Some(ViCommand::Move(Motion::ParagraphBackward(1))));
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(cur.pos.line, 2);
+
+    // 4. '{' で先頭（0行目）へ移動
+    let cmd = vi.feed_char('{');
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(cur.pos.line, 0);
+}
+
+#[test]
+fn test_scroll_adjust() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("line1\nline2\nline3");
+    let mut cur = TextCursor::new(1, 0);
+
+    // 'zz' (Center)
+    vi.feed_char('z');
+    let cmd = vi.feed_char('z');
+    assert_eq!(cmd, Some(ViCommand::ScrollAdjust(ScrollTarget::Center)));
+    let res = vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(res.scroll_adjust, Some(ScrollTarget::Center));
+
+    // 'zt' (Top)
+    vi.feed_char('z');
+    let cmd = vi.feed_char('t');
+    assert_eq!(cmd, Some(ViCommand::ScrollAdjust(ScrollTarget::Top)));
+    let res = vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(res.scroll_adjust, Some(ScrollTarget::Top));
+
+    // 'zb' (Bottom)
+    vi.feed_char('z');
+    let cmd = vi.feed_char('b');
+    assert_eq!(cmd, Some(ViCommand::ScrollAdjust(ScrollTarget::Bottom)));
+    let res = vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(res.scroll_adjust, Some(ScrollTarget::Bottom));
+}
+
+#[test]
+fn test_dot_repeat_commands() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("abcdef\n123456\nxyz");
+    let mut cur = TextCursor::new(0, 0);
+
+    // 1. 'x' で文字削除 -> 'b'が先頭に
+    let cmd = vi.feed_char('x');
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(0).unwrap(), "bcdef");
+
+    // 2. '.' で直前コマンド 'x' を繰り返し実行 -> 'c'が先頭に
+    let cmd = vi.feed_char('.');
+    assert_eq!(cmd, Some(ViCommand::RepeatLastChange));
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(0).unwrap(), "cdef");
+
+    // 3. 挿入モード 'i' で "NEW" を挿入し Esc で抜ける
+    let cmd = vi.feed_char('i');
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    vi.record_inserted_char('N');
+    vi.record_inserted_char('E');
+    vi.record_inserted_char('W');
+    let cmd = vi.feed_char('\x1b');
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(vi.mode(), ViMode::Normal);
+
+    // 4. 1行目へ移動して '.' を押すと "NEW" が反復挿入される
+    cur.pos.line = 1;
+    cur.pos.col = 0;
+    let cmd = vi.feed_char('.');
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(1).unwrap(), "NEW123456");
+}

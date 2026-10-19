@@ -6,19 +6,21 @@ This document provides a comprehensive operational guide for `vivivi`, covering 
 
 ## 1. Basic Operations & Modes
 
-| Mode Name      | Switch Key           |  Cursor Shape  | Responsibilities & Actions                                   |
-| :------------- | :------------------- | :------------: | :----------------------------------------------------------- |
-| **Normal**     | `Escape`             |   Block (█)    | Navigation, deletion, yanking, and command entry             |
-| **Insert**     | `i`, `a`, `o`, `O`   |    Bar (|)     | Regular typing (continuous typing merged into single undo)   |
-| **Replace**    | `R`                  | Underline (_)  | In-place character overwrite (returns to Normal on `Esc`)    |
-| **Visual**     | `v` / `V` / `Ctrl-v` |   Block (█)    | Character-wise / Line-wise / Rectangular block selection     |
-| **Command**    | `:`                  |   Block (█)    | Save (`:w`), quit (`:q`), substitute (`:s`), ex commands     |
+| Mode Name   | Switch Key           | Cursor Shape  | Responsibilities & Actions                                                           |                                                                                |
+| :---------- | :------------------- | :-----------: | :----------------------------------------------------------------------------------- | :----------------------------------------------------------------------------- |
+| **Normal**  | `Escape`             |   Block (█)   | Navigation, deletion, yanking, and command entry                                     |                                                                                |
+| **Insert**  | `i`, `a`, `o`, `O`   |    Bar (\     | )                                                                                    | Regular typing & Tab key insertion (continuous typing merged into single undo) |
+| **Replace** | `R`                  | Underline (_) | In-place character overwrite (Tab key replaces with tab, returns to Normal on `Esc`) |                                                                                |
+| **Visual**  | `v` / `V` / `Ctrl-v` |   Block (█)   | Character-wise / Line-wise / Rectangular block selection                             |                                                                                |
+| **Command** | `:`                  |   Block (█)   | Save (`:w`), quit (`:q`), substitute (`:s`), ex commands                             |                                                                                |
 
 > [!NOTE]
 > **Dynamic Terminal Cursor Synchronization**: Following Vim/Gvim tradition, the native terminal cursor shape automatically changes (Block, Bar, or Underline) based on the active editing mode. It reliably resets to your terminal's default shape upon exit or abnormal termination.
 
 > [!TIP]
-> **Horizontal Scrolling for Long Lines**: For lines exceeding screen width (e.g. > 80 columns), the viewport automatically and smoothly scrolls horizontally as the cursor moves or jumps to line ends (`$`). It computes true visual widths (Visual Column via `UnicodeWidthChar`) for multi-byte characters and tabs, clipping text cleanly without visual artifacts.
+> **Horizontal Scrolling & Line Wrap Control for Long Lines**:
+> The default mode is `:se nowrap` (horizontal scrolling). For lines exceeding screen width (e.g. > 80 columns), the viewport automatically and smoothly scrolls horizontally as the cursor moves or jumps to line ends (`$`). It computes true visual widths (Visual Column via `UnicodeWidthChar`) for multi-byte characters and tabs, clipping text cleanly without visual artifacts.
+> To toggle line wrapping at the screen edge on the fly, run `:se wrap` (`:set wrap`). Revert back to horizontal scrolling via `:se nowrap` (`:se wrap?` to query status).
 
 ---
 
@@ -263,9 +265,9 @@ Perform multi-line columnar editing on `Ctrl-v` block selections:
 
 ### (3) Configuration File & Customization (`config.toml`)
 Persist user preferences and key mappings in `%USERPROFILE%\.vivivi\config.toml` (or `~/.vivivi/config.toml`).
-- **Options**: `tab_stop`, `number`, `relative_number`, `gutter`, `hlsearch`, `clipboard`, `theme`, invisible symbols, and key mappings.
+- **Options**: `tab_stop`, `number`, `relative_number`, `wrap`, `gutter`, `hlsearch`, `clipboard`, `theme`, invisible symbols, and key mappings.
 - **Dynamic Reloading**: Run `:config` at any time to reload and apply changes without restarting.
-- **Runtime Set Options**: `:set number`, `:set relativenumber`, `:set tabstop=4`, `:set clipboard=unnamed`, etc.
+- **Runtime Set Options**: `:set number` / `:se nu` / `:se nonu` (line numbers), `:set wrap` / `:se wrap` / `:se nowrap` (line wrapping), `:set relativenumber` / `:se rnu`, `:set tabstop=4` (`:se ts=4`), `:set clipboard=unnamed`, etc. Query current values by appending `?` (e.g., `:se wrap?`).
 
 ### (4) Explicit Encoding Reopening & Line Ending Format
 - `:e ++enc=<enc> [file]`: Reopen file forcing specified encoding (`utf-8`, `sjis`, `euc-jp`).

@@ -4,6 +4,7 @@
 
 pub mod clipboard_hist;
 pub mod editor;
+pub mod filer;
 pub mod help;
 pub mod outline;
 pub mod preview;
@@ -141,7 +142,12 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         recent::render_recent_modal(frame, app, size);
     }
 
-    // 8. カーソルの画面配置
+    // 8. 2ペインファイラーの描画（表示中のみ最前面に重ねて描画）
+    if app.show_filer {
+        filer::render_filer(frame, app, size);
+    }
+
+    // 9. カーソルの画面配置
 
     set_terminal_cursor(
         frame,
@@ -190,15 +196,33 @@ fn set_terminal_cursor(
 
     // カレント行のカーソル表示カラム位置（全角2, 半角1, タブ幅）を計算
     let cur_visual_col = app.visual_col_at(cur.line, cur.col);
-    let scroll_x = app.scroll.1;
 
-    if screen_row < editor_area.height as usize && cur_visual_col >= scroll_x {
-        let relative_col = cur_visual_col - scroll_x;
-        let cursor_x = editor_area.x as usize + line_number_width + 1 + relative_col;
-        let cursor_y = editor_area.y as usize + screen_row;
+    if app.wrap {
+        let content_width = (editor_area.width as usize)
+            .saturating_sub(line_number_width + 1)
+            .max(1);
+        let wrapped_row = cur_visual_col / content_width;
+        let col_in_wrapped_row = cur_visual_col % content_width;
+        let target_screen_row = screen_row + wrapped_row;
 
-        if cursor_x < (editor_area.x + editor_area.width) as usize {
-            frame.set_cursor_position(Position::new(cursor_x as u16, cursor_y as u16));
+        if target_screen_row < editor_area.height as usize {
+            let cursor_x = editor_area.x as usize + line_number_width + 1 + col_in_wrapped_row;
+            let cursor_y = editor_area.y as usize + target_screen_row;
+
+            if cursor_x < (editor_area.x + editor_area.width) as usize {
+                frame.set_cursor_position(Position::new(cursor_x as u16, cursor_y as u16));
+            }
+        }
+    } else {
+        let scroll_x = app.scroll.1;
+        if screen_row < editor_area.height as usize && cur_visual_col >= scroll_x {
+            let relative_col = cur_visual_col - scroll_x;
+            let cursor_x = editor_area.x as usize + line_number_width + 1 + relative_col;
+            let cursor_y = editor_area.y as usize + screen_row;
+
+            if cursor_x < (editor_area.x + editor_area.width) as usize {
+                frame.set_cursor_position(Position::new(cursor_x as u16, cursor_y as u16));
+            }
         }
     }
 }

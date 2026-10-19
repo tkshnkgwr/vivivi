@@ -3,7 +3,7 @@
 //! 各種 Vi コマンドのディスパッチ、数値/真偽値トグル、タグジャンプ、
 //! 上行からの文字複製等の実行ロジックを統括します。
 
-use crate::command::{ViCommand, WordSearchKind};
+use crate::command::{Operator, ViCommand, WordSearchKind};
 use crate::mode::ViMode;
 use crate::register::RegisterContent;
 use vivivi_core::{TextBuffer, TextCursor};
@@ -51,6 +51,17 @@ impl ViEngine {
                 } else if *mode == ViMode::Normal {
                     cursor.clear_selection();
 
+                    // 挿入モードを抜けた際にドットリピート用変更操作として確定
+                    if prev_mode == ViMode::Insert
+                        && let Some(insert_cmd) = self.current_insert_cmd.take()
+                    {
+                        let text: String = self.current_insert_chars.drain(..).collect();
+                        self.last_change = Some(crate::engine::RepeatableChange::Insert {
+                            cmd: insert_cmd,
+                            text,
+                        });
+                    }
+
                     // 矩形一括挿入セッションが完了した場合
                     if prev_mode == ViMode::Insert && self.block_insert_session.is_some() {
                         self.finish_block_insert(buffer);
@@ -65,12 +76,16 @@ impl ViEngine {
             }
 
             ViCommand::InsertBefore => {
+                self.current_insert_cmd = Some(cmd.clone());
+                self.current_insert_chars.clear();
                 self.mode = ViMode::Insert;
                 buffer.prohibit_merge_undo();
                 result.need_redraw = true;
             }
 
             ViCommand::InsertAfter => {
+                self.current_insert_cmd = Some(cmd.clone());
+                self.current_insert_chars.clear();
                 self.mode = ViMode::Insert;
                 buffer.prohibit_merge_undo();
                 let line_len = buffer
@@ -84,6 +99,8 @@ impl ViEngine {
             }
 
             ViCommand::InsertLineStart => {
+                self.current_insert_cmd = Some(cmd.clone());
+                self.current_insert_chars.clear();
                 self.mode = ViMode::Insert;
                 buffer.prohibit_merge_undo();
                 cursor.pos.col = self.find_first_non_blank(buffer, cursor.pos.line);
@@ -91,6 +108,8 @@ impl ViEngine {
             }
 
             ViCommand::InsertLineEnd => {
+                self.current_insert_cmd = Some(cmd.clone());
+                self.current_insert_chars.clear();
                 self.mode = ViMode::Insert;
                 buffer.prohibit_merge_undo();
                 let line_len = buffer
@@ -102,6 +121,8 @@ impl ViEngine {
             }
 
             ViCommand::OpenLineBelow => {
+                self.current_insert_cmd = Some(cmd.clone());
+                self.current_insert_chars.clear();
                 self.mode = ViMode::Insert;
                 buffer.open_undo_block();
                 if cursor.pos.line + 1 >= buffer.line_count() {
@@ -118,6 +139,8 @@ impl ViEngine {
             }
 
             ViCommand::OpenLineAbove => {
+                self.current_insert_cmd = Some(cmd.clone());
+                self.current_insert_chars.clear();
                 self.mode = ViMode::Insert;
                 buffer.open_undo_block();
                 let line_start_pos = buffer.line_start_position(cursor.pos.line);
@@ -128,6 +151,7 @@ impl ViEngine {
             }
 
             ViCommand::ReplaceChar { ch, count } => {
+                self.last_change = Some(crate::engine::RepeatableChange::Command(cmd.clone()));
                 buffer.open_undo_block();
                 let line_len = buffer
                     .line_text(cursor.pos.line)
@@ -148,6 +172,8 @@ impl ViEngine {
             }
 
             ViCommand::SubstituteChar(count) => {
+                self.current_insert_cmd = Some(cmd.clone());
+                self.current_insert_chars.clear();
                 self.mode = ViMode::Insert;
                 buffer.open_undo_block();
                 let line_len = buffer
@@ -164,6 +190,7 @@ impl ViEngine {
             }
 
             ViCommand::JoinLines { count } => {
+                self.last_change = Some(crate::engine::RepeatableChange::Command(cmd.clone()));
                 let times = (*count).max(1);
                 buffer.open_undo_block();
                 for _ in 0..times {
@@ -194,6 +221,7 @@ impl ViEngine {
             }
 
             ViCommand::SwapCase => {
+                self.last_change = Some(crate::engine::RepeatableChange::Command(cmd.clone()));
                 let pos = buffer.cursor_to_position(cursor.pos);
                 if let Some(ch) = buffer.char_at(pos)
                     && ch != '\n'
@@ -220,6 +248,7 @@ impl ViEngine {
             }
 
             ViCommand::DeleteChar(count) => {
+                self.last_change = Some(crate::engine::RepeatableChange::Command(cmd.clone()));
                 buffer.open_undo_block();
                 let pos = buffer.cursor_to_position(cursor.pos);
                 let deleted = buffer.delete_text(pos, *count, false);
@@ -234,6 +263,7 @@ impl ViEngine {
             }
 
             ViCommand::DeletePrevChar(count) => {
+                self.last_change = Some(crate::engine::RepeatableChange::Command(cmd.clone()));
                 let pos = buffer.cursor_to_position(cursor.pos);
                 let delete_len = (*count).min(cursor.pos.col);
                 if delete_len > 0 {
@@ -251,6 +281,7 @@ impl ViEngine {
             }
 
             ViCommand::DeleteToEol(reg) => {
+                self.last_change = Some(crate::engine::RepeatableChange::Command(cmd.clone()));
                 let pos = buffer.cursor_to_position(cursor.pos);
                 let next_line_start = buffer.line_start_position(cursor.pos.line + 1);
                 let end_pos = if cursor.pos.line + 1 < buffer.line_count() {
@@ -270,6 +301,8 @@ impl ViEngine {
             }
 
             ViCommand::ChangeToEol(reg) => {
+                self.current_insert_cmd = Some(cmd.clone());
+                self.current_insert_chars.clear();
                 self.execute(&ViCommand::DeleteToEol(*reg), buffer, cursor);
                 self.mode = ViMode::Insert;
                 result.need_redraw = true;
@@ -280,6 +313,12 @@ impl ViEngine {
                 count,
                 register,
             } => {
+                if op == &Operator::Change {
+                    self.current_insert_cmd = Some(cmd.clone());
+                    self.current_insert_chars.clear();
+                } else if op != &Operator::Yank {
+                    self.last_change = Some(crate::engine::RepeatableChange::Command(cmd.clone()));
+                }
                 self.execute_operate_line(*op, *count, *register, buffer, cursor);
                 result.need_redraw = true;
             }
@@ -289,16 +328,24 @@ impl ViEngine {
                 motion,
                 register,
             } => {
+                if op == &Operator::Change {
+                    self.current_insert_cmd = Some(cmd.clone());
+                    self.current_insert_chars.clear();
+                } else if op != &Operator::Yank {
+                    self.last_change = Some(crate::engine::RepeatableChange::Command(cmd.clone()));
+                }
                 self.execute_operate(*op, motion, *register, buffer, cursor);
                 result.need_redraw = true;
             }
 
             ViCommand::PasteAfter { count, register } => {
+                self.last_change = Some(crate::engine::RepeatableChange::Command(cmd.clone()));
                 self.execute_paste(true, *count, *register, buffer, cursor);
                 result.need_redraw = true;
             }
 
             ViCommand::PasteBefore { count, register } => {
+                self.last_change = Some(crate::engine::RepeatableChange::Command(cmd.clone()));
                 self.execute_paste(false, *count, *register, buffer, cursor);
                 result.need_redraw = true;
             }
@@ -547,6 +594,36 @@ impl ViEngine {
                     crate::command::FoldAction::CloseLevel(lvl) => {
                         result.message = Some(format!("レベル {lvl} 以上の折り畳みを閉じました"))
                     }
+                }
+            }
+
+            ViCommand::ScrollAdjust(target) => {
+                result.scroll_adjust = Some(*target);
+                result.need_redraw = true;
+            }
+
+            ViCommand::RepeatLastChange => {
+                if let Some(change) = self.last_change.clone() {
+                    match change {
+                        crate::engine::RepeatableChange::Command(c) => {
+                            self.execute(&c, buffer, cursor);
+                        }
+                        crate::engine::RepeatableChange::Insert { cmd, text } => {
+                            self.execute(&cmd, buffer, cursor);
+                            if !text.is_empty() {
+                                buffer.open_undo_block();
+                                let cur = cursor.pos;
+                                let pos = buffer.cursor_to_position(cur);
+                                buffer.insert_text(pos, &text);
+                                let char_cnt = text.chars().count();
+                                cursor.pos =
+                                    buffer.position_to_cursor(pos + char_cnt.saturating_sub(1));
+                                buffer.close_undo_block();
+                            }
+                            self.mode = ViMode::Normal;
+                        }
+                    }
+                    result.need_redraw = true;
                 }
             }
         }

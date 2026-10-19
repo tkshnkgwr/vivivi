@@ -21,7 +21,7 @@ pub mod mode;
 pub mod parser;
 pub mod register;
 
-pub use command::{Motion, Operator, ViCommand, WordSearchKind};
+pub use command::{Motion, Operator, ScrollTarget, ViCommand, WordSearchKind};
 pub use engine::ViEngine;
 pub use mode::ViMode;
 pub use parser::{CommandParser, ParserState};

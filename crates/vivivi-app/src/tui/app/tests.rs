@@ -460,6 +460,7 @@ fn test_phase4_6_gutter_and_recent() {
 
     // 不可視文字設定の初期値
     assert!(!app.list_chars_config.enabled);
+    assert_eq!(app.list_chars_config.zenkaku_space, "　");
     app.list_chars_config.enabled = true;
     assert!(app.list_chars_config.enabled);
 }
@@ -1197,4 +1198,696 @@ fn test_multi_tab_workflow() {
 
 fn vi_cmd_bang(vi: &mut ViEngine) -> Option<vivivi_vi::ViCommand> {
     vi.feed_char('!')
+}
+
+#[test]
+fn test_se_nu_and_wrap_commands() {
+    let mut app = App::new("line1\nline2", None, CharEncoding::Utf8, NewlineType::Lf);
+
+    // デフォルト状態の検証
+    assert!(app.show_line_numbers);
+    assert!(!app.wrap); // 通常時は nowrap (false)
+
+    // 1. :se nonu で行番号非表示
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char(':'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    for c in "se nonu".chars() {
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(c),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+    }
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert!(!app.show_line_numbers);
+    assert!(app.status_message.as_ref().unwrap().contains("OFF"));
+
+    // 2. :se nu で行番号表示
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char(':'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    for c in "se nu".chars() {
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(c),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+    }
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert!(app.show_line_numbers);
+    assert!(app.status_message.as_ref().unwrap().contains("ON"));
+
+    // 3. :se wrap で折り返し有効
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char(':'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    for c in "se wrap".chars() {
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(c),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+    }
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert!(app.wrap);
+    assert_eq!(app.scroll.1, 0);
+    assert!(app.status_message.as_ref().unwrap().contains("ON"));
+
+    // 4. :se nowrap で折り返し無効
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char(':'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    for c in "se nowrap".chars() {
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(c),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+    }
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert!(!app.wrap);
+    assert!(app.status_message.as_ref().unwrap().contains("OFF"));
+
+    // 5. :se nu? / :se wrap? で状態確認
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char(':'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    for c in "se nu?".chars() {
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(c),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+    }
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert!(app.status_message.as_ref().unwrap().contains("number"));
+
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char(':'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    for c in "se wrap?".chars() {
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(c),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+    }
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert!(app.status_message.as_ref().unwrap().contains("nowrap"));
+}
+
+#[test]
+fn test_insert_mode_tab_key() {
+    let mut app = App::new("", None, CharEncoding::Utf8, NewlineType::Lf);
+
+    // 1. 'i' で挿入モードに入る
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('i'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert_eq!(app.mode(), ViMode::Insert);
+
+    // 2. 'h', 'i', Tab, '!' を入力
+    for c in "hi".chars() {
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(c),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+    }
+    // Tabキー押下
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Tab,
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    // '!' を入力
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('!'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+
+    // バッファにタブ文字 '\t' が正しく挿入されていること
+    assert_eq!(app.buffer.to_string(), "hi\t!");
+    // visual_col: "hi" (2) + tab (2 -> 4) + "!" (1) = 5
+    assert_eq!(app.visual_col_at(0, 4), 5);
+}
+
+#[test]
+fn test_two_pane_filer_workflow() {
+    let mut app = App::new("", None, CharEncoding::Utf8, NewlineType::Lf);
+
+    // 1. :filer コマンドを実行して2ペインファイラーを開く
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char(':'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    for c in "filer".chars() {
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(c),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+    }
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+
+    assert!(app.show_filer);
+    assert!(app.filer.is_some());
+
+    let filer = app.filer.as_ref().unwrap();
+    assert_eq!(filer.active, vivivi_modes::filer::ActiveFilerPane::Left);
+
+    // 2. Tab キーで左右ペイン切り替え
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Tab,
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert_eq!(
+        app.filer.as_ref().unwrap().active,
+        vivivi_modes::filer::ActiveFilerPane::Right
+    );
+
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Tab,
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert_eq!(
+        app.filer.as_ref().unwrap().active,
+        vivivi_modes::filer::ActiveFilerPane::Left
+    );
+
+    // 3. j でカーソル移動
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('j'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    let total = app.filer.as_ref().unwrap().left.entries.len();
+    if total > 1 {
+        assert_eq!(app.filer.as_ref().unwrap().left.cursor, 1);
+    }
+
+    // 4. Space で選択反転（カーソルは自動で次行に進む）
+    if total > 0 {
+        let prev_cursor = app.filer.as_ref().unwrap().left.cursor;
+        let is_parent_dir = app.filer.as_ref().unwrap().left.entries[prev_cursor].name == "..";
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(' '),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+        if !is_parent_dir {
+            assert!(app.filer.as_ref().unwrap().left.entries[prev_cursor].is_selected);
+        }
+        if total > 1 && prev_cursor + 1 < total {
+            assert_eq!(app.filer.as_ref().unwrap().left.cursor, prev_cursor + 1);
+        }
+    }
+
+    // 5. 'q' でファイラーを閉じる
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('q'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert!(!app.show_filer);
+    assert!(app.filer.is_none());
+}
+
+#[test]
+fn test_two_pane_filer_delete_with_d_key() {
+    let temp_dir = std::env::temp_dir().join(format!(
+        "vivivi_test_filer_del_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    let file_path = temp_dir.join("test_delete.txt");
+    std::fs::write(&file_path, "hello filer delete").unwrap();
+    assert!(file_path.exists());
+
+    let mut app = App::new("", None, CharEncoding::Utf8, NewlineType::Lf);
+    app.open_filer(Some(&temp_dir));
+    assert!(app.show_filer);
+
+    // カーソルを test_delete.txt に合わせる
+    let left_entries = &app.filer.as_ref().unwrap().left.entries;
+    let target_idx = left_entries
+        .iter()
+        .position(|e| e.name == "test_delete.txt")
+        .expect("test_delete.txt should exist in filer");
+    app.filer.as_mut().unwrap().left.cursor = target_idx;
+
+    // 'd' キーを押して削除実行
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('d'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+
+    // ファイルがファイルシステムから削除されたことを検証
+    assert!(!file_path.exists(), "file should be deleted by 'd' key");
+    assert_eq!(
+        app.status_message.as_deref(),
+        Some("1 件のファイルを削除しました")
+    );
+
+    // リフレッシュされたエントリ一覧にも存在しないことを検証
+    let new_entries = &app.filer.as_ref().unwrap().left.entries;
+    assert!(new_entries.iter().all(|e| e.name != "test_delete.txt"));
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn test_current_date_str_format() {
+    let date_str = current_date_str();
+    assert_eq!(date_str.len(), 10);
+    let parts: Vec<&str> = date_str.split('-').collect();
+    assert_eq!(parts.len(), 3);
+    assert_eq!(parts[0].len(), 4);
+    assert_eq!(parts[1].len(), 2);
+    assert_eq!(parts[2].len(), 2);
+    let year: u32 = parts[0].parse().unwrap();
+    let month: u32 = parts[1].parse().unwrap();
+    let day: u32 = parts[2].parse().unwrap();
+    assert!(year >= 2026);
+    assert!((1..=12).contains(&month));
+    assert!((1..=31).contains(&day));
+}
+
+#[test]
+fn test_export_pdf_ex_command_and_preview_p_key() {
+    let temp_dir = std::env::temp_dir().join(format!(
+        "vivivi_test_pdf_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    let src_path = temp_dir.join("sample.txt");
+    let out_pdf = temp_dir.join("sample.pdf");
+    std::fs::write(&src_path, "Hello Vivivi PDF Export\nLine 2 content").unwrap();
+
+    let mut app = App::new(
+        "Hello Vivivi PDF Export\nLine 2 content",
+        Some(src_path.clone()),
+        CharEncoding::Utf8,
+        NewlineType::Lf,
+    );
+
+    // 1. :pdf コマンドでの出力
+    crate::tui::event::ex::execute_ex_command(&mut app, "pdf");
+    assert!(out_pdf.exists(), "sample.pdf should be generated by :pdf");
+    let pdf_bytes = std::fs::read(&out_pdf).unwrap();
+    assert!(pdf_bytes.starts_with(b"%PDF-1.4"));
+
+    // 2. 引数付き :pdf <path> コマンドでの出力
+    let custom_pdf = temp_dir.join("custom_out.pdf");
+    crate::tui::event::ex::execute_ex_command(
+        &mut app,
+        &format!("pdf {}", custom_pdf.to_str().unwrap()),
+    );
+    assert!(
+        custom_pdf.exists(),
+        "custom_out.pdf should be generated by :pdf <path>"
+    );
+    let custom_bytes = std::fs::read(&custom_pdf).unwrap();
+    assert!(custom_bytes.starts_with(b"%PDF-1.4"));
+
+    // 3. :preview を開いて 'p' キーでのPDF出力
+    std::fs::remove_file(&out_pdf).unwrap();
+    assert!(!out_pdf.exists());
+    crate::tui::event::ex::execute_ex_command(&mut app, "preview");
+    assert!(app.show_preview);
+
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('p'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert!(
+        out_pdf.exists(),
+        "sample.pdf should be generated by 'p' key in preview"
+    );
+
+    // 4. コマンドライン経由（:pdf + Enter）で二重生成されないことを検証
+    std::fs::remove_file(&out_pdf).unwrap();
+    if custom_pdf.exists() {
+        std::fs::remove_file(&custom_pdf).unwrap();
+    }
+    assert!(!out_pdf.exists());
+
+    // ':' を入力してコマンドラインモードに入る
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char(':'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    // 'p', 'd', 'f' を入力
+    for c in "pdf".chars() {
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(c),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+    }
+    // Enter で確定
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+
+    assert!(out_pdf.exists(), "sample.pdf should be generated");
+    let duplicate_pdf = temp_dir.join("sample.txt.pdf");
+    assert!(
+        !duplicate_pdf.exists(),
+        "duplicate sample.txt.pdf should NOT exist"
+    );
+
+    let pdf_count = std::fs::read_dir(&temp_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "pdf"))
+        .count();
+    assert_eq!(pdf_count, 1, "exactly one PDF file must be generated");
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn test_visual_line_yank_and_paste() {
+    let text = "line1\nline2\nline3\n";
+    let mut app = App::new(text, None, CharEncoding::Utf8, NewlineType::Lf);
+
+    // 1. 'V' を入力して VisualLine モードへ
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('V'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert_eq!(app.mode(), ViMode::VisualLine);
+
+    // 2. 'j' を入力して 2行目まで選択
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('j'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+
+    // 3. 'y' を入力してヤンク
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('y'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert_eq!(app.mode(), ViMode::Normal);
+    assert_eq!(
+        app.vi.registers().get(None).unwrap().as_str(),
+        "line1\nline2\n"
+    );
+
+    // 4. 'p' を入力して貼り付け
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('p'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+
+    let result = app.buffer.to_string();
+    assert_eq!(result, "line1\nline1\nline2\nline2\nline3\n");
+}
+
+#[test]
+fn test_visual_character_multi_line_yank_and_paste() {
+    let text = "abcdef\nghijkl\n";
+    let mut app = App::new(text, None, CharEncoding::Utf8, NewlineType::Lf);
+
+    // カーソルを 'c' (col 2) に移動
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('l'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('l'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert_eq!(app.cursor_pos().col, 2);
+
+    // 1. 'v' を入力して Visual モードへ
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('v'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert_eq!(app.mode(), ViMode::Visual);
+
+    // 2. 'j' を入力して次行へ移動
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('j'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+
+    // 3. 'y' でヤンク
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('y'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert_eq!(app.mode(), ViMode::Normal);
+    assert_eq!(app.vi.registers().get(None).unwrap().as_str(), "cdef\nghi");
+
+    // 4. 'p' で貼り付け
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('p'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert_eq!(app.buffer.to_string(), "abccdef\nghidef\nghijkl\n");
+}
+
+#[test]
+fn test_phase1_tui_integration() {
+    let mut app = App::new(
+        "line1\nline2\n\nline3\nline4",
+        None,
+        CharEncoding::Utf8,
+        NewlineType::Lf,
+    );
+
+    // 1. '>>' でインデント
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('>'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('>'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert_eq!(app.buffer.line_text(0).unwrap(), "    line1");
+
+    // 2. '.' でドットリピート (再度インデント追加)
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('.'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert_eq!(app.buffer.line_text(0).unwrap(), "        line1");
+
+    // 3. '<<' でアンインデント
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('<'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('<'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert_eq!(app.buffer.line_text(0).unwrap(), "    line1");
+
+    // 4. '}' で段落移動 (空行の2行目へ)
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('}'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert_eq!(app.cursor.pos.line, 2);
+
+    // 5. 'zz' で画面中央スクロール調整
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('z'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('z'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert_eq!(app.scroll.0, 0);
 }

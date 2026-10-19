@@ -34,12 +34,12 @@ The buffer consists of pre-gap data, the empty gap, and post-gap data.
   $$
 
 #### Core Operations and Complexity
-| Operation | Complexity | Description |
-| :--- | :--- | :--- |
-| **Insert** (`insert`) | $O(1)$ (amortized) | Writes element at `gap_start`, `gap_start += 1`, `gap_len -= 1`. |
-| **Remove** (`remove`) | $O(1)$ | Expands gap over deleted elements, `gap_len += 1`. |
-| **Move Gap** (`move_gap`) | $O(K)$ | Only executed when the cursor jumps. Shifts intervening $K$ elements. |
-| **Reserve** (`reserve_gap`) | $O(N)$ | Only on gap exhaustion. Doubles buffer size and moves post-gap data. |
+| Operation                   | Complexity         | Description                                                           |
+| :-------------------------- | :----------------- | :-------------------------------------------------------------------- |
+| **Insert** (`insert`)       | $O(1)$ (amortized) | Writes element at `gap_start`, `gap_start += 1`, `gap_len -= 1`.      |
+| **Remove** (`remove`)       | $O(1)$             | Expands gap over deleted elements, `gap_len += 1`.                    |
+| **Move Gap** (`move_gap`)   | $O(K)$             | Only executed when the cursor jumps. Shifts intervening $K$ elements. |
+| **Reserve** (`reserve_gap`) | $O(N)$             | Only on gap exhaustion. Doubles buffer size and moves post-gap data.  |
 
 ---
 
@@ -79,12 +79,12 @@ Each operation generates its inverse action upon undo:
 
 ### 1.3 OpenViVi Code Mapping
 
-| Project Crate (`vivivi-core`) | OpenViVi (`vivi/buffer/`) | Notes |
-| :--- | :--- | :--- |
-| `GapBuffer<T>` | `gap_buffer<Type>` (`gap_buffer.h`) | OpenViVi memory shifting algorithm ported to safe Rust |
-| `UndoMgr` | `UndoMgr` (`undoMgr.h` / `undoMgr.cpp`) | Recreates nested blocks, continuous merge, inverse actions |
-| `UndoBlock` | `UndoAction::FLAG_BLOCK` | Modernized into a type-safe transactional struct |
-| `TextBuffer` | `Buffer` (`Buffer.h` / `Buffer.cpp`) | Combines GapBuffer and UndoMgr with cursor/line conversions |
+| Project Crate (`vivivi-core`) | OpenViVi (`vivi/buffer/`)               | Notes                                                       |
+| :---------------------------- | :-------------------------------------- | :---------------------------------------------------------- |
+| `GapBuffer<T>`                | `gap_buffer<Type>` (`gap_buffer.h`)     | OpenViVi memory shifting algorithm ported to safe Rust      |
+| `UndoMgr`                     | `UndoMgr` (`undoMgr.h` / `undoMgr.cpp`) | Recreates nested blocks, continuous merge, inverse actions  |
+| `UndoBlock`                   | `UndoAction::FLAG_BLOCK`                | Modernized into a type-safe transactional struct            |
+| `TextBuffer`                  | `Buffer` (`Buffer.h` / `Buffer.cpp`)    | Combines GapBuffer and UndoMgr with cursor/line conversions |
 
 ---
 
@@ -139,8 +139,8 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
 | :----------------------------------- | :------------------------ | :------------------------------------------------------------- |
 | Full-width Alphanumeric $\to$ Half   | `:hankaku`, `:%hankaku`   | Maps full-width ASCII/symbols to standard ASCII                |
 | Half-width Alphanumeric $\to$ Full   | `:zenkaku`, `:%zenkaku`   | Maps standard ASCII to Unicode full-width (U+FF01〜U+FF5E)     |
-| Hiragana $\to$ Full-width Katakana   | `:katakana`, `:%katakana` | Maps Hiragana (U+3041〜U+3096) to Katakana                    |
-| Katakana $\to$ Hiragana              | `:hiragana`, `:%hiragana` | Maps Katakana (U+30A1〜U+30F6) to Hiragana                    |
+| Hiragana $\to$ Full-width Katakana   | `:katakana`, `:%katakana` | Maps Hiragana (U+3041〜U+3096) to Katakana                     |
+| Katakana $\to$ Hiragana              | `:hiragana`, `:%hiragana` | Maps Katakana (U+30A1〜U+30F6) to Hiragana                     |
 | Full-width Katakana $\to$ Half-width | `:hankata`, `:%hankata`   | Converts full-width Katakana to half-width voiced kana pairs   |
 | Half-width Katakana $\to$ Full-width | `:zenkata`, `:%zenkata`   | Composes half-width kana + voice marks into single full glyphs |
 | Uppercase / Lowercase Conversion     | `:toupper`, `:tolower`    | Case conversion across ASCII and Unicode text                  |
@@ -414,8 +414,8 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
   - `:set nolist`: Disable invisible character rendering (default).
   - `:set list!`: Toggle rendering.
 - **Glyph Specifications**:
-  - **Full-width space (U+3000)**: Displayed as an open square (`□`).
-  - **Tab character (`\t`)**: Displayed with a lead arrow and trailing dashes (e.g. `▸---` for tabstop 4).
+  - **Full-width space (U+3000)**: Rendered preserving exact 2-column fullwidth display with refined wine-red background highlight (`Color::Rgb(120, 35, 35)`) avoiding ambiguous-width glyph shrinkage.
+  - **Tab character (`\t`)**: Displayed with lead arrow and trailing dashes (e.g. `▸---` for configured `tabstop`). Rendered as cleanly expanded spaces in standard view mode. Supported via Tab key in Insert and Replace modes.
   - **EOL marker**: Displayed as a dollar sign (`$`) or return symbol.
   - **Trailing spaces**: Highlighted with warning colors or underline.
 
@@ -474,10 +474,10 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
 ### 14.3 Configuration File & Customization (`config.toml`)
 - **Location**: `%USERPROFILE%\.vivivi\config.toml` (or `~/.vivivi/config.toml`).
 - **Configuration Schema**:
-  - `[editor]`: `tab_stop`, `number`, `relative_number`, `gutter`, `hlsearch`, `clipboard`, `theme`
+  - `[editor]`: `tab_stop`, `number`, `relative_number`, `wrap`, `gutter`, `hlsearch`, `clipboard`, `theme`
   - `[invisible]`: `enabled`, `space`, `tab`, `eol`
   - `[keymap.normal]`, `[keymap.insert]`: Custom key remapping tables
-- **Dynamic Reload**: `:config` ex command reloads settings from disk on the fly.
+- **Dynamic Reload & Set**: `:config` ex command reloads settings from disk on the fly. Runtime toggling via `:set` / `:se` for line numbers (`:se nu` / `:se nonu`), line wrapping (`:se wrap` / `:se nowrap`), tabstop, clipboard, etc., with `?` status queries.
 
 ### 14.4 Explicit Encoding Reload & Line Ending Format
 - **Explicit Encoding Reopening (`:e ++enc=<enc>`)**: Bypass auto-detection and force reload buffer using `utf-8`, `sjis`, or `euc-jp`.

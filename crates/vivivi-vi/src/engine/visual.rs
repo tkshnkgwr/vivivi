@@ -32,6 +32,21 @@ impl ViEngine {
         let min_col = anchor.col.min(pos.col);
         let max_col = anchor.col.max(pos.col);
 
+        if matches!(op, Operator::ShiftRight | Operator::ShiftLeft) {
+            let start_line = min_line;
+            let end_line = (max_line + 1).min(buffer.line_count());
+            if op == Operator::ShiftRight {
+                Self::indent_lines_right(buffer, start_line, end_line);
+            } else {
+                Self::indent_lines_left(buffer, start_line, end_line);
+            }
+            cursor.clear_selection();
+            cursor.pos.line = min_line;
+            cursor.pos.col = self.find_first_non_blank(buffer, cursor.pos.line);
+            self.mode = ViMode::Normal;
+            return;
+        }
+
         match self.mode {
             ViMode::VisualBlock => {
                 buffer.open_undo_block();

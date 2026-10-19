@@ -28,6 +28,9 @@ $RECYCLE.BIN/
 *.swp
 *.swo
 *~
+*.difflog
+*.un~
+.undodir/
 
 # ===== Build Output / Logs =====
 *.exe

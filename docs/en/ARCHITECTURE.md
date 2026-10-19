@@ -95,5 +95,7 @@ Provides terminal frontend rendering and application lifecycle orchestration.
 - **Zero-Dependency Core Tools**:
   - PDF generation, LCS diffing, and persistent undo serialization are all implemented strictly in standard Rust without external bloat crates.
   - Ensures blazing compilation speed and cross-platform portability.
-- **Desktop GUI (egui) Migration to Phase 5**:
+- **Desktop GUI (egui) Migration to Phase 5 & Design Specifications**:
   - Desktop GUI frontend and GUI-dependent features (minimap, falling deletion animation, etc.) were migrated to Phase 5 per user instruction, focusing current efforts on terminal TUI and core tooling engines.
+  - For detailed architecture, framework trade-offs, styling principles, and prompt templates for the planned `vivivi-gui` crate, see [GUI_DESIGN.md](file:///docs/en/GUI_DESIGN.md).
+

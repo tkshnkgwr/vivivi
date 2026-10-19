@@ -5,7 +5,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph, Wrap},
 };
 
 use crate::tui::app::App;
@@ -149,8 +149,11 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
 
         // 不可視文字可視化が有効な場合、専用フォーマットを適用
         let (processed_line, inv_info) = if app.list_chars_config.enabled && !app.is_csv_active {
-            let inv_chars =
-                vivivi_modes::format_line_invisibles(&display_line, 4, &app.list_chars_config);
+            let inv_chars = vivivi_modes::format_line_invisibles(
+                &display_line,
+                app.tab_width.max(1),
+                &app.list_chars_config,
+            );
             let s: String = inv_chars.iter().map(|c| c.ch).collect();
             (s, Some(inv_chars))
         } else {
@@ -191,26 +194,32 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
         }
 
         // 不可視文字で文字数が増減した場合のスタイル長調整
-        if let Some(ref inv) = inv_info {
+        if inv_info.is_some() {
             styles.resize(chars.len(), Style::default().fg(Color::DarkGray));
-            for (idx, item) in inv.iter().enumerate() {
-                if idx < styles.len() {
-                    if item.is_zenkaku_space {
-                        styles[idx] = Style::default()
-                            .fg(Color::Red)
-                            .bg(Color::Rgb(50, 20, 20))
-                            .add_modifier(Modifier::BOLD);
-                    } else if item.is_invisible {
-                        styles[idx] = Style::default().fg(Color::DarkGray);
-                    }
-                }
-            }
         }
 
         // カレント行の背景色（暗いブルーグレー）
         if is_current_line {
             for s in &mut styles {
                 *s = s.bg(Color::Rgb(30, 35, 45));
+            }
+        }
+
+        // 不可視文字（タブ、EOL、全角スペース）の専用スタイル適用
+        // ※カレント行背景色より後に適用することで、全角スペースのハイライト等が打ち消されないようにする
+        if let Some(ref inv) = inv_info {
+            for (idx, item) in inv.iter().enumerate() {
+                if idx < styles.len() {
+                    if item.is_zenkaku_space {
+                        // 全角スペース: 文字サイズ（全角幅2マス）を維持したまま、ワインレッド背景で視認性を確保
+                        styles[idx] = styles[idx]
+                            .bg(Color::Rgb(120, 35, 35))
+                            .fg(Color::LightRed)
+                            .add_modifier(Modifier::BOLD);
+                    } else if item.is_invisible {
+                        styles[idx] = styles[idx].fg(Color::DarkGray);
+                    }
+                }
             }
         }
 
@@ -318,7 +327,7 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
         row_spans.push(Span::styled(gutter_sym, gutter_style));
         row_spans.push(Span::styled(" ", base_bg));
 
-        let scroll_x = scroll.1;
+        let scroll_x = if app.wrap { 0 } else { scroll.1 };
         let mut visual_x = 0;
         let mut cur_chunk = String::new();
         let mut cur_style = Style::default();
@@ -346,15 +355,22 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
                 chunk_has_started = true;
             }
 
-            if st == cur_style {
-                cur_chunk.push(ch);
+            let render_w = if visual_x < scroll_x {
+                char_end_x - scroll_x
             } else {
-                if !cur_chunk.is_empty() {
-                    row_spans.push(Span::styled(cur_chunk.clone(), cur_style));
-                    cur_chunk.clear();
-                }
-                cur_chunk.push(ch);
+                ch_w
+            };
+
+            if st != cur_style && !cur_chunk.is_empty() {
+                row_spans.push(Span::styled(cur_chunk.clone(), cur_style));
+                cur_chunk.clear();
                 cur_style = st;
+            }
+
+            if ch == '\t' {
+                cur_chunk.push_str(&" ".repeat(render_w));
+            } else {
+                cur_chunk.push(ch);
             }
 
             visual_x = char_end_x;
@@ -375,6 +391,9 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
         )));
     }
 
-    let paragraph = Paragraph::new(lines_spans);
+    let mut paragraph = Paragraph::new(lines_spans);
+    if app.wrap {
+        paragraph = paragraph.wrap(Wrap { trim: false });
+    }
     frame.render_widget(paragraph, area);
 }

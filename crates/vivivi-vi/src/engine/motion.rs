@@ -185,6 +185,61 @@ impl ViEngine {
                     }
                 }
             }
+            Motion::ParagraphForward(count) => {
+                for _ in 0..*count {
+                    let total_lines = buffer.line_count();
+                    let mut line = cursor.pos.line;
+                    if line >= total_lines.saturating_sub(1) {
+                        break;
+                    }
+                    let current_empty = buffer
+                        .line_text(line)
+                        .map(|s| s.trim().is_empty())
+                        .unwrap_or(true);
+                    let mut crossed_non_empty = !current_empty;
+                    while line + 1 < total_lines {
+                        line += 1;
+                        let is_empty = buffer
+                            .line_text(line)
+                            .map(|s| s.trim().is_empty())
+                            .unwrap_or(true);
+                        if !is_empty {
+                            crossed_non_empty = true;
+                        } else if crossed_non_empty {
+                            break;
+                        }
+                    }
+                    cursor.pos.line = line;
+                    cursor.pos.col = 0;
+                }
+            }
+            Motion::ParagraphBackward(count) => {
+                for _ in 0..*count {
+                    let mut line = cursor.pos.line;
+                    if line == 0 {
+                        break;
+                    }
+                    let current_empty = buffer
+                        .line_text(line)
+                        .map(|s| s.trim().is_empty())
+                        .unwrap_or(true);
+                    let mut crossed_non_empty = !current_empty;
+                    while line > 0 {
+                        line -= 1;
+                        let is_empty = buffer
+                            .line_text(line)
+                            .map(|s| s.trim().is_empty())
+                            .unwrap_or(true);
+                        if !is_empty {
+                            crossed_non_empty = true;
+                        } else if crossed_non_empty {
+                            break;
+                        }
+                    }
+                    cursor.pos.line = line;
+                    cursor.pos.col = 0;
+                }
+            }
         }
     }
 

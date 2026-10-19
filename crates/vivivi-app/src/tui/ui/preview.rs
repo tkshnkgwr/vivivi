@@ -37,7 +37,7 @@ pub fn render_preview_view(frame: &mut Frame, app: &App, area: Rect) {
         .collect();
 
     let title = format!(
-        " 印刷プレビュー ({}行中 {}行〜) [j/k:スクロール, d/u:半画面, q/Esc:閉じる] ",
+        " 印刷プレビュー ({}行中 {}行〜) [p:PDF保存, j/k:スクロール, d/u:半画面, q/Esc:閉じる] ",
         total_lines,
         scroll_offset + 1
     );
