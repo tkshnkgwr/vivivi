@@ -818,3 +818,145 @@ fn test_dot_repeat_commands() {
     vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
     assert_eq!(buf.line_text(1).unwrap(), "NEW123456");
 }
+
+#[test]
+fn test_text_objects_word() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("hello wonderful world");
+    let mut cur = TextCursor::new(0, 8); // 'wonderful' の途中
+
+    // 1. 'diw' で "wonderful" を削除
+    vi.feed_char('d');
+    vi.feed_char('i');
+    let cmd = vi.feed_char('w');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(0).unwrap(), "hello  world");
+
+    // 2. 'daw' で "world" を後ろまたは前の空白ごと削除
+    cur.pos.col = 7; // 'world' の 'w'
+    vi.feed_char('d');
+    vi.feed_char('a');
+    let cmd = vi.feed_char('w');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(0).unwrap(), "hello");
+
+    // 3. 'ciw' で単語を削除して挿入モードへ遷移
+    cur.pos.col = 1; // 'hello' の途中
+    vi.feed_char('c');
+    vi.feed_char('i');
+    let cmd = vi.feed_char('w');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(vi.mode(), ViMode::Insert);
+    assert_eq!(buf.line_text(0).unwrap(), "");
+}
+
+#[test]
+fn test_text_objects_quotes_and_brackets() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("let s = \"hello rust\";\nfoo(123, 456);");
+    let mut cur = TextCursor::new(0, 11); // "hello rust" の途中
+
+    // 1. 'di"' で引用符の中身を削除
+    vi.feed_char('d');
+    vi.feed_char('i');
+    let cmd = vi.feed_char('"');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(0).unwrap(), "let s = \"\";");
+
+    // 2. 'da(' で括弧ごと削除
+    cur.pos.line = 1;
+    cur.pos.col = 5; // '123' の途中
+    vi.feed_char('d');
+    vi.feed_char('a');
+    let cmd = vi.feed_char('(');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(1).unwrap(), "foo;");
+}
+
+#[test]
+fn test_case_change_operators() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("hello WORLD\nfoo BAR baz");
+    let mut cur = TextCursor::new(0, 0);
+
+    // 1. 'gUe' で 'hello' を 'HELLO' に大文字化
+    vi.feed_char('g');
+    vi.feed_char('U');
+    let cmd = vi.feed_char('e');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(0).unwrap(), "HELLO WORLD");
+
+    // 2. 'gu$' で行末まで小文字化
+    vi.feed_char('g');
+    vi.feed_char('u');
+    let cmd = vi.feed_char('$');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(0).unwrap(), "hello world");
+
+    // 3. 'gUU' で行全体を大文字化
+    vi.feed_char('g');
+    vi.feed_char('U');
+    let cmd = vi.feed_char('U');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(0).unwrap(), "HELLO WORLD");
+
+    // 4. 'guu' で行全体を小文字化
+    vi.feed_char('g');
+    vi.feed_char('u');
+    let cmd = vi.feed_char('u');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(buf.line_text(0).unwrap(), "hello world");
+
+    // 5. ビジュアルモードでの 'U' (大文字化) と 'u' (小文字化)
+    cur.pos.line = 1;
+    cur.pos.col = 0;
+    vi.set_mode(ViMode::Visual);
+    cur.anchor = Some(CursorPosition::new(1, 0));
+    cur.pos = CursorPosition::new(1, 6); // "foo BAR"
+
+    let cmd = vi.feed_char('U');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(vi.mode(), ViMode::Normal);
+    assert_eq!(buf.line_text(1).unwrap(), "FOO BAR baz");
+}
+
+#[test]
+fn test_visual_text_objects() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("prefix \"inner content\" suffix");
+    let mut cur = TextCursor::new(0, 10); // 'inner content' の中
+
+    // 1. 'v' でビジュアルモード開始
+    let cmd = vi.feed_char('v');
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(vi.mode(), ViMode::Visual);
+
+    // 2. 'i"' で引用符の内側を選択
+    vi.feed_char('i');
+    let cmd = vi.feed_char('"');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+
+    // 選択範囲が "inner content" (8..21) に設定されていること
+    assert_eq!(cur.anchor, Some(CursorPosition::new(0, 8)));
+    assert_eq!(cur.pos, CursorPosition::new(0, 20)); // inclusive end
+
+    // 3. 'y' でヤンク
+    let cmd = vi.feed_char('y');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(vi.mode(), ViMode::Normal);
+
+    let yanked = vi.registers.get_unnamed().unwrap();
+    assert_eq!(yanked.as_str(), "inner content");
+}

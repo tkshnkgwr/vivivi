@@ -240,6 +240,16 @@ impl ViEngine {
                     cursor.pos.col = 0;
                 }
             }
+            Motion::TextObject(obj) => {
+                if let Some((from, to)) = self.find_text_object_range(buffer, cursor, obj) {
+                    if self.mode.is_visual() {
+                        cursor.anchor = Some(buffer.position_to_cursor(from));
+                        cursor.pos = buffer.position_to_cursor(to.saturating_sub(1).max(from));
+                    } else {
+                        cursor.pos = buffer.position_to_cursor(from);
+                    }
+                }
+            }
         }
     }
 

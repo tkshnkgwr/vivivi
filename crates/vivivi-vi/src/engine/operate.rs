@@ -16,38 +16,51 @@ impl ViEngine {
         buffer: &mut TextBuffer,
         cursor: &mut TextCursor,
     ) {
-        let start_pos = buffer.cursor_to_position(cursor.pos);
-        let mut target_cursor = cursor.clone();
-        self.execute_motion(motion, buffer, &mut target_cursor);
-        let end_pos = buffer.cursor_to_position(target_cursor.pos);
+        let (from, to) = match motion {
+            Motion::TextObject(obj) => {
+                if let Some((start, end)) = self.find_text_object_range(buffer, cursor, obj) {
+                    (start, end)
+                } else {
+                    return;
+                }
+            }
+            _ => {
+                let start_pos = buffer.cursor_to_position(cursor.pos);
+                let mut target_cursor = cursor.clone();
+                self.execute_motion(motion, buffer, &mut target_cursor);
+                let end_pos = buffer.cursor_to_position(target_cursor.pos);
 
-        let is_inclusive = matches!(
-            motion,
-            Motion::FindCharForward { till: false, .. }
-                | Motion::EndOfLine
-                | Motion::EndWord(_)
-                | Motion::EndBigWord(_)
-                | Motion::MatchingParen
-        );
+                let is_inclusive = matches!(
+                    motion,
+                    Motion::FindCharForward { till: false, .. }
+                        | Motion::EndOfLine
+                        | Motion::EndWord(_)
+                        | Motion::EndBigWord(_)
+                        | Motion::MatchingParen
+                );
 
-        let (from, mut to) = if start_pos <= end_pos {
-            (start_pos, end_pos)
-        } else {
-            (end_pos, start_pos)
+                let (from, mut to) = if start_pos <= end_pos {
+                    (start_pos, end_pos)
+                } else {
+                    (end_pos, start_pos)
+                };
+
+                if is_inclusive && to < buffer.len() {
+                    to += 1;
+                }
+
+                (from, to)
+            }
         };
 
-        if is_inclusive && to < buffer.len() {
-            to += 1;
-        }
-
-        let len = to - from;
+        let len = to.saturating_sub(from);
         if len == 0 {
             return;
         }
 
         let text = buffer.get_text(from, len);
         self.registers
-            .set(reg, RegisterContent::CharacterWise(text));
+            .set(reg, RegisterContent::CharacterWise(text.clone()));
 
         match op {
             Operator::Yank => {
@@ -67,10 +80,29 @@ impl ViEngine {
                 cursor.pos = buffer.position_to_cursor(from);
                 self.mode = ViMode::Insert;
             }
+            Operator::ToLower => {
+                let lower = text.to_lowercase();
+                buffer.open_undo_block();
+                buffer.delete_text(from, len, false);
+                buffer.insert_text(from, &lower);
+                buffer.close_undo_block();
+                cursor.pos = buffer.position_to_cursor(from);
+                self.clamp_cursor(buffer, cursor);
+            }
+            Operator::ToUpper => {
+                let upper = text.to_uppercase();
+                buffer.open_undo_block();
+                buffer.delete_text(from, len, false);
+                buffer.insert_text(from, &upper);
+                buffer.close_undo_block();
+                cursor.pos = buffer.position_to_cursor(from);
+                self.clamp_cursor(buffer, cursor);
+            }
             Operator::ShiftRight | Operator::ShiftLeft => {
-                let start_line = cursor.pos.line.min(target_cursor.pos.line);
+                let start_line = buffer.position_to_cursor(from).line;
+                let end_pos = (from + len).saturating_sub(1).max(from);
                 let end_line =
-                    (cursor.pos.line.max(target_cursor.pos.line) + 1).min(buffer.line_count());
+                    (buffer.position_to_cursor(end_pos).line + 1).min(buffer.line_count());
                 if op == Operator::ShiftRight {
                     Self::indent_lines_right(buffer, start_line, end_line);
                 } else {
@@ -175,6 +207,24 @@ impl ViEngine {
             }
             Operator::ShiftLeft => {
                 Self::indent_lines_left(buffer, start_line, end_line);
+                cursor.pos.col = self.find_first_non_blank(buffer, cursor.pos.line);
+            }
+            Operator::ToLower => {
+                let text = buffer.get_text(start_pos, len);
+                let lower = text.to_lowercase();
+                buffer.open_undo_block();
+                buffer.delete_text(start_pos, len, false);
+                buffer.insert_text(start_pos, &lower);
+                buffer.close_undo_block();
+                cursor.pos.col = self.find_first_non_blank(buffer, cursor.pos.line);
+            }
+            Operator::ToUpper => {
+                let text = buffer.get_text(start_pos, len);
+                let upper = text.to_uppercase();
+                buffer.open_undo_block();
+                buffer.delete_text(start_pos, len, false);
+                buffer.insert_text(start_pos, &upper);
+                buffer.close_undo_block();
                 cursor.pos.col = self.find_first_non_blank(buffer, cursor.pos.line);
             }
         }

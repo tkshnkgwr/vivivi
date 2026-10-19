@@ -69,9 +69,51 @@ pub enum Motion {
     ParagraphForward(usize),
     /// 前の段落へ移動 (`{`)
     ParagraphBackward(usize),
+    /// テキストオブジェクト (`iw`, `aw`, `i"`, `a(`, `i{` 等)
+    TextObject(TextObject),
 }
 
-/// オペレータ（削除、ヤンク、変更、インデントなどの操作種別）。
+/// テキストオブジェクトの境界修飾子（内側か全体か）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextObjectModifier {
+    /// 内側 (`i` / inner)
+    Inner,
+    /// 境界記号や前後の空白を含む全体 (`a` / around)
+    Around,
+}
+
+/// テキストオブジェクトの対象種別。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextObjectKind {
+    /// 単語 (`w`)
+    Word,
+    /// 空白区切り単語 (`W`)
+    BigWord,
+    /// 二重引用符 (`"`)
+    DoubleQuote,
+    /// 単一引用符 (`'`)
+    SingleQuote,
+    /// バッククォート (`` ` ``)
+    BackQuote,
+    /// 丸括弧 (`(`, `)`, `b`)
+    Parentheses,
+    /// 波括弧 (`{`, `}`, `B`)
+    Braces,
+    /// 角括弧 (`[`, `]`)
+    Bracket,
+    /// 山括弧 (`<`, `>`)
+    AngleBracket,
+}
+
+/// テキストオブジェクト（単語、引用符、括弧等の編集単位）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextObject {
+    pub modifier: TextObjectModifier,
+    pub kind: TextObjectKind,
+    pub count: usize,
+}
+
+/// オペレータ（削除、ヤンク、変更、インデント、大文字小文字変換などの操作種別）。
 ///
 /// # Examples
 ///
@@ -93,6 +135,10 @@ pub enum Operator {
     ShiftRight,
     /// インデント削除 (`<`)
     ShiftLeft,
+    /// 小文字化 (`gu`)
+    ToLower,
+    /// 大文字化 (`gU`)
+    ToUpper,
 }
 
 /// 画面スクロール配置の目標位置。

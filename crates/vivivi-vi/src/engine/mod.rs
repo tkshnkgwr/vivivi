@@ -7,6 +7,7 @@ mod ex;
 mod exec;
 mod motion;
 mod operate;
+mod text_object;
 mod visual;
 
 #[cfg(test)]

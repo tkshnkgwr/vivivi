@@ -42,6 +42,10 @@
 | Vi Commands        | Jump Last Edit (@, '@) & Line Replicate       |     ViVi 3 / ViVi 4      | Instant return to previous edit, replicate text from above line         |        Implemented (vi) |
 | Vi Commands        | Global Marks (mA - mZ, :marks)                |     ViVi 3 / ViVi 4      | Cross-file workspace-persistent marks using uppercase letters           |        Implemented (vi) |
 | Vi Commands        | Tag Jump (Ctrl-], Alt-])                      | Common (ViVi / OpenViVi) | Jump to declaration/definition via tags file & AST syntax analysis      |        Implemented (vi) |
+| Vi Commands        | Text Objects (iw, aw, i", a", i(, a()         |   Common (Gvim / ViVi)   | Edit/select target ranges inside or around words, quotes, and brackets  |        Implemented (vi) |
+| Vi Commands        | Case Conversion (gu, gU, guu, gUU, u, U)      |   Common (Gvim / ViVi)   | Lowercase/uppercase target motion, current line, or visual selection    |        Implemented (vi) |
+| Vi Commands        | Indent & Repeat (>>, <<, >, <, .)             |   Common (Gvim / ViVi)   | Line/block indentation shifting and dot repeat of previous change       |        Implemented (vi) |
+| Vi Commands        | Scroll Adjust & Paragraphs (zz, zt, zb, {, }) |   Common (Gvim / ViVi)   | Center/top/bottom screen scroll adjust and paragraph jump motions       |        Implemented (vi) |
 | Tools & Files      | Generational Backup (DiffLog / .difflog)      |     ViVi 3 / ViVi 4      | Differential backups on save; version rollback & per-line blame         |     Implemented (modes) |
 | Tools & Files      | Persistent Undo (undofile)                    |  Common (Gvim / Custom)  | Preserve Undo/Redo history on disk to resume undos across sessions      |      Implemented (core) |
 | Tools & Files      | In-Code ToDo Extraction (undone/TODO)         |          ViVi 4          | Scan member files for ToDo tags and interactive jump list               |     Implemented (modes) |
@@ -271,6 +275,18 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - [x] **Dynamic Option Control**: Implemented `:se nu` / `:se nonu` / `:se wrap` / `:se nowrap` and status query commands (`:se nu?`, `:se wrap?`).
   - [x] **Full-Width Space Display**: Eliminated glyph shrinking caused by ambiguous-width marks; preserved 2-cell width with wine-red background highlight.
   - [x] **Input Robustness**: Implemented `KeyCode::Tab` input in Insert and Replace modes and full space-expansion tab rendering.
+  - [x] **Vi Standard Editing Command Enhancements (Phase 1 & Phase 2)**:
+    - **Indentation Operators**: Line-wise (`>>`, `<<`), motion-targeted (`>`, `<`), and visual selection (`>`, `<`).
+    - **Dot Repeat (`.`)**: Exact one-key repetition of the previous modification (commands, insert, indent, changes).
+    - **Scroll Adjust & Paragraph Motions**: Screen centering/top/bottom (`zz`, `zt`, `zb`) and paragraph jumps (`{`, `}`).
+    - **Text Objects**: Words (`iw`, `aw`, `iW`, `aW`), quotes (`i"`, `a"`, `i'`, `a'`, `` i` ``, `` a` ``), brackets (`i(`, `a(`, `ib`, `ab`, `i{`, `a{`, `iB`, `aB`, `i[`, `a[`, `i<`, `a<`).
+    - **Case Conversion**: Motion-targeted (`gu`, `gU`), line-wise (`guu`, `gUU`), and visual selection (`u`, `U`).
+  - [x] **PDF Export Dual-File Bug Fix & DiffLog Exclusion**:
+    - Fixed dual PDF file generation in print preview / `:pdf` to cleanly output a single PDF. Standardized `.<filename>.difflog` and ignored via `.gitignore`.
+  - [x] **Multi-Line Visual Yank & Paste Bug Fix**:
+    - Completely resolved line-wise paste corruption after multi-line visual yank.
+  - [x] **Filer `d` Key Conflict Resolution**:
+    - Resolved key event conflict between Filer delete prompt and Vi delete operator.
 - [ ] **[Distribution & CI/CD] GitHub Actions Automated Release Pipeline (`.github/workflows/release.yml`)**
   - Windows x86_64 portable zip & SHA256 checksum generation triggered on `v*` tags.
 - [ ] **[Packaging] Scoop Bucket Maintenance (`vivivi.json`) & Winget Integration**

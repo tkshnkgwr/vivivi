@@ -3,7 +3,9 @@
 //! プレフィックスカウント（`3`）、レジスタ指定（`"a`）、オペレータ（`d`, `y`, `c`）、
 //! 2ストロークキー（`gg`）、およびコマンドライン入力（`:`, `/`, `?`）を順次解釈します。
 
-use crate::command::{Motion, Operator, ViCommand, WordSearchKind};
+use crate::command::{
+    Motion, Operator, TextObject, TextObjectKind, TextObjectModifier, ViCommand, WordSearchKind,
+};
 use crate::mode::ViMode;
 
 /// パーサーの内部状態を表す列挙体。
@@ -35,6 +37,13 @@ pub enum ParserState {
         op: Option<Operator>,
         is_forward: bool,
         is_till: bool,
+        count: usize,
+        register: Option<char>,
+    },
+    /// テキストオブジェクトの対象文字待ち (`i` または `a` の直後)
+    WaitingForTextObject {
+        op: Option<Operator>,
+        modifier: TextObjectModifier,
         count: usize,
         register: Option<char>,
     },
@@ -304,6 +313,38 @@ impl CommandParser {
                         register: None,
                     });
                 }
+                'u' => {
+                    self.reset();
+                    return Some(ViCommand::VisualOperate {
+                        op: Operator::ToLower,
+                        register: None,
+                    });
+                }
+                'U' => {
+                    self.reset();
+                    return Some(ViCommand::VisualOperate {
+                        op: Operator::ToUpper,
+                        register: None,
+                    });
+                }
+                'i' => {
+                    self.state = ParserState::WaitingForTextObject {
+                        op: None,
+                        modifier: TextObjectModifier::Inner,
+                        count: 1,
+                        register: None,
+                    };
+                    return None;
+                }
+                'a' => {
+                    self.state = ParserState::WaitingForTextObject {
+                        op: None,
+                        modifier: TextObjectModifier::Around,
+                        count: 1,
+                        register: None,
+                    };
+                    return None;
+                }
                 'r' => {
                     self.reset();
                     self.state = ParserState::WaitingForVisualReplaceChar;
@@ -391,27 +432,61 @@ impl CommandParser {
                 }
             }
 
-            ParserState::WaitingForG { count: _ } => {
-                self.state = ParserState::Idle;
+            ParserState::WaitingForG { count } => {
+                let count = *count;
                 match ch {
-                    'g' => Some(ViCommand::Move(Motion::DocumentStart)),
-                    '*' => Some(ViCommand::SearchWordUnderCursor {
-                        forward: true,
-                        kind: WordSearchKind::Partial,
-                    }),
-                    '#' => Some(ViCommand::SearchWordUnderCursor {
-                        forward: false,
-                        kind: WordSearchKind::Partial,
-                    }),
-                    '<' => Some(ViCommand::SearchWordUnderCursor {
-                        forward: true,
-                        kind: WordSearchKind::Prefix,
-                    }),
-                    '=' => Some(ViCommand::SearchWordUnderCursor {
-                        forward: true,
-                        kind: WordSearchKind::Suffix,
-                    }),
-                    _ => None,
+                    'g' => {
+                        self.state = ParserState::Idle;
+                        Some(ViCommand::Move(Motion::DocumentStart))
+                    }
+                    'u' => {
+                        self.state = ParserState::WaitingForMotion {
+                            op: Operator::ToLower,
+                            count,
+                            register: None,
+                        };
+                        None
+                    }
+                    'U' => {
+                        self.state = ParserState::WaitingForMotion {
+                            op: Operator::ToUpper,
+                            count,
+                            register: None,
+                        };
+                        None
+                    }
+                    '*' => {
+                        self.state = ParserState::Idle;
+                        Some(ViCommand::SearchWordUnderCursor {
+                            forward: true,
+                            kind: WordSearchKind::Partial,
+                        })
+                    }
+                    '#' => {
+                        self.state = ParserState::Idle;
+                        Some(ViCommand::SearchWordUnderCursor {
+                            forward: false,
+                            kind: WordSearchKind::Partial,
+                        })
+                    }
+                    '<' => {
+                        self.state = ParserState::Idle;
+                        Some(ViCommand::SearchWordUnderCursor {
+                            forward: true,
+                            kind: WordSearchKind::Prefix,
+                        })
+                    }
+                    '=' => {
+                        self.state = ParserState::Idle;
+                        Some(ViCommand::SearchWordUnderCursor {
+                            forward: true,
+                            kind: WordSearchKind::Suffix,
+                        })
+                    }
+                    _ => {
+                        self.state = ParserState::Idle;
+                        None
+                    }
                 }
             }
 
@@ -535,7 +610,7 @@ impl CommandParser {
                 let count = *count;
                 let register = *register;
 
-                // オペレータ連打（例: dd, yy, cc, >>, <<）は行操作
+                // オペレータ連打（例: dd, yy, cc, >>, <<, guu, gUU）は行操作
                 let is_double_op = matches!(
                     (op, ch),
                     (Operator::Delete, 'd')
@@ -543,6 +618,10 @@ impl CommandParser {
                         | (Operator::Change, 'c')
                         | (Operator::ShiftRight, '>')
                         | (Operator::ShiftLeft, '<')
+                        | (Operator::ToLower, 'u')
+                        | (Operator::ToLower, 'g')
+                        | (Operator::ToUpper, 'U')
+                        | (Operator::ToUpper, 'g')
                 );
 
                 if is_double_op {
@@ -552,6 +631,22 @@ impl CommandParser {
                         count,
                         register,
                     });
+                }
+
+                // テキストオブジェクト（i または a）待ちへ遷移
+                if ch == 'i' || ch == 'a' {
+                    let modifier = if ch == 'i' {
+                        TextObjectModifier::Inner
+                    } else {
+                        TextObjectModifier::Around
+                    };
+                    self.state = ParserState::WaitingForTextObject {
+                        op: Some(op),
+                        modifier,
+                        count,
+                        register,
+                    };
+                    return None;
                 }
 
                 // f, F, t, T は文字入力待ちへ遷移
@@ -576,6 +671,51 @@ impl CommandParser {
                     })
                 } else {
                     self.reset();
+                    None
+                }
+            }
+
+            ParserState::WaitingForTextObject {
+                op,
+                modifier,
+                count,
+                register,
+            } => {
+                let op = *op;
+                let modifier = *modifier;
+                let count = *count;
+                let register = *register;
+                self.reset();
+
+                let kind = match ch {
+                    'w' => Some(TextObjectKind::Word),
+                    'W' => Some(TextObjectKind::BigWord),
+                    '"' => Some(TextObjectKind::DoubleQuote),
+                    '\'' => Some(TextObjectKind::SingleQuote),
+                    '`' => Some(TextObjectKind::BackQuote),
+                    '(' | ')' | 'b' => Some(TextObjectKind::Parentheses),
+                    '{' | '}' | 'B' => Some(TextObjectKind::Braces),
+                    '[' | ']' => Some(TextObjectKind::Bracket),
+                    '<' | '>' => Some(TextObjectKind::AngleBracket),
+                    _ => None,
+                };
+
+                if let Some(kind) = kind {
+                    let motion = Motion::TextObject(TextObject {
+                        modifier,
+                        kind,
+                        count,
+                    });
+                    if let Some(op) = op {
+                        Some(ViCommand::Operate {
+                            op,
+                            motion,
+                            register,
+                        })
+                    } else {
+                        Some(ViCommand::Move(motion))
+                    }
+                } else {
                     None
                 }
             }

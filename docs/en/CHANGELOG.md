@@ -7,6 +7,30 @@ All notable changes to this project will be documented in this file. The format 
 ## [0.9.0-beta] - 2026-10-19 (Testing / Dogfooding)
 
 ### Added
+- **Major Vi Standard Editing Command Enhancements (Phase 1 & Phase 2)**:
+  - **Full Text Objects Engine**:
+    - Word & Big Word objects: `iw` / `aw`, `iW` / `aW`.
+    - Quote objects: `i"` / `a"` (double quotes), `i'` / `a'` (single quotes), `` i` `` / `` a` `` (backticks).
+    - Bracket & Parenthesis objects: `i(` / `a(` (`ib`/`ab`), `i{` / `a{` (`iB`/`aB`), `i[` / `a[`, `i<` / `a<`.
+    - Operator combinations in Normal mode (`diw`, `ci"`, `ya(`, `guiw`, etc.).
+    - Automatic selection expansion in Visual mode (`v` + `i"`, `v` + `iw`, etc.).
+  - **Case Conversion Operators**:
+    - `gu<motion>` / `gU<motion>`: Lowercase / uppercase target motion or text object range (`guw`, `gU$`, `gui"`, etc.).
+    - `guu` / `gug`, `gUU` / `gUg`: Line-wise lowercase / uppercase conversions.
+    - Visual mode conversions: `u` (lowercase), `U` (uppercase).
+  - **Indentation Operators**:
+    - Line-wise indentation: `>>` (shift right / 4 spaces), `<<` (shift left / unindent).
+    - Motion-targeted indentation: `>` + motion, `<` + motion.
+    - Visual mode selection indentation: `>`, `<`.
+  - **Dot Repeat Engine (`.`)**:
+    - Full repeatable change engine accurately repeating the last modification (single-command deletion `x`, operator changes `cw`/`ciw`, line changes `cc`, indentations `>>`/`<<`, case shifts, and character insertions).
+  - **Screen Scrolling Adjustments**:
+    - `zz`: Center cursor line vertically on screen.
+    - `zt`: Scroll cursor line to the top of screen.
+    - `zb`: Scroll cursor line to the bottom of screen.
+  - **Paragraph Jump Motions**:
+    - `{`: Jump backward to preceding blank line / paragraph start.
+    - `}`: Jump forward to next blank line / paragraph end.
 - **Dynamic Line Number & Line Wrap Control Commands**:
   - Implemented `:se nu` / `:se nonu` / `:set nu` / `:set nonu` (line numbering), `:se rnu` / `:se nornu` (relative line numbering).
   - Implemented `:se wrap` / `:se nowrap` / `:set wrap` / `:set nowrap` (line wrapping at terminal edge vs. default horizontal scrolling).
@@ -16,6 +40,14 @@ All notable changes to this project will be documented in this file. The format 
   - Handled `KeyCode::Tab` in `handle_insert_mode` and `handle_replace_mode` to reliably insert and replace tab character `\t`.
 
 ### Fixed / Improved
+- **PDF Export Duplicate File Creation Bug**:
+  - Resolved bug in print preview (`p` key) and `:pdf` command where dual PDF files were generated; now reliably outputs a single complete PDF document.
+- **Generational Backup DiffLog Naming Convention**:
+  - Standardized edit session diff log file names to leading-dot `.<filename>.difflog` and registered in `.gitignore` to prevent repository pollution.
+- **Multi-Line Visual Yank & Paste Bug**:
+  - Fixed issue where pasting (`p`) after multi-line character visual yank (`v` + `y`) corrupted lines; now cleanly pastes as character/line-wise blocks.
+- **Filer `d` Key Conflict Resolution**:
+  - Fixed conflict between Vi delete operator `d` and 2-pane Filer delete prompt, ensuring the deletion confirmation modal immediately triggers in Filer.
 - **Full-Width (Zenkaku) Space Visualization**:
   - Replaced ambiguous-width `□` substitution with native `\u{3000}` (preserving exact 2-column display width) highlighted with a refined wine-red background (`Color::Rgb(120, 35, 35)`) under `:set list`.
   - Fixed rendering order bug where current line background was overwriting full-width space highlight colors.

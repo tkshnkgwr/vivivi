@@ -47,6 +47,72 @@ impl ViEngine {
             return;
         }
 
+        if matches!(op, Operator::ToLower | Operator::ToUpper) {
+            buffer.open_undo_block();
+            if self.mode == ViMode::VisualBlock {
+                for line in min_line..=max_line {
+                    if line >= buffer.line_count() {
+                        continue;
+                    }
+                    let line_str = buffer.line_text(line).unwrap_or_default();
+                    let chars: Vec<char> = line_str.chars().collect();
+                    let start = min_col.min(chars.len());
+                    let end = (max_col + 1).min(chars.len());
+
+                    if start < end {
+                        let original: String = chars[start..end].iter().collect();
+                        let converted = if op == Operator::ToLower {
+                            original.to_lowercase()
+                        } else {
+                            original.to_uppercase()
+                        };
+                        let replace_start = buffer.line_start_position(line) + start;
+                        buffer.delete_text(replace_start, end - start, false);
+                        buffer.insert_text(replace_start, &converted);
+                    }
+                }
+                cursor.pos.line = min_line;
+                cursor.pos.col = min_col;
+            } else if self.mode == ViMode::VisualLine {
+                let start_pos = buffer.line_start_position(min_line);
+                let end_pos = buffer.line_start_position(max_line + 1);
+                let len = end_pos.saturating_sub(start_pos);
+                if len > 0 {
+                    let text = buffer.get_text(start_pos, len);
+                    let converted = if op == Operator::ToLower {
+                        text.to_lowercase()
+                    } else {
+                        text.to_uppercase()
+                    };
+                    buffer.delete_text(start_pos, len, false);
+                    buffer.insert_text(start_pos, &converted);
+                }
+                cursor.pos.line = min_line.min(buffer.line_count().saturating_sub(1));
+                cursor.pos.col = self.find_first_non_blank(buffer, cursor.pos.line);
+            } else {
+                let p1 = buffer.cursor_to_position(anchor);
+                let p2 = buffer.cursor_to_position(pos);
+                let from = p1.min(p2);
+                let to = (p1.max(p2) + 1).min(buffer.len());
+                let len = to.saturating_sub(from);
+                if len > 0 {
+                    let text = buffer.get_text(from, len);
+                    let converted = if op == Operator::ToLower {
+                        text.to_lowercase()
+                    } else {
+                        text.to_uppercase()
+                    };
+                    buffer.delete_text(from, len, false);
+                    buffer.insert_text(from, &converted);
+                }
+                cursor.pos = buffer.position_to_cursor(from);
+            }
+            buffer.close_undo_block();
+            cursor.clear_selection();
+            self.mode = ViMode::Normal;
+            return;
+        }
+
         match self.mode {
             ViMode::VisualBlock => {
                 buffer.open_undo_block();

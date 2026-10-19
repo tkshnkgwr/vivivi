@@ -128,3 +128,22 @@ cargo build --release
 | 8-6 | System Clipboard Sync (`"+y`, `"*p`)                 | Yank with `"+y`, paste in Notepad; `:set cb=unnamed`      | Transparent bidirectional synchronization between OS clipboard and registers      |   [ ]   |
 | 8-7 | Syntax Expansion (Go, Ruby, TOML, PS, etc.)          | Open `.go`, `.rb`, `.toml`, `.ps1`, etc.                  | Status bar shows language badge; keywords, types, and comments syntax highlighted |   [ ]   |
 
+---
+
+## 9. Vi Standard Editing Enhancements (Phase 1 & Phase 2 Implemented)
+
+| No.  | Test Item                                            | Action / Key Sequence                                     | Expected Result                                                                   | Checked |
+| :--- | :--------------------------------------------------- | :-------------------------------------------------------- | :-------------------------------------------------------------------------------- | :-----: |
+| 9-1  | Text Objects Word (diw, daw, ciw)                   | Run `diw`, `daw`, `ciw` on a target word                  | Deletes target word inner/around; ciw transitions to Insert mode                  |   [ ]   |
+| 9-2  | Text Objects Quotes (di", da", ci')                 | Run `di"`, `da"`, `ci'` inside target quotes              | Deletes quote content inner only or around quotes                                 |   [ ]   |
+| 9-3  | Text Objects Brackets (di(, da(, di{)               | Run `di(`, `da(`, `di{` inside target brackets            | Deletes bracket content inner only or around bracket symbols                      |   [ ]   |
+| 9-4  | Visual Selection Text Objects (v + i")              | Press `v` then `i"` or `a"` inside quotes                 | Expands visual selection anchor/pos to target object; allows y and d              |   [ ]   |
+| 9-5  | Case Conversion (guw, gU$, guu, gUU, u, U)          | Run `guw`, `gU$`, `guu`, `gUU`, or press `u`/`U` in Visual| Target range or line is cleanly converted to lowercase or uppercase               |   [ ]   |
+| 9-6  | Indentation Operators (>>, <<, >, <)                | Run `>>` or `<<` at line start; run `>` or `<` on visual  | Indents or unindents by 4 spaces across target lines                              |   [ ]   |
+| 9-7  | Dot Repeat (x then ., ciw then ., >> then .)        | After `x`, `ciw`, or `>>`, press `.` at other lines       | Accurately repeats previous change with identical semantics                       |   [ ]   |
+| 9-8  | Screen Scrolling Adjust (zz, zt, zb)                | Press `zz` (center), `zt` (top), or `zb` (bottom)         | Smoothly adjusts vertical screen viewport relative to cursor line                 |   [ ]   |
+| 9-9  | Paragraph Jump Motions ({, })                       | Press `{` or `}` in document with blank lines             | Accurately jumps cursor forward or backward across paragraph blank lines          |   [ ]   |
+| 9-10 | Multi-Line Visual Yank & Paste (v + y -> p)         | Select multiple lines via `v`, yank with `y`, paste `p`   | Pastes clean multi-line text without line-wise formatting corruption              |   [ ]   |
+| 9-11 | PDF Standalone Output Bug Fix (:pdf / preview p)    | Press `p` inside `:preview` or run `:pdf`                 | Outputs only a single clean .pdf document without duplicate files                 |   [ ]   |
+| 9-12 | Filer d Key File Deletion Dialog                    | Highlight file inside `:filer` and press `d`              | Triggers file deletion confirmation modal without Vi operator conflict            |   [ ]   |
+
