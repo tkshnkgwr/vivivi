@@ -269,7 +269,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 
 ---
 
-## 3. Currently in Progress: Beta Testing & Practical Verification (v0.9.1-beta)
+## 3. Currently in Progress: Beta Testing & Practical Verification (v0.9.2-beta)
 - [ ] **[Verification & Dogfooding] Boss's Hands-on Manual Testing (`MANUAL_TEST_GUIDE.md`)**
   - Daily coding and production usage, discovering friction points, edge-cases, and bugs.
   - [x] **Dynamic Option Control**: Implemented `:se nu` / `:se nonu` / `:se wrap` / `:se nowrap` and status query commands (`:se nu?`, `:se wrap?`).
@@ -283,6 +283,8 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
     - **Case Conversion**: Motion-targeted (`gu`, `gU`), line-wise (`guu`, `gUU`), and visual selection (`u`, `U`).
   - [x] **PDF Export Dual-File Bug Fix & DiffLog Exclusion**:
     - Fixed dual PDF file generation in print preview / `:pdf` to cleanly output a single PDF. Standardized `.<filename>.difflog` and ignored via `.gitignore`.
+  - [x] **Complete Japanese (CJK) PDF Mojibake Resolution**:
+    - Implemented Adobe standard CIDFont (`Type 0` / `HeiseiKakuGo-W5` / `UniJIS-UTF16-H`) with exact 2:1 monospaced grid, UTF-16BE hex encoding, and `unicode-width` display-width column wrapping/centering.
   - [x] **Multi-Line Visual Yank & Paste Bug Fix**:
     - Completely resolved line-wise paste corruption after multi-line visual yank.
   - [x] **Filer `d` Key Conflict Resolution**:

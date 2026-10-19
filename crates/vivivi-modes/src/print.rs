@@ -110,18 +110,14 @@ pub fn paginate_text(
     let mut current_lineno = 1;
 
     for line in text.lines() {
-        // 折り返し処理（文字幅考慮の簡易分割）
-        let chars: Vec<char> = line.chars().collect();
+        // 折り返し処理（文字表示幅を考慮した分割）
         let max_content_width = if settings.show_line_numbers {
             settings.columns_per_line.saturating_sub(8) // " 123 | "
         } else {
             settings.columns_per_line
         };
 
-        let mut start = 0;
-        let mut is_first_chunk = true;
-
-        if chars.is_empty() {
+        if line.is_empty() {
             let formatted = if settings.show_line_numbers {
                 format!("{:4} | ", current_lineno)
             } else {
@@ -136,12 +132,27 @@ pub fn paginate_text(
             continue;
         }
 
-        while start < chars.len() {
-            let end = (start + max_content_width).min(chars.len());
-            let chunk: String = chars[start..end].iter().collect();
+        // 表示幅に応じたチャンク分割（全角2桁、半角1桁を考慮）
+        let mut chunks = Vec::new();
+        let mut current_chunk = String::new();
+        let mut current_width = 0;
 
+        for c in line.chars() {
+            let char_width = unicode_width::UnicodeWidthChar::width(c).unwrap_or(1);
+            if current_width + char_width > max_content_width && !current_chunk.is_empty() {
+                chunks.push(std::mem::take(&mut current_chunk));
+                current_width = 0;
+            }
+            current_chunk.push(c);
+            current_width += char_width;
+        }
+        if !current_chunk.is_empty() {
+            chunks.push(current_chunk);
+        }
+
+        for (chunk_idx, chunk) in chunks.into_iter().enumerate() {
             let formatted = if settings.show_line_numbers {
-                if is_first_chunk {
+                if chunk_idx == 0 {
                     format!("{:4} | {}", current_lineno, chunk)
                 } else {
                     format!("     : {}", chunk)
@@ -151,17 +162,14 @@ pub fn paginate_text(
             };
 
             current_page.push(formatted);
-            if is_first_chunk {
+            if chunk_idx == 0 {
                 current_lineno += 1;
-                is_first_chunk = false;
             }
 
             if current_page.len() >= body_capacity {
                 raw_pages.push(current_page);
                 current_page = Vec::new();
             }
-
-            start = end;
         }
     }
 
@@ -218,7 +226,8 @@ pub fn paginate_text(
 }
 
 fn center_text(s: &str, width: usize) -> String {
-    let len = s.chars().count();
+    use unicode_width::UnicodeWidthStr;
+    let len = s.width();
     if len >= width {
         return s.to_string();
     }
@@ -256,7 +265,9 @@ pub fn format_preview_text(pages: &[PrintPage]) -> String {
 /// ページデータを自己完結型 PDF 1.4 ファイルとして出力・保存します。
 ///
 /// 外部Cライブラリや重厚なクレートに依存せず、A4用紙サイズ（595.28 x 841.89 pt）の
-/// 標準PDFバイナリ（Courier等幅フォント使用）を直接エンコードして書き出します。
+/// 標準PDFバイナリを直接エンコードして書き出します。
+/// 日本語（CJK）およびASCII混在環境に完全対応するため、Adobe 標準 CIDFont（`HeiseiKakuGo-W5` / `UniJIS-UTF16-H`）
+/// を採用し、半角英数字（CID 1..230）を幅500、全角文字を幅1000の等幅グリッドとして出力します。
 ///
 /// # 引数
 /// - `pages`: 出力対象のページデータ一覧
@@ -286,11 +297,15 @@ pub fn export_to_pdf<P: AsRef<Path>>(pages: &[PrintPage], output_path: P) -> Res
     // 2: Outlines
     // 3: Pages
     // 4 .. 4 + num_pages - 1: Page objects
-    // 4 + num_pages: Font object (Courier)
-    // 4 + num_pages + 1 .. 4 + num_pages + 1 + num_pages - 1: Content stream objects
+    // 4 + num_pages: Font object (Type0 HeiseiKakuGo-W5)
+    // 5 + num_pages: CIDFontType0 object
+    // 6 + num_pages: FontDescriptor object
+    // 7 + num_pages .. 7 + num_pages + num_pages - 1: Content stream objects
 
     let font_obj_id = 4 + num_pages;
-    let first_content_id = font_obj_id + 1;
+    let cid_font_id = font_obj_id + 1;
+    let font_desc_id = font_obj_id + 2;
+    let first_content_id = font_obj_id + 3;
 
     // 1 0 obj: Catalog
     offsets.push(pdf.len());
@@ -325,13 +340,29 @@ pub fn export_to_pdf<P: AsRef<Path>>(pages: &[PrintPage], output_path: P) -> Res
         pdf.extend_from_slice(page_obj.as_bytes());
     }
 
-    // Font オブジェクト (Courier)
+    // Type0 Font オブジェクト (HeiseiKakuGo-W5 / UniJIS-UTF16-H)
     offsets.push(pdf.len());
     let font_obj = format!(
-        "{} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\nendobj\n",
-        font_obj_id
+        "{} 0 obj\n<< /Type /Font /Subtype /Type0 /BaseFont /HeiseiKakuGo-W5-UniJIS-UTF16-H /Encoding /UniJIS-UTF16-H /DescendantFonts [ {} 0 R ] >>\nendobj\n",
+        font_obj_id, cid_font_id
     );
     pdf.extend_from_slice(font_obj.as_bytes());
+
+    // CIDFontType0 オブジェクト（半角=500、全角=1000）
+    offsets.push(pdf.len());
+    let cid_font_obj = format!(
+        "{} 0 obj\n<< /Type /Font /Subtype /CIDFontType0 /BaseFont /HeiseiKakuGo-W5 /CIDSystemInfo << /Registry (Adobe) /Ordering (Japan1) /Supplement 4 >> /FontDescriptor {} 0 R /DW 1000 /W [ 1 230 500 ] >>\nendobj\n",
+        cid_font_id, font_desc_id
+    );
+    pdf.extend_from_slice(cid_font_obj.as_bytes());
+
+    // FontDescriptor オブジェクト
+    offsets.push(pdf.len());
+    let desc_obj = format!(
+        "{} 0 obj\n<< /Type /FontDescriptor /FontName /HeiseiKakuGo-W5 /Flags 4 /FontBBox [-100 -200 1000 900] /ItalicAngle 0 /Ascent 880 /Descent -120 /CapHeight 700 /StemV 80 >>\nendobj\n",
+        font_desc_id
+    );
+    pdf.extend_from_slice(desc_obj.as_bytes());
 
     // 各 Content stream オブジェクト
     for (i, page) in pages.iter().enumerate() {
@@ -342,8 +373,7 @@ pub fn export_to_pdf<P: AsRef<Path>>(pages: &[PrintPage], output_path: P) -> Res
         stream.push_str("BT\n/F1 9 Tf\n12 TL\n40 800 Td\n");
 
         for line in &page.lines {
-            let escaped = escape_pdf_string(line);
-            stream.push_str(&format!("({}) '\n", escaped));
+            stream.push_str(&encode_pdf_hex_line(line));
         }
         stream.push_str("ET\n");
 
@@ -382,17 +412,15 @@ pub fn export_to_pdf<P: AsRef<Path>>(pages: &[PrintPage], output_path: P) -> Res
     Ok(())
 }
 
-fn escape_pdf_string(s: &str) -> String {
-    let mut out = String::new();
-    for c in s.chars() {
-        match c {
-            '(' => out.push_str("\\("),
-            ')' => out.push_str("\\)"),
-            '\\' => out.push_str("\\\\"),
-            _ if c.is_ascii() => out.push(c),
-            _ => out.push('?'), // ASCII範囲外フォールバック
-        }
+/// 文字列を行単位の PDF 16進テキスト（UTF-16BE `<HEX> '\n`）としてエンコードします。
+fn encode_pdf_hex_line(s: &str) -> String {
+    use std::fmt::Write;
+    let mut out = String::with_capacity(s.len() * 4 + 4);
+    out.push('<');
+    for u in s.encode_utf16() {
+        let _ = write!(out, "{:04x}", u);
     }
+    out.push_str("> '\n");
     out
 }
 
@@ -416,5 +444,45 @@ mod tests {
         let preview = format_preview_text(&pages);
         assert!(preview.contains("TestDoc"));
         assert!(preview.contains("Line 1"));
+    }
+
+    #[test]
+    fn test_paginate_japanese_width() {
+        let text = "こんにちは世界\nHello World\n";
+        let settings = PrintSettings {
+            lines_per_page: 10,
+            columns_per_line: 20,
+            show_line_numbers: false,
+            header_format: "TestJP".into(),
+            footer_format: "%Page%".into(),
+        };
+
+        let pages = paginate_text(text, "test_jp.txt", "2026-10-19", &settings);
+        assert_eq!(pages.len(), 1);
+        let preview = format_preview_text(&pages);
+        assert!(preview.contains("こんにちは世界"));
+        assert!(preview.contains("Hello World"));
+    }
+
+    #[test]
+    fn test_export_to_pdf_japanese() {
+        let temp_dir = std::env::temp_dir();
+        let pdf_path = temp_dir.join("vivivi_test_jp_out.pdf");
+
+        let settings = PrintSettings::default();
+        let text =
+            "fn main() {\n    // 日本語PDF出力の検証\n    println!(\"こんにちは世界！\");\n}\n";
+        let pages = paginate_text(text, "main.rs", "2026-10-19", &settings);
+
+        export_to_pdf(&pages, &pdf_path).unwrap();
+        assert!(pdf_path.exists());
+
+        let bytes = std::fs::read(&pdf_path).unwrap();
+        assert!(bytes.starts_with(b"%PDF-1.4"));
+        let pdf_str = String::from_utf8_lossy(&bytes);
+        assert!(pdf_str.contains("/BaseFont /HeiseiKakuGo-W5"));
+        assert!(pdf_str.contains("/Encoding /UniJIS-UTF16-H"));
+
+        let _ = std::fs::remove_file(&pdf_path);
     }
 }

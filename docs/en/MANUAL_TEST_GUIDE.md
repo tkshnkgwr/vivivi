@@ -146,4 +146,5 @@ cargo build --release
 | 9-10 | Multi-Line Visual Yank & Paste (v + y -> p)         | Select multiple lines via `v`, yank with `y`, paste `p`   | Pastes clean multi-line text without line-wise formatting corruption              |   [ ]   |
 | 9-11 | PDF Standalone Output Bug Fix (:pdf / preview p)    | Press `p` inside `:preview` or run `:pdf`                 | Outputs only a single clean .pdf document without duplicate files                 |   [ ]   |
 | 9-12 | Filer d Key File Deletion Dialog                    | Highlight file inside `:filer` and press `d`              | Triggers file deletion confirmation modal without Vi operator conflict            |   [ ]   |
+| 9-13 | Japanese (CJK) PDF Mojibake Resolution              | Run :pdf or press p in :preview on Japanese file        | Renders beautiful Japanese text without mojibake on exact 2:1 monospaced grid     |   [ ]   |
 

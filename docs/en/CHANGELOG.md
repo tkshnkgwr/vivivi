@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [0.9.2-beta] - 2026-10-19
+
+### Fixed / Improved
+- **Complete Resolution of Japanese (CJK) Text Mojibake in PDF Output**:
+  - Replaced legacy ASCII-only font (`Type 1 / Courier`) and non-ASCII fallback `?` substitution with standard **Adobe CIDFont (`Type 0` / `HeiseiKakuGo-W5` / `UniJIS-UTF16-H`)**, rendering beautiful Japanese Gothic typography across major PDF viewers (Windows Edge / Chrome / Acrobat Reader, macOS Preview, Linux, etc.) without inflating binary size.
+  - Applied `/DW 1000 /W [ 1 230 500 ]` to enforce an exact **2:1 monospaced grid** (500 width for half-width ASCII CIDs 1..230, 1000 width for full-width CJK).
+  - Transitioned content stream line drawing to **UTF-16BE Hexadecimal string format (`<HEX> '`)**, eliminating syntax breakage and special character escaping pitfalls.
+- **Accurate Display-Width Wrapping & Centering via `unicode-width`**:
+  - Upgraded pagination (`paginate_text`) and footer centering (`center_text`) from character counts (`chars().count()`) to character display widths (2 columns for full-width, 1 column for half-width). Source code containing mixed Japanese and ASCII now wraps cleanly at the exact column boundary (default 80 columns).
+
+---
+
 ## [0.9.1-beta] - 2026-10-19
 
 ### Added
