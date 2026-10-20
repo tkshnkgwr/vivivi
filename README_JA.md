@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024%20Edition-orange.svg)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/version-v0.1.0-brightgreen.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/version-v0.9.3--beta-brightgreen.svg)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/tkshnkgwr/vivivi)
 
 [English](./README.md) | [日本語](./README_JA.md)
@@ -76,6 +76,20 @@ Unicode罫線の自動結合、インラインCSV/TSV高速整列・編集、Mig
   - 閲覧時はクォート記号を非表示にし、カーソル行のみ生テキストで直接編集可能。
 - 📐 **Unicode 罫線自動結合描画モード**:
   - Unicode 罫線ブロック（U+2500〜U+254B）の交差判定に基づき、`Ctrl + 矢印キー` で十字（`┼`）やT字（`┬`, `┴`, `├`, `┤`）へ自動変換して接続。
+- 🔍 **外部Grep検索 & クイックフィックス (`:grep`, `:cnext`, `:cprev`)**:
+  - `ripgrep` (`rg`) や `git grep` と連動した高速プロジェクト全文検索。検索結果一覧から該当箇所へ即時ジャンプ。
+- 🏷️ **CTagsタグジャンプ & タグ一括生成 (`:tag`, `:tags`, `:maketags`, `Ctrl-]`, `Ctrl-t`)**:
+  - `tags` ファイルに基づく関数・構造体定義への瞬時ジャンプとタグスタック履歴管理。
+- 📁 **コード折り畳み (Folding - `zf`, `zo`, `zc`, `za`, `zd`, `:fold`)**:
+  - 選択範囲の手動折り畳み、個別展開・折り畳み、トグル、全解除。TUIエディタ描画時に折り畳み行（`+--- X lines: ...`）をコンパクト表示。
+- 🔄 **高度な文字列置換 & 計算式置換 (`:s`, `:%s`, `\=`)**:
+  - Vim互換の正規表現置換に加え、`:%s/パターン/\=式/g` による評価置換（行番号 `line(".")` や数値加算計算など）に対応。
+- ⚖️ **外部差分比較プレビュー (`:diff [path]`, `:difflog`)**:
+  - 未保存バッファと保存済み実ファイルの差分比較、または指定した外部ファイルとの差分をシンタックスハイライト付きで専用プレビューウィンドウに表示。
+- 📄 **Markdown文書の直接PDF出力 (`:pdf [path]`)**:
+  - 編集中のMarkdown文書を、日本語フォントを適切に埋め込んだPDFドキュメントとして直接生成・エクスポート。
+- 📑 **ファイルテンプレート自動展開 & 永続Undo手動保存 (`:undofile`, `doc/templates/`)**:
+  - 新規ファイル作成時の言語別テンプレート自動適用、および編集履歴の手動永続化対応。
 - 🌐 **文字コード・改行自動判別**:
   - UTF-8, Shift_JIS (CP932), EUC-JP / CRLF, LF, CR を自動判別し、保存時も元の文字コードと改行体系を完全維持。
 

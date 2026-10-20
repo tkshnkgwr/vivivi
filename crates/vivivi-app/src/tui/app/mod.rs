@@ -188,7 +188,10 @@ impl App {
         if let Some(ref path) = file_path {
             if !path.exists() && initial_text.is_empty() {
                 let tm = vivivi_modes::TemplateManager::new();
-                if let Some(res) = tm.load_and_expand(path, "2026-10-14", "12:00:00") {
+                let date_str = current_date_str();
+                let dt_str = current_datetime_str();
+                let time_str = dt_str.split_whitespace().nth(1).unwrap_or("00:00:00");
+                if let Some(res) = tm.load_and_expand(path, &date_str, time_str) {
                     buffer = TextBuffer::from_text(&res.text);
                 }
             } else {

@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024%20Edition-orange.svg)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/version-v0.1.0-brightgreen.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/version-v0.9.3--beta-brightgreen.svg)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/tkshnkgwr/vivivi)
 
 [English](./README.md) | [日本語](./README_JA.md)
@@ -75,6 +75,20 @@ It faithfully ports the core Vi editing mechanics and data structures while inte
   - Transparently hides quote marks while reading, exposing raw text on the cursor line for precision editing.
 - 📐 **Unicode Box-Drawing (Keisen) Auto-Joining**:
   - Seamlessly draws and connects Unicode box characters (U+2500 - U+254B) using `Ctrl + Arrow keys`, automatically resolving corners, T-junctions, and cross intersections.
+- 🔍 **External Grep & Quickfix List (`:grep`, `:cnext`, `:cprev`)**:
+  - Fast whole-workspace text search via `ripgrep` (`rg`) or `git grep`, with quickfix navigation across matches.
+- 🏷️ **CTags Tag Jump & Generation (`:tag`, `:tags`, `:maketags`, `Ctrl-]`, `Ctrl-t`)**:
+  - Instant navigation to symbol definitions using `tags` files, complete with tag stack history.
+- 📁 **Code Folding (`zf`, `zo`, `zc`, `za`, `zd`, `:fold`)**:
+  - Manual range folding, fold/unfold toggling, and fold deletion, with compact `+--- X lines: ...` summary lines in TUI.
+- 🔄 **Advanced Search & Replace with Expression Evaluation (`:s`, `:%s`, `\=`)**:
+  - Vim-compatible regex replacement with `:%s/pattern/\=expr/g` evaluation support (e.g. line numbers or arithmetic).
+- ⚖️ **Diff Preview & External Diff (`:diff [path]`, `:difflog`)**:
+  - View syntax-highlighted diffs between unsaved buffers and disk files, or compare against external files.
+- 📄 **Direct Markdown to PDF Export (`:pdf [path]`)**:
+  - Directly export active Markdown documents to PDF with embedded Japanese font support.
+- 📑 **Template Auto-Expansion & Persistent Undo (`:undofile`, `doc/templates/`)**:
+  - Auto-populates new files from language templates and supports manual persistent undo history storage.
 - 🌐 **Charset & Newline Auto-Detection**:
   - Auto-detects UTF-8, Shift_JIS (CP932), EUC-JP, and CRLF / LF, preserving original formatting on save.
 

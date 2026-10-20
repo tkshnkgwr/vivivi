@@ -70,8 +70,7 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
     };
 
     let total_lines = app.buffer.line_count();
-    let start_line = scroll.0;
-    let end_line = (start_line + area.height as usize).min(total_lines);
+    let max_display_lines = area.height as usize;
 
     // カーソル位置の対応括弧ペアを探索
     let cursor_offset = app.buffer.cursor_to_position(cur);
@@ -94,7 +93,14 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
         .collect();
     let change_markers = app.change_tracker.compute_markers(&all_lines);
 
-    for line_idx in start_line..end_line {
+    let mut line_idx = scroll.0;
+    while line_idx < total_lines && lines_spans.len() < max_display_lines {
+        // コード折り畳みによって隠されている行ならスキップ
+        if app.vi.fold_manager.is_line_hidden(line_idx + 1) {
+            line_idx += 1;
+            continue;
+        }
+
         let is_current_line = line_idx == cur.line;
 
         // 行番号のフォーマット
@@ -147,8 +153,17 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
             raw_line
         };
 
-        // 不可視文字可視化が有効な場合、専用フォーマットを適用
-        let (processed_line, inv_info) = if app.list_chars_config.enabled && !app.is_csv_active {
+        // 閉じられた折り畳みブロックの開始行であるか判定
+        let fold_placeholder = app
+            .vi
+            .fold_manager
+            .get_fold_placeholder(line_idx + 1, &display_line);
+        let is_fold_start = fold_placeholder.is_some();
+
+        // 不可視文字可視化が有効な場合、専用フォーマットを適用（折り畳みプレースホルダー行は除外）
+        let (processed_line, inv_info) = if let Some(ph) = fold_placeholder {
+            (ph, None)
+        } else if app.list_chars_config.enabled && !app.is_csv_active {
             let inv_chars = vivivi_modes::format_line_invisibles(
                 &display_line,
                 app.tab_width.max(1),
@@ -161,7 +176,12 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
         };
 
         // 構文解析（シンタックスハイライト）トークンの取得
-        let tokens = if app.is_csv_active {
+        let tokens = if is_fold_start {
+            vec![vivivi_modes::SyntaxToken {
+                text: processed_line.clone(),
+                token_type: vivivi_modes::TokenType::Type,
+            }]
+        } else if app.is_csv_active {
             vec![vivivi_modes::SyntaxToken {
                 text: display_line.clone(),
                 token_type: vivivi_modes::TokenType::Text,
@@ -381,6 +401,7 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
         }
 
         lines_spans.push(Line::from(row_spans));
+        line_idx += 1;
     }
 
     // 末尾行以降の ~ チルダ表示（Vim伝統スタイル）

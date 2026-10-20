@@ -24,7 +24,7 @@
 | [設定 & カスタマイズ](config.md)         | `:config`, `:set` 等           | config.toml によるキーマップ、表示設定・テーマの永続管理         |
 | [クラッシュリカバリ](recovery.md)        | `:recover`, `:swap`            | .swp バックグラウンド自動保存とクラッシュ未保存データ復旧        |
 | [クリップボード連携](clipboard.md)       | `"+y`, `"*p`, `:set cb`        | OSクリップボードとViレジスタの透過的双方向同期                   |
-| [ツール機能 & 管理](tools.md)            | `:grep`, `:todo`, `zc` 等      | Grep検索、ToDo抽出、折り畳み、ファイラー、世代管理、印刷         |
+| [ツール機能 & 管理](tools.md)            | `:grep`, `:tag`, `:diff` 等    | Grep検索、タグ、外部差分比較、折り畳み、印刷プレビュー           |
 | [構文強調 (Syntax)](syntax.md)           | `:help syntax`                 | 全18言語（Go/Ruby/TOML/PowerShell等含む）の構文色分け            |
 | [視覚・編集支援](visual.md)              | `F7` / `:recent`, 矩形編集     | 矩形選択一括編集、変更行ガター強調、最近使ったファイル           |
 
@@ -43,12 +43,31 @@
 - **`gt` / `gT`**: 次のタブ / 前のタブへ切り替え（`[count]gt` で指定タブへ直接ジャンプ）
 - **`Ctrl-v` + `I` / `A` / `c` / `r`**: 矩形選択範囲の左端一括挿入 / 右端一括追加 / 一括置換 / 一括塗りつぶし
 - **`"+y` / `"+p`**: OSクリップボードへのコピー / OSクリップボードからの貼り付け
+- **`Ctrl-]` / `Ctrl-t`**: タグジャンプ（定義元ジャンプ） / タグスタックからの復帰
+- **`zc` / `zo` / `za` / `zR`**: コード折り畳みの閉じる / 開く / トグル / 全展開
 
-### exコマンド一覧（抜粋）
+### exコマンド一覧
 - `:help [topic]` / `:h [topic]`: ヘルプを開く（トピック名指定可）
-- `:w [file]`: バッファを保存
-- `:q` / `:q!`: 終了 / 強制終了
-- `:wq`: 保存して終了
+- `:<行番号>`: 指定行へジャンプ（例: `:42`, `:1`）
+- `:%s/before/after/[flags]`: バッファ全体の文字列置換（`g`:全置換, `i`:大文字小文字無視, `e`:式置換）
+- `:s/before/after/[flags]`: カレント行の文字列置換
+- `:grep <pattern> [path]`: プロジェクト内高速正規表現検索（プレビューモーダル展開）
+- `:cnext` / `:cn`: Grep結果の次の該当箇所へ順送りジャンプ
+- `:cprev` / `:cp`: Grep結果の前の該当箇所へ逆送りジャンプ
+- `:tag <name>`: 指定シンボルへのタグジャンプ
+- `:tags`: タグジャンプ履歴スタック一覧の表示
+- `:maketags` / `:tags gen`: プロジェクト内シンボル走査による `tags` ファイル一括生成
+- `:marks`: 登録されているマーク（`ma`〜`mz`）一覧をステータスバーに表示
+- `:fold` / `:foldindent`: インデント階層からコード折り畳みブロックを自動検出
+- `:diff [file]`: 保存前ファイルまたは指定外部ファイルとの unified diff プレビュー
+- `:difflog`: 世代バックアップ履歴一覧のプレビュー表示
+- `:undofile`: 編集中のファイルの永続 undofile（`.<file>.undofile`）を手動保存
+- `:preview` / `:print`: A4ページ分割印刷プレビュー画面の表示（`p` でPDF保存）
+- `:pdf [path]`: 現在のバッファ内容を直接 A4 PDF 形式でファイル出力
+- `:filer [path]` / `:explore`: 2ペイン インラインファイラーの起動
+- `:w [file]`: バッファを保存（別名保存可）
+- `:q` / `:q!`: 終了 / 未保存変更を破棄して強制終了
+- `:wq` / `:x`: 保存して終了
 - `:tabnew [file]`: 新規タブを作成（ファイル名指定可）
 - `:tabclose` / `:tabc`: カレントタブを閉じる
 - `:tabonly`: カレントタブ以外の全タブを閉じる
@@ -61,10 +80,12 @@
 - `:e ++enc=<enc> [file]`: 指定文字コード（`utf-8`, `sjis`, `euc-jp`）で再読込
 - `:set fenc=<enc>`: 保存文字コード（`utf-8`, `sjis`, `euc-jp`）を指定
 - `:set ff=unix / dos`: 改行コード（LF / CRLF）を指定
+- `:set number` / `:set nonumber`: 行番号表示切替（`:set nu` / `:set nonu`）
+- `:set wrap` / `:set nowrap`: テキスト折り返し表示切替
+- `:set relativenumber`: 相対行番号表示切替（`:set rnu`）
 - `:set list` / `:set nolist`: 不可視文字（全角スペース□/タブ/改行$）表示切替
 - `:set gutter` / `:set nogutter`: 変更行ガター強調（黄:未保存, 緑:保存済）切替
-- `:todo`: バッファ内 ToDo/FIXME を抽出して一覧プレビュー
-- `:diff`: 保存前ファイルとの差分をプレビュー表示
+- `:todo` / `:undone`: バッファ内 ToDo/FIXME を抽出して一覧プレビュー
 - `:split` / `:vsplit`: 水平分割 / 垂直分割（Vim互換ネスト二分木）
 - `:close` / `:only`: カレントウィンドウを閉じる / 単一ウィンドウ化
 - `:calc` / `:sum` / `:total`: BOX選択範囲の数値を集計
@@ -73,9 +94,8 @@
 - `:keisen`: 罫線モードのトグル
 - `:migemo <query>`: ローマ字日本語（Migemo）検索を実行
 - `:zenkaku` / `:hankaku`: 全角半角一括変換
-- `:help syntax`: シンタックスハイライト（全18言語）の詳細ヘルプを表示
-- `:help tab`: マルチタブ管理の詳細ヘルプを表示
-- `:help config`: 設定ファイル（`config.toml`）の詳細ヘルプを表示
-- `:help recovery`: クラッシュリカバリとスワップファイルの詳細ヘルプを表示
-- `:help clipboard`: クリップボード連携の詳細ヘルプを表示
-- `:help visual`: 視覚・編集支援機能（矩形編集等）の詳細ヘルプを表示
+- `:align <target>`: 指定文字・罫線枠内テキストのアライン整列
+- `:renumber [start] [step]`: 行頭・選択範囲のリナンバ連番付与
+- `:insbeg` / `:insend` / `:begend`: 行頭・行末の一括挿入
+- `:abbrev [key val]`: 静的略語展開（挿入モードで `Ctrl-;` 展開）
+- `:zen [expr]`: Zen-Coding（HTML展開）

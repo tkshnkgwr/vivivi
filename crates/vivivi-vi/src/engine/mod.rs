@@ -5,6 +5,7 @@
 
 mod ex;
 mod exec;
+mod helpers;
 mod motion;
 mod operate;
 mod text_object;

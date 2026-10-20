@@ -467,12 +467,32 @@ impl App {
             format!("{topic_name}.md")
         };
 
-        // 探索候補パス（doc/help, docs/help, help）
-        let candidates = [
+        // 探索候補パス（doc/help, docs/help, help, ../../doc/help 等）
+        let mut candidates = vec![
             PathBuf::from("doc").join("help").join(&file_name),
             PathBuf::from("docs").join("help").join(&file_name),
             PathBuf::from("help").join(&file_name),
+            PathBuf::from("..")
+                .join("..")
+                .join("doc")
+                .join("help")
+                .join(&file_name),
+            PathBuf::from("..")
+                .join("..")
+                .join("docs")
+                .join("help")
+                .join(&file_name),
         ];
+        if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+            candidates.push(
+                PathBuf::from(manifest_dir)
+                    .join("..")
+                    .join("..")
+                    .join("doc")
+                    .join("help")
+                    .join(&file_name),
+            );
+        }
 
         let mut content = None;
         let mut loaded_path = None;

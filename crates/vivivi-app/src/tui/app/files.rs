@@ -157,8 +157,17 @@ impl App {
                 vivivi_core::decode_bytes(&bytes)
             }
         } else {
+            let tm = vivivi_modes::TemplateManager::new();
+            let date_str = crate::tui::app::current_date_str();
+            let dt_str = crate::tui::app::current_datetime_str();
+            let time_str = dt_str.split_whitespace().nth(1).unwrap_or("00:00:00");
+            let templated = if let Some(res) = tm.load_and_expand(&path, &date_str, time_str) {
+                res.text
+            } else {
+                String::new()
+            };
             (
-                String::new(),
+                templated,
                 forced_encoding.unwrap_or(CharEncoding::Utf8),
                 NewlineType::default(),
             )
