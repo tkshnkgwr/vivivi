@@ -8,9 +8,10 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem},
+    widgets::{Block, Borders, List, ListItem},
 };
 
+use super::clear_modal_area;
 use crate::tui::app::App;
 
 /// 最近開いたファイル（MRU）およびお気に入りファイルの選択ダイアログを描画します。
@@ -24,8 +25,8 @@ use crate::tui::app::App;
 pub fn render_recent_modal(frame: &mut Frame, app: &App, area: Rect) {
     let popup_area = centered_rect(70, 70, area);
 
-    // 背景をクリアして透過を防ぐ
-    frame.render_widget(Clear, popup_area);
+    // 背景を安全にクリア（全角文字の境界重なり防止）
+    clear_modal_area(frame, popup_area);
 
     let mut all_entries = Vec::new();
 

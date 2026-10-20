@@ -12,6 +12,46 @@ pub mod recent;
 pub mod status;
 pub mod tab_bar;
 
+use unicode_width::UnicodeWidthStr;
+
+/// ポップアップモーダルを描画する領域を背景から安全にクリアします。
+///
+/// 単純に `Clear` を適用するだけでは、モーダルの左境界（`area.x - 1`）に全角文字
+/// （表示幅2の日本語文字等）が存在する場合、その文字の右半分がモーダルの枠線に
+/// はみ出して重なり、文字化けや表示乱れを起こします（Windows Terminal / ConPTYの仕様）。
+/// 本関数は、モーダル領域のクリアに加えて境界線と衝突する全角文字を安全にブランク化します。
+pub fn clear_modal_area(frame: &mut Frame, area: Rect) {
+    // 1. 通常の領域クリア
+    frame.render_widget(ratatui::widgets::Clear, area);
+
+    // 2. 左境界に跨がる全角文字の除去
+    let buf = frame.buffer_mut();
+    if area.x > 0 {
+        let left_x = area.x - 1;
+        for y in area.top()..area.bottom() {
+            if left_x < buf.area.width && y < buf.area.height {
+                let cell = &buf[(left_x, y)];
+                if cell.symbol().width() > 1 {
+                    buf[(left_x, y)].set_symbol(" ");
+                }
+            }
+        }
+    }
+
+    // 3. 右境界に跨がる全角文字の除去（右枠線の直後セルが全角後続の場合等）
+    let right_x = area.x + area.width;
+    if right_x < buf.area.width {
+        for y in area.top()..area.bottom() {
+            if y < buf.area.height {
+                let cell = &buf[(right_x, y)];
+                if cell.symbol().width() > 1 {
+                    buf[(right_x, y)].set_symbol(" ");
+                }
+            }
+        }
+    }
+}
+
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Position, Rect},
@@ -224,5 +264,36 @@ fn set_terminal_cursor(
                 frame.set_cursor_position(Position::new(cursor_x as u16, cursor_y as u16));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    #[test]
+    fn test_clear_modal_area_wide_char_boundary() {
+        let backend = TestBackend::new(40, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        terminal
+            .draw(|f| {
+                // (5, 5) に全角文字 "編" を配置（5と6を占有）
+                f.buffer_mut()
+                    .set_string(5, 5, "編", ratatui::style::Style::default());
+                assert_eq!(f.buffer_mut()[(5, 5)].symbol(), "編");
+
+                // x=6 を左端とするモーダル領域をクリア
+                let popup = Rect::new(6, 2, 20, 10);
+                clear_modal_area(f, popup);
+
+                // 左境界 (5, 5) の全角文字が " " にクリアされ、枠線との重なりが防止されていること
+                assert_eq!(f.buffer_mut()[(5, 5)].symbol(), " ");
+                // モーダル内部 (6, 5) も空白になっていること
+                assert_eq!(f.buffer_mut()[(6, 5)].symbol(), " ");
+            })
+            .unwrap();
     }
 }

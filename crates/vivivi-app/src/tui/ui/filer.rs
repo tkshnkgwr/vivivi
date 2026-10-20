@@ -8,10 +8,11 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Block, Borders, Paragraph},
 };
 use vivivi_modes::filer::{ActiveFilerPane, FilerPane};
 
+use super::clear_modal_area;
 use crate::tui::app::App;
 
 /// 2ペインファイラーの全画面モーダルを描画します。
@@ -23,8 +24,8 @@ pub fn render_filer(frame: &mut Frame, app: &App, area: Rect) {
     // 画面中央に 90% x 85% のモーダル領域を確保
     let popup_area = centered_rect(90, 85, area);
 
-    // 背景をクリアして背後のエディタ透過を防ぐ
-    frame.render_widget(Clear, popup_area);
+    // 背景を安全にクリア（全角文字の境界重なり防止）
+    clear_modal_area(frame, popup_area);
 
     // 外枠ブロック
     let main_block = Block::default()

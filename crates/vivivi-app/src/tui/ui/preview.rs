@@ -7,9 +7,10 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::Line,
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Block, Borders, Paragraph},
 };
 
+use super::clear_modal_area;
 use crate::tui::app::App;
 
 /// 印刷プレビュー（ヘッダー・フッター・行番号・ページ区切り付き）画面をモーダルビューとして描画します。
@@ -21,8 +22,8 @@ use crate::tui::app::App;
 pub fn render_preview_view(frame: &mut Frame, app: &App, area: Rect) {
     let popup_area = centered_rect(90, 90, area);
 
-    // 背景をクリア
-    frame.render_widget(Clear, popup_area);
+    // 背景を安全にクリア（全角文字の境界重なり防止）
+    clear_modal_area(frame, popup_area);
 
     let inner_height = (popup_area.height as usize).saturating_sub(2);
     let total_lines = app.preview_lines.len();

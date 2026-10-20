@@ -47,10 +47,23 @@
 - **`zc` / `zo` / `za` / `zR`**: コード折り畳みの閉じる / 開く / トグル / 全展開
 
 ### exコマンド一覧
+
+#### 1. ヘルプ・ファイル操作・終了
 - `:help [topic]` / `:h [topic]`: ヘルプを開く（トピック名指定可）
+- `:w [file]`: バッファを保存（別名保存可）
+- `:q` / `:q!`: 終了 / 未保存変更を破棄して強制終了
+- `:wq` / `:x`: 保存して終了
+- `:e ++enc=<enc> [file]`: 指定文字コード（`utf-8`, `sjis`, `euc-jp`）でファイルを開く／再読込
+- `:recent` / `:mru`: 最近使ったファイル＆お気に入り一覧を開く
+- `:fav` / `:favorite`: 現在のファイルをお気に入り登録／解除
+- `:recover`: スワップファイル（`.swp`）から直前の未保存バッファを復元
+- `:swap`: スワップファイルのメタ情報を表示
+
+#### 2. 移動・ジャンプ・検索・置換
 - `:<行番号>`: 指定行へジャンプ（例: `:42`, `:1`）
 - `:%s/before/after/[flags]`: バッファ全体の文字列置換（`g`:全置換, `i`:大文字小文字無視, `e`:式置換）
 - `:s/before/after/[flags]`: カレント行の文字列置換
+- `:migemo <query>`: ローマ字日本語（Migemo）検索を実行
 - `:grep <pattern> [path]`: プロジェクト内高速正規表現検索（プレビューモーダル展開）
 - `:cnext` / `:cn`: Grep結果の次の該当箇所へ順送りジャンプ
 - `:cprev` / `:cp`: Grep結果の前の該当箇所へ逆送りジャンプ
@@ -58,44 +71,43 @@
 - `:tags`: タグジャンプ履歴スタック一覧の表示
 - `:maketags` / `:tags gen`: プロジェクト内シンボル走査による `tags` ファイル一括生成
 - `:marks`: 登録されているマーク（`ma`〜`mz`）一覧をステータスバーに表示
-- `:fold` / `:foldindent`: インデント階層からコード折り畳みブロックを自動検出
-- `:diff [file]`: 保存前ファイルまたは指定外部ファイルとの unified diff プレビュー
-- `:difflog`: 世代バックアップ履歴一覧のプレビュー表示
-- `:undofile`: 編集中のファイルの永続 undofile（`.<file>.undofile`）を手動保存
-- `:preview` / `:print`: A4ページ分割印刷プレビュー画面の表示（`p` でPDF保存）
-- `:pdf [path]`: 現在のバッファ内容を直接 A4 PDF 形式でファイル出力
-- `:filer [path]` / `:explore`: 2ペイン インラインファイラーの起動
-- `:w [file]`: バッファを保存（別名保存可）
-- `:q` / `:q!`: 終了 / 未保存変更を破棄して強制終了
-- `:wq` / `:x`: 保存して終了
+
+#### 3. 画面分割・タブ・ファイラー
+- `:split` / `:vsplit`: 水平分割 / 垂直分割（Vim互換ネスト二分木）
+- `:close` / `:only`: カレントウィンドウを閉じる / 単一ウィンドウ化
 - `:tabnew [file]`: 新規タブを作成（ファイル名指定可）
 - `:tabclose` / `:tabc`: カレントタブを閉じる
 - `:tabonly`: カレントタブ以外の全タブを閉じる
-- `:config`: `config.toml` 設定ファイルを即時再読込
-- `:recover`: スワップファイル（`.swp`）から直前の未保存バッファを復元
-- `:swap`: スワップファイルのメタ情報を表示
-- `:set clipboard=unnamed`: OS共有クリップボード連携を有効化
-- `:recent` / `:mru`: 最近使ったファイル＆お気に入り一覧を開く
-- `:fav` / `:favorite`: 現在のファイルをお気に入り登録／解除
-- `:e ++enc=<enc> [file]`: 指定文字コード（`utf-8`, `sjis`, `euc-jp`）で再読込
-- `:set fenc=<enc>`: 保存文字コード（`utf-8`, `sjis`, `euc-jp`）を指定
-- `:set ff=unix / dos`: 改行コード（LF / CRLF）を指定
+- `:filer [path]` / `:explore`: 2ペイン インラインファイラーの起動
+
+#### 4. 外部連携・差分・出力・履歴
+- `:diff [file]`: 保存前ファイルまたは指定外部ファイルとの unified diff プレビュー
+- `:difflog`: 世代バックアップ履歴一覧のプレビュー表示
+- `:preview` / `:print`: A4ページ分割印刷プレビュー画面の表示（`p` でPDF保存）
+- `:pdf [path]`: 現在のバッファ内容を直接 A4 PDF 形式でファイル出力
+- `:undofile`: 編集中のファイルの永続 undofile（`.<file>.undofile`）を手動保存
+- `:cbhist` / `:history`: クリップボード履歴ウィンドウを表示
+- `:todo` / `:undone`: バッファ内 ToDo/FIXME を抽出して一覧プレビュー
+
+#### 5. 表示切替・バッファ設定
 - `:set number` / `:set nonumber`: 行番号表示切替（`:set nu` / `:set nonu`）
-- `:set wrap` / `:set nowrap`: テキスト折り返し表示切替
 - `:set relativenumber`: 相対行番号表示切替（`:set rnu`）
+- `:set wrap` / `:set nowrap`: テキスト折り返し表示切替
 - `:set list` / `:set nolist`: 不可視文字（全角スペース□/タブ/改行$）表示切替
 - `:set gutter` / `:set nogutter`: 変更行ガター強調（黄:未保存, 緑:保存済）切替
-- `:todo` / `:undone`: バッファ内 ToDo/FIXME を抽出して一覧プレビュー
-- `:split` / `:vsplit`: 水平分割 / 垂直分割（Vim互換ネスト二分木）
-- `:close` / `:only`: カレントウィンドウを閉じる / 単一ウィンドウ化
-- `:calc` / `:sum` / `:total`: BOX選択範囲の数値を集計
-- `:cbhist` / `:history`: クリップボード履歴を表示
-- `:csv` / `:tsv`: インラインCSV / TSV整列モード
-- `:keisen`: 罫線モードのトグル
-- `:migemo <query>`: ローマ字日本語（Migemo）検索を実行
-- `:zenkaku` / `:hankaku`: 全角半角一括変換
+- `:set fenc=<enc>`: 保存文字コード（`utf-8`, `sjis`, `euc-jp`）を指定
+- `:set ff=unix / dos`: 改行コード（LF / CRLF）を指定
+- `:set clipboard=unnamed`: OS共有クリップボード連携を有効化
+- `:config`: `config.toml` 設定ファイルを即時再読込
+
+#### 6. テキスト整形・モード・拡張機能
+- `:fold` / `:foldindent`: インデント階層からコード折り畳みブロックを自動検出
 - `:align <target>`: 指定文字・罫線枠内テキストのアライン整列
 - `:renumber [start] [step]`: 行頭・選択範囲のリナンバ連番付与
 - `:insbeg` / `:insend` / `:begend`: 行頭・行末の一括挿入
+- `:zenkaku` / `:hankaku`: 全角半角一括変換
+- `:csv` / `:tsv`: インラインCSV / TSV整列モード
+- `:keisen`: 罫線モードのトグル
+- `:calc` / `:sum` / `:total`: BOX選択範囲の数値を集計
 - `:abbrev [key val]`: 静的略語展開（挿入モードで `Ctrl-;` 展開）
 - `:zen [expr]`: Zen-Coding（HTML展開）

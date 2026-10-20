@@ -8,9 +8,10 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Block, Borders, Paragraph},
 };
 
+use super::clear_modal_area;
 use crate::tui::app::App;
 
 /// Markdown 形式のヘルプドキュメント画面をモーダルビューとして描画します。
@@ -24,8 +25,8 @@ use crate::tui::app::App;
 pub fn render_help_view(frame: &mut Frame, app: &App, area: Rect) {
     let popup_area = centered_rect(85, 85, area);
 
-    // 背景をクリア
-    frame.render_widget(Clear, popup_area);
+    // 背景を安全にクリア（全角文字の境界重なり防止）
+    clear_modal_area(frame, popup_area);
 
     let inner_height = (popup_area.height as usize).saturating_sub(2); // 上下枠線分
     let total_lines = app.help_lines.len();
