@@ -5,10 +5,11 @@ members = [
     "crates/vivivi-vi",
     "crates/vivivi-modes",
     "crates/vivivi-app",
+    "crates/vivivi-gui",
 ]
 
 [workspace.package]
-version = "0.9.4-beta"
+version = "0.9.5-beta"
 edition = "2024"
 authors = ["vivivi developers"]
 license = "MIT"
@@ -18,6 +19,7 @@ repository = "https://github.com/tkshnkgwr/vivivi"
 vivivi-core = { path = "crates/vivivi-core" }
 vivivi-vi = { path = "crates/vivivi-vi" }
 vivivi-modes = { path = "crates/vivivi-modes" }
+vivivi-app = { path = "crates/vivivi-app" }
 
 thiserror = "2.0"
 anyhow = "1.0"

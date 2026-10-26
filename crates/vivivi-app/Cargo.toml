@@ -5,6 +5,10 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[lib]
+name = "vivivi_app"
+path = "src/lib.rs"
+
 [[bin]]
 name = "vivivi"
 path = "src/main.rs"

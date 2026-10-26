@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024%20Edition-orange.svg)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/version-v0.9.4--beta-brightgreen.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/version-v0.9.5--beta-brightgreen.svg)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/tkshnkgwr/vivivi)
 
 [English](./README.md) | [日本語](./README_JA.md)
@@ -27,9 +27,9 @@ It would be a privilege if former ViVi or OpenViVi users find a home here, thoug
 * **Development Approach**:  
   The Rust implementation is developed in active collaboration with AI (Gemini). As I am relatively new to GitHub and open-source workflows, I appreciate your patience and understanding.
 * **Current Status**:  
-  Currently in Alpha (TUI only). The immediate focus is stabilizing essential daily editing workflows to reach Beta and an official release as soon as possible.
-* **GUI Roadmap**:  
-  A desktop GUI version using `egui` will be undertaken once core editing features have matured.
+  Currently in Beta (`v0.9.5-beta`). Both the full-featured terminal TUI (`vivivi`) and the native desktop GUI (`vivivi-gui`) powered by `egui` / `eframe` are implemented and share a unified headless core.
+* **GUI & TUI Dual Architecture**:  
+  Use `vivivi` for ultra-fast terminal/SSH workflows, or launch `vivivi-gui` for a modern Tokyo Night desktop experience with PlemolJP typography, inline Japanese IME, minimap, and gravity-drop deletion animations.
 
 ---
 
@@ -89,8 +89,13 @@ It faithfully ports the core Vi editing mechanics and data structures while inte
   - Directly export active Markdown documents to PDF with embedded Japanese font support.
 - 📑 **Template Auto-Expansion & Persistent Undo (`:undofile`, `doc/templates/`)**:
   - Auto-populates new files from language templates and supports manual persistent undo history storage.
-- 🌐 **Charset & Newline Auto-Detection**:
-  - Auto-detects UTF-8, Shift_JIS (CP932), EUC-JP, and CRLF / LF, preserving original formatting on save.
+- 🌐 **Early Charset & Newline Auto-Detection**:
+  - Instant early-return detection for UTF-8, UTF-8 BOM, Shift_JIS (CP932), EUC-JP, UTF-16LE/BE, and CRLF / LF / CR (resolving on first signature byte and 3 consecutive line endings), preserving original formatting on save.
+- 🖥️ **Native Desktop GUI (`vivivi-gui` via `egui` / `eframe`)**:
+  - **Tokyo Night 3-Tier Contrast Theme**: Eye-friendly dark palette (`#1A1B26` editor, `#16161E` panels, `#292E42` statusline) with 4px rounded corners.
+  - **PlemolJP Monospace Priority Loader**: Automatically discovers bundled or system-installed PlemolJP fonts with BIZ UD Gothic / Consolas fallback.
+  - **Custom `ui.painter()` Grid & Inline Japanese IME**: Renders crisp CJK/ASCII 2:1 columns, underlined IME preedit strings, mode-aware cursors, and OS IME candidate window tracking without using `egui::TextEdit`.
+  - **Gravity-Drop Character Deletion Animation & 0% CPU Idle**: Deleted characters fall with 2D gravity and fade out over 0.5s, returning immediately to 0% CPU reactive idle once animations finish.
 
 ---
 
@@ -98,11 +103,16 @@ It faithfully ports the core Vi editing mechanics and data structures while inte
 
 ```mermaid
 graph TD
-    App["vivivi-app (TUI / CLI Entrypoint)"]
+    Gui["vivivi-gui (Desktop GUI: egui / eframe)"]
+    App["vivivi-app (Headless Core Library & TUI Entrypoint)"]
     Core["vivivi-core (GapBuffer, UndoMgr, Cursor, Encodings)"]
     Vi["vivivi-vi (Vi State Machine, Command Parser, Registers, Ex)"]
     Modes["vivivi-modes (CSV, Keisen, Outline, Conversions, Syntax)"]
 
+    Gui --> App
+    Gui --> Vi
+    Gui --> Modes
+    Gui --> Core
     App --> Vi
     App --> Modes
     App --> Core
@@ -110,19 +120,20 @@ graph TD
     Modes --> Core
 ```
 
-| Crate Name     | Responsibilities & Roles                                                | Dependencies  |
-| :------------- | :---------------------------------------------------------------------- | :------------ |
-| `vivivi-core`  | GapBuffer, line manager, cursor, Undo/Redo, charset & newline detection | None          |
-| `vivivi-vi`    | Vi state machine, command parser, registers, block editing, ex commands | `vivivi-core` |
-| `vivivi-modes` | CSV/TSV mode, Unicode box drawing, outline parser, conversions, syntax  | `vivivi-core` |
-| `vivivi-app`   | Full-screen TUI (Ratatui + crossterm), window splitting, main loop      | All crates    |
+| Crate Name     | Responsibilities & Roles                                                      | Dependencies      |
+| :------------- | :---------------------------------------------------------------------------- | :---------------- |
+| `vivivi-core`  | GapBuffer, line manager, cursor, Undo/Redo, early charset & newline detection | None              |
+| `vivivi-vi`    | Vi state machine, command parser, registers, block editing, ex commands       | `vivivi-core`     |
+| `vivivi-modes` | CSV/TSV mode, Unicode box drawing, outline parser, conversions, syntax        | `vivivi-core`     |
+| `vivivi-app`   | Headless editor session library (`App`, `Tab`, `WindowTreeNode`) & TUI binary | Core / Vi / Modes |
+| `vivivi-gui`   | Native desktop GUI (`egui` / `eframe`), inline IME, minimap, particle physics | All crates        |
 
 ---
 
 ## 🚀 Installation & Build
 
 ### Prerequisites
-- Rust 1.80+ (Edition 2024 support)
+- Rust 1.85+ (Edition 2024 support)
 - Cargo
 
 ### Local Build
@@ -131,20 +142,24 @@ graph TD
 git clone https://github.com/tkshnkgwr/vivivi.git
 cd vivivi
 
-# Build workspace
-cargo build
+# Build workspace (TUI & GUI)
+cargo build --workspace
 
-# Run application (TUI)
-cargo run
+# Run Terminal TUI application
+cargo run -p vivivi-app
 
-# Build optimized release binary
-cargo build --release
+# Run Desktop GUI application
+cargo run -p vivivi-gui
+
+# Build optimized release binaries
+cargo build --release --workspace
 ```
 
 ### Run Tests
 ```powershell
-# Run unit tests across all crates (all 103 tests passing)
-cargo test
+# Run unit, public API integration, and doc tests across all crates
+cargo test --all-targets
+cargo test --doc
 ```
 
 ---

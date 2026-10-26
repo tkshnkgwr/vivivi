@@ -9,7 +9,7 @@ use super::*;
 use substitute::execute_substitute_command;
 
 /// exコマンドの実行処理 (:w, :q, :wq, :s, etc.)
-pub(crate) fn execute_ex_command(app: &mut App, cmd: &str) {
+pub fn execute_ex_command(app: &mut App, cmd: &str) {
     let trimmed = cmd.trim();
     if trimmed.is_empty() {
         return;
@@ -144,11 +144,19 @@ pub(crate) fn execute_ex_command(app: &mut App, cmd: &str) {
             execute_ai_command(app, trimmed);
         }
 
+        // --- Undo / Redo (:undo, :u, :redo) ---
+        "undo" | "u" => {
+            app.feed_vi_char('u');
+        }
+        "redo" => {
+            app.feed_vi_char('\x12');
+        }
+
         // --- 画面分割 (:split, :vsplit, :close, :only) ---
         "split" | "sp" => {
             app.split_horizontal();
         }
-        "vsplit" | "vs" => {
+        "vsplit" | "vsp" | "vs" => {
             app.split_vertical();
         }
         "close" | "c" => {

@@ -269,10 +269,11 @@ Persist user preferences and key mappings in `%USERPROFILE%\.vivivi\config.toml`
 - **Dynamic Reloading**: Run `:config` at any time to reload and apply changes without restarting.
 - **Runtime Set Options**: `:set number` / `:se nu` / `:se nonu` (line numbers), `:set wrap` / `:se wrap` / `:se nowrap` (line wrapping), `:set relativenumber` / `:se rnu`, `:set tabstop=4` (`:se ts=4`), `:set clipboard=unnamed`, etc. Query current values by appending `?` (e.g., `:se wrap?`).
 
-### (4) Explicit Encoding Reopening & Line Ending Format
+### (4) Early Encoding Auto-Detection & Format Conversion
+- **Ultra-Fast Early Detection**: Upon opening a file, BOM detection and exclusive signature bytes (Shift_JIS trails, EUC-JP kana, UTF-8 sequences) resolve character encoding on the very first character, while 3 consecutive identical endings resolve line format (CRLF / LF / CR) immediately. The active status appears in the bottom-right status bar (e.g. `[UTF-8/CRLF/...]`).
 - `:e ++enc=<enc> [file]`: Reopen file forcing specified encoding (`utf-8`, `sjis`, `euc-jp`).
-- `:set fenc=<enc>`: Set encoding format for subsequent saves.
-- `:set ff=unix` / `:set ff=dos`: Convert line endings (LF vs CRLF) on save.
+- `:set fenc=<enc>`: Set encoding format for subsequent saves (`:set fenc?` queries active encoding). Followed by `:w` to write.
+- `:set ff=unix` / `:set ff=dos` / `:set ff=mac`: Convert line endings (LF, CRLF, CR) on save (`:set ff?` queries format). Followed by `:w` to write.
 
 ### (5) Crash Recovery & Auto-Save Swap Files (.swp)
 - **Automatic Checkpoints**: Background swap dumps saved to `.<filename>.swp` every 20 keystrokes and upon returning to Normal mode (`Esc`).
@@ -286,4 +287,35 @@ Persist user preferences and key mappings in `%USERPROFILE%\.vivivi\config.toml`
 
 ### (7) Syntax Highlighting Expansion (18 Languages)
 - Expanded syntax highlighting to 18 languages: added Go (`.go`), Ruby (`.rb`), TOML (`.toml`), PowerShell (`.ps1`), YAML (`.yaml`), XML (`.xml`), and Windows Batch (`.bat`, `.cmd`). Status bar displays active language badges automatically.
+
+---
+
+## 7. Native Desktop GUI (`vivivi-gui`) Operational Guide
+
+`vivivi-gui` is the native desktop GUI frontend powered by `egui` / `eframe`. It shares 100% of the headless editor core, configuration (`config.toml`), and Vi keybindings with the terminal TUI edition.
+
+### (1) Launching the Desktop GUI
+```powershell
+# Launch with an empty buffer
+cargo run -p vivivi-gui
+
+# Launch opening a target file
+cargo run -p vivivi-gui -- path/to/file.rs
+```
+
+### (2) Workspace Layout, Mouse & IME Interactions
+- **Top Menu Bar & Multi-Tab Bar**:
+  - Access common operations via `File`, `Edit`, `View`, `Mode`, `Tools`, and `Help` menus (Save, Split/Vsplit, Character Conversions, Keisen Mode, CSV Mode, ToDo Extraction, PDF Export, Help viewer).
+  - Click any tab in the tab bar to switch buffers, or click `+` to open a new tab page (`:tabnew`).
+- **Collapsible Left Sidebar (`Files` / `Outline`)**:
+  - `📁 Files` tab: Browse directory contents. Click `📁 .. (Parent Directory)` to move up a directory, click subdirectories to navigate into them, or click any file to open it in the active editor window.
+  - `🌲 Outline` tab: Displays extracted Markdown headings and code symbols (`fn`, `struct`, `impl`, etc.); click any symbol to jump directly to its line.
+- **Central Split Editor Canvas & Right Minimap**:
+  - Renders nested `:split` and `:vsplit` windows. Clicking inside any split pane switches active window focus and positions the cursor at the clicked cell.
+  - Clicking anywhere on the right-side Minimap jumps the viewport scroll directly to that proportional position in the document.
+- **Inline Japanese IME Composition**:
+  - In Insert, Replace, CommandLine (`:` / `/`), and Migemo (`g/`) modes, OS IME composition is automatically enabled.
+  - Uncommitted preedit text is rendered inline at the cursor with a cyan underline, and the OS candidate window tracks the exact cursor coordinates every frame.
+- **Gravity-Drop Character Deletion Animation**:
+  - Deleting characters (`x`, `dd`, `dw`, `Backspace`) spawns 2D physics glyphs that fall and fade out over 0.5 seconds (toggleable via `View` -> `💧 Drop Animation`). Once all particles fade out, rendering automatically returns to `0% CPU` reactive idle mode.
 

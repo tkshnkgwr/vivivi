@@ -56,7 +56,7 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) {
 
     // マクロ記録中であれば、記録トグル/再生キー以外のキーストロークをバッファに保存
     if app.is_recording_macro && !is_macro_toggle && !is_macro_play {
-        app.recorded_macro_events.push(key);
+        app.recorded_macro_events.push(key.into());
     }
 
     dispatch_key_event(app, key);
@@ -574,7 +574,8 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
     }
 }
 
-pub(crate) mod ex;
+pub mod ex;
+pub use ex::execute_ex_command;
 mod modes;
 
 pub(crate) use modes::{
@@ -604,7 +605,7 @@ pub fn play_macro(app: &mut App) {
         let prev_recording = app.is_recording_macro;
         app.is_recording_macro = false;
         for ev in events {
-            dispatch_key_event(app, ev);
+            dispatch_key_event(app, ev.into());
         }
         app.is_recording_macro = prev_recording;
         app.status_message = Some(format!("マクロ再生完了 ({count} 件のキーイベントを実行)"));

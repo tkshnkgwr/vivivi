@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024%20Edition-orange.svg)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/version-v0.9.4--beta-brightgreen.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/version-v0.9.5--beta-brightgreen.svg)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/tkshnkgwr/vivivi)
 
 [English](./README.md) | [日本語](./README_JA.md)
@@ -27,9 +27,9 @@
 * **開発体制**:  
   Rustによるコード実装は、AI（Gemini）と相談しながら進めています。また、筆者自身GitHubの運用全般に不慣れな点が多く、至らない点があるかと思いますがご容赦ください。
 * **現在のステータス**:  
-  現在はα版（TUI版のみ）です。日常の編集に必要な基本機能を早期に固め、できる限り早い段階でβ版、正式リリース版へと移行することを目指しています。
-* **GUIの展望**:  
-  デスクトップGUI（egui）版は、エディタのコア機能の実装が一段落した後に着手いたします。
+  現在はβ版（`v0.9.5-beta`）です。共通のヘッドレスコア（`vivivi-app`）を基盤として、ターミナルTUI版（`vivivi`）とデスクトップGUI版（`vivivi-gui` / `egui` + `eframe`）の両方が動作します。
+* **TUI ＆ GUI ハイブリッド構成**:  
+  コンソールやSSH環境では超軽量な `vivivi`（TUI）、デスクトップ環境では Tokyo Night テーマ・PlemolJP 等幅フォント・日本語IMEインライン変換・削除文字落下アニメーションを備えた `vivivi-gui`（GUI）をシームレスに使い分けられます。
 
 ---
 
@@ -90,8 +90,13 @@ Unicode罫線の自動結合、インラインCSV/TSV高速整列・編集、Mig
   - 編集中のMarkdown文書を、日本語フォントを適切に埋め込んだPDFドキュメントとして直接生成・エクスポート。
 - 📑 **ファイルテンプレート自動展開 & 永続Undo手動保存 (`:undofile`, `doc/templates/`)**:
   - 新規ファイル作成時の言語別テンプレート自動適用、および編集履歴の手動永続化対応。
-- 🌐 **文字コード・改行自動判別**:
-  - UTF-8, Shift_JIS (CP932), EUC-JP / CRLF, LF, CR を自動判別し、保存時も元の文字コードと改行体系を完全維持。
+- 🌐 **特有文字・決定打による文字コード・改行の超高速早期自動判別**:
+  - UTF-8, UTF-8 BOM, Shift_JIS (CP932), EUC-JP, UTF-16LE/BE（1文字目の特有バイトで即時確定）および CRLF, LF, CR（3行連続出現で即時確定）を自動判別し、保存時も元の文字コードと改行体系を完全維持。
+- 🖥️ **ネイティブ・デスクトップ GUI (`vivivi-gui` / `egui` + `eframe`)**:
+  - **Tokyo Night 3段階コントラスト外観**: エディタ背景 (`#1A1B26`)、パネル背景 (`#16161E`)、ステータスライン (`#292E42`) の3段階配色と角丸 4px によるモダンな視覚設計。
+  - **PlemolJP フォント最優先ロード**: `fonts/` またはシステム導入済みの PlemolJP を自動検出し、BIZ UDゴシック / Consolas への多段フォールバックを構成。
+  - **`ui.painter()` カスタムグリッド描画 ＆ 日本語 IME インライン統合**: 標準 `TextEdit` を使わず、行番号・ガター変更マーカー・対応括弧・不可視文字・IME 未確定文字列（シアン下線付き）を等幅セルで直接描画し、OS の IME 候補ウィンドウ座標を毎フレーム同期。
+  - **削除文字落下物理アニメーション ＆ 0% CPU 省電力制御**: 文字削除時にグリフが放物線を描いて落下・フェードアウト（0.5秒）し、消滅後は再描画要求を停止してアイドル時 CPU 0% のリアクティブ待機を維持。
 
 ---
 
@@ -99,11 +104,16 @@ Unicode罫線の自動結合、インラインCSV/TSV高速整列・編集、Mig
 
 ```mermaid
 graph TD
-    App["vivivi-app (TUI / CLI エントリポイント)"]
+    Gui["vivivi-gui (デスクトップGUI: egui / eframe)"]
+    App["vivivi-app (ヘッドレス共通コア & TUI エントリポイント)"]
     Core["vivivi-core (GapBuffer・UndoMgr・カーソル・エンコーディング)"]
     Vi["vivivi-vi (Vi状態機械・コマンドパーサー・レジスタ・ex)"]
     Modes["vivivi-modes (CSV・罫線・アウトライン・文字変換・シンタックス)"]
 
+    Gui --> App
+    Gui --> Vi
+    Gui --> Modes
+    Gui --> Core
     App --> Vi
     App --> Modes
     App --> Core
@@ -111,19 +121,20 @@ graph TD
     Modes --> Core
 ```
 
-| クレート名     | 役割・責務                                                               | 依存クレート  |
-| :------------- | :----------------------------------------------------------------------- | :------------ |
-| `vivivi-core`  | テキストバッファ、行管理、カーソル、Undo/Redo、文字コード・改行判別      | なし          |
-| `vivivi-vi`    | Vi状態機械、コマンドパーサー、レジスタ、矩形編集、exコマンド             | `vivivi-core` |
-| `vivivi-modes` | CSV/TSVモード、Unicode罫線描画、アウトライン解析、文字変換、シンタックス | `vivivi-core` |
-| `vivivi-app`   | フルスクリーンTUI（Ratatui + crossterm）、画面分割、メインループ         | 全クレート    |
+| クレート名     | 役割・責務                                                               | 依存クレート      |
+| :------------- | :----------------------------------------------------------------------- | :---------------- |
+| `vivivi-core`  | テキストバッファ、行管理、カーソル、Undo/Redo、文字コード・改行早期判別  | なし              |
+| `vivivi-vi`    | Vi状態機械、コマンドパーサー、レジスタ、矩形編集、exコマンド             | `vivivi-core`     |
+| `vivivi-modes` | CSV/TSVモード、Unicode罫線描画、アウトライン解析、文字変換、シンタックス | `vivivi-core`     |
+| `vivivi-app`   | ヘッドレス共通セッション基盤 (`App`, `Tab`, `WindowTreeNode`) ＆ TUI本体 | Core / Vi / Modes |
+| `vivivi-gui`   | デスクトップGUI (`egui` / `eframe`)、日本語IME統合、ミニマップ、落下演出 | 全クレート        |
 
 ---
 
 ## 🚀 インストール & ビルド
 
 ### 必要要件
-- Rust 1.80 以上 (Edition 2021 / 2024 準備済み)
+- Rust 1.85 以上 (Edition 2024 対応)
 - Cargo
 
 ### ローカルビルド
@@ -132,20 +143,24 @@ graph TD
 git clone https://github.com/tkshnkgwr/vivivi.git
 cd vivivi
 
-# ワークスペース全体のビルド
-cargo build
+# ワークスペース全体のビルド (TUI & GUI)
+cargo build --workspace
 
-# アプリケーションの実行 (TUI)
-cargo run
+# ターミナル TUI 版の実行
+cargo run -p vivivi-app
 
-# リリースバイナリのビルド (約2.99MBの超軽量バイナリ)
-cargo build --release
+# デスクトップ GUI 版の実行
+cargo run -p vivivi-gui
+
+# リリースバイナリのビルド
+cargo build --release --workspace
 ```
 
 ### テスト実行
 ```powershell
-# 全クレートの単体・統合・ドキュメントテスト実行 (全550件超完全合格)
-cargo test
+# 全クレートの単体・公開API統合・ドキュメントテスト実行
+cargo test --all-targets
+cargo test --doc
 ```
 
 ---

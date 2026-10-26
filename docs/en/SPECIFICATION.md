@@ -479,10 +479,20 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
   - `[keymap.normal]`, `[keymap.insert]`: Custom key remapping tables
 - **Dynamic Reload & Set**: `:config` ex command reloads settings from disk on the fly. Runtime toggling via `:set` / `:se` for line numbers (`:se nu` / `:se nonu`), line wrapping (`:se wrap` / `:se nowrap`), tabstop, clipboard, etc., with `?` status queries.
 
-### 14.4 Explicit Encoding Reload & Line Ending Format
+### 14.4 Encoding Auto-Detection, Reload & Line Ending Format Specifications
+- **Ultra-Fast Early Encoding Detection (`detect_encoding`)**:
+  - **BOM Early Return**: Identifies UTF-8 BOM (`EF BB BF`), UTF-16LE (`FF FE`), and UTF-16BE (`FE FF`) on initial bytes.
+  - **UTF-8 Validity Verification**: Leverages SIMD-accelerated `std::str::from_utf8`. Valid UTF-8 resolves immediately.
+  - **Shift_JIS Deterministic Early Return (1st Character)**:
+    - 1st byte in `0x81..=0x9F` (hiragana `0x82`, katakana `0x83`, JIS level 1 kanji) immediately resolves to Shift_JIS.
+    - 2nd byte in `0x40..=0x7E` (katakana "Te" `83 65`, 0x5C characters like "Hyou" `95 5C`) strictly cannot exist in EUC-JP/UTF-8 multi-byte trails, immediately resolving to Shift_JIS.
+  - **EUC-JP Deterministic Early Return**: Identifies EUC-JP hiragana (`0xA4` + `0xA1..=0xF3`) and katakana (`0xA5` + `0xA1..=0xF6`) on first appearance.
+- **Line Ending 3-Line Early Detection (`detect_newline`)**:
+  - Immediately resolves when 3 consecutive identical line endings (CRLF, LF, CR) appear, skipping buffer scan.
+  - Falls back to 8KB sampling for mixed endings, defaulting to LF for single-line inputs.
 - **Explicit Encoding Reopening (`:e ++enc=<enc>`)**: Bypass auto-detection and force reload buffer using `utf-8`, `sjis`, or `euc-jp`.
 - **Target Save Encoding (`:set fenc=<enc>`)**: Specify destination encoding on next save.
-- **Line Ending Format (`:set ff=unix|dos`)**: Convert newline convention between LF and CRLF on save.
+- **Line Ending Format (`:set ff=unix|dos|mac`)**: Convert newline convention between LF, CRLF, and CR on save (`:set ff?` queries format).
 
 ### 14.5 Crash Recovery & Auto-Save Swap Files (.swp)
 - **Swap Creation**: Creates hidden `.<filename>.swp` in the same directory for modified buffers.
@@ -499,6 +509,39 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
 - **New Languages**: Go (`.go`), Ruby (`.rb`), TOML (`.toml`), PowerShell (`.ps1`), YAML (`.yaml`), XML (`.xml`), and Windows Batch (`.bat`, `.cmd`).
 - **Lexical Analysis**: Accurate tokenization of keywords, types/classes, strings, numbers, comments, symbols, and environment variables (Batch).
 - **Status Bar Badges**: Distinct language badges (`[Go]`, `[Ruby]`, `[TOML]`, `[PowerShell]`, `[YAML]`, `[XML]`, `[Batch]`) rendered in the status bar.
+
+---
+
+## 15. Native Desktop GUI Architecture Specifications (Phase 5 / `vivivi-gui`)
+
+### 15.1 Shared Headless Library Foundation (`vivivi-app` `[lib]`)
+- **Decoupled Core**: `vivivi-app` is structured as both a shared library (`vivivi_app`) and the TUI binary (`vivivi`), exposing the complete editor session state ([`App`]), multi-tab pages ([`TabPage`]), recursive split window tree ([`WindowTreeNode`]), configuration ([`EditorConfig`]), and key/Ex command dispatchers independent of the rendering backend.
+- **Frontend-Agnostic Primitives**: Abstracts terminal types into [`LogicalRect`] and [`AppKeyEvent`], enabling 100% shared window geometry navigation (`Ctrl-W h/j/k/l`) and Vi state transitions across TUI and GUI.
+
+### 15.2 Visual Theme & Font Loader (`theme.rs`, `fonts.rs`)
+- **Tokyo Night 3-Tier Contrast Visuals**:
+  - Avoids harsh pitch black (`#000000`) in favor of a 3-tier dark palette: Editor Canvas (`#1A1B26`), Side Panels & Command Line (`#16161E`), and Statusline & Active Tab (`#292E42`).
+  - Eliminates noisy widget borders (`Stroke::NONE`) and applies uniform `4px` corner rounding.
+- **PlemolJP Priority Font Loader**:
+  - Scans executable-relative `fonts/`, working directory `fonts/`, user font directory (`%LOCALAPPDATA%\Microsoft\Windows\Fonts`), and system fonts (`C:\Windows\Fonts`) to load `PlemolJP` first, with multi-stage fallback to `BIZ UD Gothic`, `Consolas`, and `Meiryo` for a strict 2:1 CJK/ASCII monospaced grid.
+
+### 15.3 4-Pane Layout & Custom `ui.painter()` Rendering (`app.rs`)
+- **4-Pane Workspace**:
+  1. `TopBottomPanel::top`: Menu bar (File / Edit / View / Mode / Tools / Help) and interactive multi-tab bar (`+` new tab button & tab switching).
+  2. `SidePanel::left`: Collapsible left sidebar switching between `Files` (File Explorer with `..` parent traversal & directory navigation) and `Outline` (symbol tree with one-click line jump).
+  3. `TopBottomPanel::bottom`: 2-row footer comprising the status bar (mode badge, Keisen/CSV/Macro indicators, encoding/newline badges, line/col coordinates) and the bottom Ex command / Migemo search line.
+  4. `CentralPanel`: Nested split editor views computed via `WindowTreeNode::compute_logical_rects` alongside a right-side Minimap with Viewport Culling and click-to-jump scrolling.
+- **Custom Grid Painting & Inline Japanese IME Integration**:
+  - Completely bypasses `egui::TextEdit`; captures `Event::Key`, `Event::Text`, and `Event::Ime(Preedit/Commit)` via `ctx.input` and feeds the shared `App` core directly.
+  - Guards IME composition keys (`Backspace`, `Enter`, `Escape`, arrow keys) while `ime_preedit` is non-empty so OS IME candidate selection never corrupts the buffer.
+  - Uses `ui.painter()` to render visible line numbers, gutter change markers (yellow unsaved / green saved), code folding placeholders, CSV column alignment, invisible characters & full-width space highlights, matching parentheses, visual selections, search matches, and underlined inline IME preedit text.
+  - Draws mode-specific cursors (Block for Normal/Visual, I-beam for Insert, Underline for Replace) and updates `ctx.output_mut(|o| o.ime = ...)` every frame with the exact screen cursor rectangle.
+
+### 15.4 Gravity-Drop Deletion Animation & 0% CPU Hybrid Control (`particles.rs`)
+- **2D Physics Particles (`ParticleManager`)**:
+  - Detects character and line deletions (`x`, `dd`, `dw`, `Backspace`), spawning `Particle` instances at the deleted glyph screen coordinates with initial scatter velocity, `720.0 px/s²` gravity, and a `0.5s` fade-out lifetime.
+- **0% CPU Reactive Idle Loop**:
+  - Calls `ctx.request_repaint()` strictly while `particles.is_active()` is `true`. Once all particles fade out after 0.5 seconds, repaint requests cease and `egui` returns to reactive event-waiting mode (`0% CPU` usage while idle).
 
 
 

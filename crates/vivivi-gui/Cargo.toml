@@ -1,0 +1,24 @@
+[package]
+name = "vivivi-gui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+name = "vivivi_gui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "vivivi-gui"
+path = "src/main.rs"
+
+[dependencies]
+vivivi-core.workspace = true
+vivivi-vi.workspace = true
+vivivi-modes.workspace = true
+vivivi-app.workspace = true
+eframe = "0.31"
+egui = "0.31"
+anyhow.workspace = true
+unicode-width.workspace = true

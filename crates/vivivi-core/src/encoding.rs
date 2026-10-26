@@ -165,7 +165,9 @@ impl NewlineType {
 
 /// 生バイト列から文字コードを自動判別します。
 ///
-/// BOM の有無を最優先で確認し、続いて UTF-8 検証、日本語特有の Shift_JIS / EUC-JP バイト列パターンのスコアリングを行って推定します。
+/// 1. BOM（Byte Order Mark）を先頭で即時判定（UTF-8 BOM, UTF-16LE, UTF-16BE）。
+/// 2. 特有文字（排他的バイトパターン）の早期検出（Shift_JIS特有の第2バイト、EUC-JPかな領域、UTF-8 3/4バイト列）。
+/// 3. 特有文字が検出されなかった場合（ASCII英数のみ等）は、統計スコアリングおよびUTF-8妥当性検証で決定します。
 ///
 /// # Examples
 ///
@@ -183,7 +185,7 @@ pub fn detect_encoding(bytes: &[u8]) -> (CharEncoding, &'static encoding_rs::Enc
         return (CharEncoding::Utf8, UTF_8);
     }
 
-    // 1. BOM（Byte Order Mark）判定
+    // 1. BOM（Byte Order Mark）判定（先頭数バイトで即座に確定）
     if bytes.starts_with(&[0xef, 0xbb, 0xbf]) {
         return (CharEncoding::Utf8Bom, UTF_8);
     }
@@ -194,32 +196,90 @@ pub fn detect_encoding(bytes: &[u8]) -> (CharEncoding, &'static encoding_rs::Enc
         return (CharEncoding::Utf16Be, UTF_16BE);
     }
 
-    // 2. UTF-8 検証（エラーがなければ UTF-8 として扱う）
-    if std::str::from_utf8(bytes).is_ok() {
+    // UTF-16 BOMなし検出（0x00 が1バイトおきに頻出する場合）
+    if bytes.len() >= 4 {
+        let sample = &bytes[..bytes.len().min(512)];
+        let zeros_even = sample.iter().step_by(2).filter(|&&b| b == 0).count();
+        let zeros_odd = sample
+            .iter()
+            .skip(1)
+            .step_by(2)
+            .filter(|&&b| b == 0)
+            .count();
+        if zeros_even > sample.len() / 4 && zeros_odd == 0 {
+            return (CharEncoding::Utf16Be, UTF_16BE);
+        } else if zeros_odd > sample.len() / 4 && zeros_even == 0 {
+            return (CharEncoding::Utf16Le, UTF_16LE);
+        }
+    }
+
+    // 最大 64KB までをサンプリング
+    let scan_len = bytes.len().min(65536);
+    let sample = &bytes[..scan_len];
+
+    // 2. UTF-8 妥当性判定
+    //    UTF-8 として合法であれば即座に UTF-8 確定
+    //    （Shift_JIS / EUC-JP の日本語テキストが UTF-8 として妥当になることは構造上あり得ない）
+    if std::str::from_utf8(sample).is_ok() {
         return (CharEncoding::Utf8, UTF_8);
     }
 
-    // 3. 日本語文字コード（Shift_JIS vs EUC-JP）の統計的・パターン判定
+    // 3. Shift_JIS vs EUC-JP の早期判定（特有文字・排他バイトが出た瞬間に即時確定）
     let mut sjis_score = 0usize;
     let mut euc_score = 0usize;
 
     let mut i = 0;
-    while i < bytes.len() {
-        let b1 = bytes[i];
+    while i < sample.len() {
+        let b1 = sample[i];
 
-        // Shift_JIS (0x81..=0x9F, 0xE0..=0xFC) + 2nd (0x40..=0x7E, 0x80..=0xFC)
-        if (matches!(b1, 0x81..=0x9f | 0xe0..=0xfc)) && i + 1 < bytes.len() {
-            let b2 = bytes[i + 1];
-            if matches!(b2, 0x40..=0x7e | 0x80..=0xfc) {
+        // --- A. Shift_JIS 特有確定パターン ---
+        if (matches!(b1, 0x81..=0x9f | 0xe0..=0xfc)) && i + 1 < sample.len() {
+            let b2 = sample[i + 1];
+
+            // 決定打1: 0x81..=0x9F (0x8E, 0x8F除く) は EUC-JP には存在しないコード領域
+            // (0x82 はひらがな、0x83 はカタカナ、0x88..=0x98 はJIS第1水準漢字)
+            // これが出た時点で即座に Shift_JIS 確定
+            if matches!(b1, 0x81..=0x8d | 0x90..=0x9f)
+                && matches!(b2, 0x40..=0x7e | 0x80..=0xfc)
+                && b2 != 0x7f
+            {
+                return (CharEncoding::ShiftJis, SHIFT_JIS);
+            }
+
+            // 決定打2: 第2バイトが 0x40..=0x7E (ASCII英数記号領域、0x7F除く)
+            // EUC-JP のマルチバイト後続バイト（0xA1..=0xFE）には絶対にあり得ないため Shift_JIS 確定
+            if matches!(b2, 0x40..=0x7e) && b2 != 0x7f {
+                return (CharEncoding::ShiftJis, SHIFT_JIS);
+            }
+
+            // 決定打3: 0x8E / 0x8F で第2バイトが EUC-JP 半角カナ範囲外
+            if matches!(b1, 0x8e | 0x8f) && matches!(b2, 0x40..=0x7e | 0xe0..=0xfc) && b2 != 0x7f {
+                return (CharEncoding::ShiftJis, SHIFT_JIS);
+            }
+
+            if matches!(b2, 0x40..=0x7e | 0x80..=0xfc) && b2 != 0x7f {
                 sjis_score += 2;
                 i += 2;
                 continue;
             }
         }
 
-        // EUC-JP (0xA1..=0xFE) + 2nd (0xA1..=0xFE)
-        if matches!(b1, 0xa1..=0xfe) && i + 1 < bytes.len() {
-            let b2 = bytes[i + 1];
+        // --- B. EUC-JP 特有確定パターン ---
+        // EUC-JP ひらがな領域: 0xA4 + 0xA1..=0xF3 (ぁ〜ん)
+        // EUC-JP カタカナ領域: 0xA5 + 0xA1..=0xF6 (ァ〜ヶ)
+        // Shift_JIS では半角カナ（0xA1..=0xDF）の連続になり、通常文章ではあり得ないため即確定
+        if (b1 == 0xa4 || b1 == 0xa5) && i + 1 < sample.len() {
+            let b2 = sample[i + 1];
+            if (b1 == 0xa4 && matches!(b2, 0xa1..=0xf3))
+                || (b1 == 0xa5 && matches!(b2, 0xa1..=0xf6))
+            {
+                return (CharEncoding::EucJp, EUC_JP);
+            }
+        }
+
+        // 一般的な EUC-JP 2バイト文字
+        if matches!(b1, 0xa1..=0xfe) && i + 1 < sample.len() {
+            let b2 = sample[i + 1];
             if matches!(b2, 0xa1..=0xfe) {
                 euc_score += 2;
                 i += 2;
@@ -230,19 +290,20 @@ pub fn detect_encoding(bytes: &[u8]) -> (CharEncoding, &'static encoding_rs::Enc
         i += 1;
     }
 
+    // 4. 特有文字で早期確定しなかった場合のスコア判定
     if euc_score > sjis_score && euc_score > 0 {
         (CharEncoding::EucJp, EUC_JP)
     } else if sjis_score > 0 {
         (CharEncoding::ShiftJis, SHIFT_JIS)
     } else {
-        // デフォルトは UTF-8
         (CharEncoding::Utf8, UTF_8)
     }
 }
 
 /// テキストから改行コードを自動判別します。
 ///
-/// CRLF、LF、CR の出現頻度を走査し、最多のものを返します。同数または改行が存在しない場合は LF をデフォルトとします。
+/// CRLF、LF、CR を順次走査し、同一の改行形式が3回出現した時点で即座に早期リターンします。
+/// 改行の出現が少ない場合は最大 8KB までのサンプリングで最多の形式を判定します。
 ///
 /// # Examples
 ///
@@ -257,18 +318,31 @@ pub fn detect_newline(bytes: &[u8]) -> NewlineType {
     let mut lf_count = 0usize;
     let mut cr_count = 0usize;
 
+    // 最大 8KB をサンプリング走査（早期確定時は数行で即時 return）
+    let scan_len = bytes.len().min(8192);
+    let sample = &bytes[..scan_len];
+
     let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'\r' {
-            if i + 1 < bytes.len() && bytes[i + 1] == b'\n' {
+    while i < sample.len() {
+        if sample[i] == b'\r' {
+            if i + 1 < sample.len() && sample[i + 1] == b'\n' {
                 crlf_count += 1;
+                if crlf_count >= 3 && lf_count == 0 && cr_count == 0 {
+                    return NewlineType::Crlf;
+                }
                 i += 2;
                 continue;
             } else {
                 cr_count += 1;
+                if cr_count >= 3 && crlf_count == 0 && lf_count == 0 {
+                    return NewlineType::Cr;
+                }
             }
-        } else if bytes[i] == b'\n' {
+        } else if sample[i] == b'\n' {
             lf_count += 1;
+            if lf_count >= 3 && crlf_count == 0 && cr_count == 0 {
+                return NewlineType::Lf;
+            }
         }
         i += 1;
     }

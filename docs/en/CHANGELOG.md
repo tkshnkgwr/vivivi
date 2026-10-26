@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [0.9.5-beta] - 2026-10-26
+
+### Added / Improved
+- **Full Native Desktop GUI Implementation (`vivivi-gui` Crate / Steps 0–4 Completed)**:
+  - **Step 0 (Decoupling `vivivi-app` into a Shared Headless Library)**:
+    - Added `[lib]` target (`src/lib.rs`, `src/types.rs`) to `vivivi-app`, exposing `App`, `Tab`, `WindowTreeNode`, `EditorConfig`, `handle_key_event`, and `execute_ex_command` to both TUI and GUI frontends.
+    - Introduced frontend-agnostic `LogicalRect` and `AppKeyEvent` types and expanded Ex command aliases (`:undo` / `:u`, `:redo`, `:vsp`).
+  - **Step 1 (Tokyo Night Visual Theme & PlemolJP Priority Font Loader / `theme.rs`, `fonts.rs`)**:
+    - Configured 3-tier contrast dark palette (`#1A1B26` editor canvas, `#16161E` side panels, `#292E42` statusline), eliminated harsh widget strokes (`Stroke::NONE`), and applied `4px` corner rounding.
+    - Implemented multi-stage font loader prioritizing `PlemolJP` from `./fonts/`, `%LOCALAPPDATA%\Microsoft\Windows\Fonts`, or `C:\Windows\Fonts`, falling back to `BIZ UD Gothic` and `Consolas`.
+  - **Step 2 (4-Pane Skeletal Layout & Viewport-Culled Minimap / `app.rs`)**:
+    - Built top menu bar & multi-tab bar, collapsible left sidebar (File Explorer with `..` parent traversal & directory navigation / Symbol Outline toggle), 2-row bottom status bar & ex command line, and central nested split editor canvas (`WindowTreeNode`) with right-side minimap.
+  - **Step 3 (Shared `App` Core Coupling & Inline Japanese IME Integration / `app.rs`)**:
+    - Bypassed `egui::TextEdit` entirely; captured `Event::Key`, `Event::Text`, and `Event::Ime(Preedit/Commit)` via `ctx.input` and dispatched directly to the shared `App` core, guarding IME composition keys (`Backspace`, `Enter`, etc.) while preedit is active.
+    - Rendered monospaced character grid via `ui.painter()` supporting line numbers, gutter change markers (yellow unsaved / green saved), code folding, CSV alignment, invisible characters & full-width space highlight, matching parentheses, visual selection, search highlight, and underlined inline IME preedit preview.
+    - Rendered mode-aware cursors (Block for Normal/Visual, I-beam for Insert, Underline for Replace) and emitted `ctx.output_mut(|o| o.ime = ...)` cursor rects to the OS IME every frame.
+    - Integrated floating `egui::Window` modals for `:help` (`F1`), `:preview`, `F6` (clipboard history), `:recent` (`F7`), and `:filer`.
+  - **Step 4 (Gravity-Drop Deletion Animation & 0% CPU Hybrid Loop / `particles.rs`)**:
+    - Implemented `ParticleManager` and `extract_deleted_line_segment` to spawn falling 2D physics glyphs (`720.0 px/s²` gravity, 0.5s alpha fade-out) whenever characters or lines are deleted (`x`, `dd`, `dw`, `Backspace`).
+    - Requested `ctx.request_repaint()` strictly while particles are active, immediately returning to `egui` reactive idle mode (`0% CPU` on input wait) once all particles expire.
+- **Ultra-Fast Early Encoding & Line Ending Auto-Detection (`vivivi-core::encoding`)**:
+  - Overhauled the detection engine to immediately return upon discovering exclusive signature bytes rather than scanning entire large buffers.
+  - **BOM Early Return**: Instantly identifies UTF-8 BOM (`EF BB BF`), UTF-16LE (`FF FE`), and UTF-16BE (`FE FF`) from the leading bytes.
+  - **UTF-8 Validity Check**: Leverages SIMD-accelerated `std::str::from_utf8`. Valid UTF-8 text with multi-byte characters immediately resolves to UTF-8.
+  - **Shift_JIS Deterministic Early Return (1st Character Match)**:
+    - 1st byte in `0x81..=0x9F` (hiragana `0x82`, katakana `0x83`, JIS level 1 kanji): Immediately resolves to Shift_JIS as this range does not exist in standard EUC-JP or lead UTF-8.
+    - 2nd byte in `0x40..=0x7E` (e.g. katakana "Te" `83 65` or 0x5C-containing characters like "Hyou" `95 5C`): Strictly impossible in EUC-JP/UTF-8 multi-byte trails, instantly resolving to Shift_JIS.
+  - **EUC-JP Deterministic Early Return**: Identifies EUC-JP hiragana (`0xA4` + `0xA1..=0xF3`) and katakana (`0xA5` + `0xA1..=0xF6`) on first appearance.
+  - **Line Ending 3-Line Early Return**: Immediately resolves newline format when 3 consecutive identical line endings (CRLF, LF, CR) appear, skipping unnecessary buffer scanning.
+- **Comprehensive Encoding & Line Ending Test Suite (`tests/encoding_api.rs`)**:
+  - Added dedicated test cases covering Shift_JIS katakana/hiragana/0x5C characters (`表構十申能`), EUC-JP, UTF-8 with emoji, quick newline resolution, ASCII-only files, and mixed line endings.
+  - Implemented 12-way roundtrip tests across all combinations (UTF-8, UTF-8 BOM, Shift_JIS, EUC-JP $\times$ LF, CRLF, CR) verifying 100% fidelity upon save and reload.
+
+---
+
 ## [0.9.2-beta] - 2026-10-19
 
 ### Fixed / Improved

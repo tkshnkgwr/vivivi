@@ -125,7 +125,10 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     } else {
         app.window_tree.compute_rects(editor_container)
     };
-    app.window_rects = window_rects.clone();
+    app.window_rects = window_rects
+        .iter()
+        .map(|&(idx, r)| (idx, crate::types::LogicalRect::from(r)))
+        .collect();
 
     let active_idx = app.active_window;
     let active_editor_area = window_rects

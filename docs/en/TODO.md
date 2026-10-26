@@ -13,72 +13,73 @@
 
 ### 📊 Feature Lineage Matrix
 
-| Category           | Feature Name                                  |     Lineage (Origin)     | Key Capabilities & Description                                          |           vivivi Status |
-| :----------------- | :-------------------------------------------- | :----------------------: | :---------------------------------------------------------------------- | ----------------------: |
-| Data Architecture  | GapBuffer                                     |         OpenViVi         | O(1) local cursor editing with memory shifting algorithm                |      Implemented (core) |
-| Data Architecture  | UndoMgr (Transactional Undo)                  |         OpenViVi         | Undo blocks, typing merge, and Save Point tracking                      |      Implemented (core) |
-| Data Architecture  | ViewLineMgr (Wrap Line Mgr)                   |         OpenViVi         | Bi-directional mapping between logical & wrapped screen lines           |      Implemented (core) |
-| Data Architecture  | Encoding & BOM Auto-Detection                 |         OpenViVi         | UTF-8, Shift_JIS, EUC-JP, BOM recognition & conversion                  |      Implemented (core) |
-| Editing Assists    | Unicode Keisen Mode (Box-Drawing)             | Common (ViVi / OpenViVi) | Ctrl+Arrow draw/join, Shift+Arrow erase box borders                     |     Implemented (modes) |
-| Editing Assists    | Inline CSV/TSV Column Mode                    |     ViVi 3 / ViVi 4      | Auto column alignment & transparent quote editing                       |     Implemented (modes) |
-| Editing Assists    | Batch Character Conversion                    | Common (ViVi / OpenViVi) | Full-width ⇄ Half-width, Kana, Upper ⇄ Lowercase                        |     Implemented (modes) |
-| Editing Assists    | Keisen Protected Edit Mode                    |     ViVi 3 / ViVi 4      | Automatic whitespace adjust inside boxes to keep frames intact          |     Implemented (modes) |
-| Editing Assists    | Text Alignment                                |     ViVi 3 / ViVi 4      | Multi-line columnar vertical alignment on target chars (=, :)           |       Implemented (app) |
-| Editing Assists    | Batch Head/Tail Insertion                     |          ViVi 4          | Batch prefix/suffix insertion on selected lines or document             |       Implemented (app) |
-| Editing Assists    | Renumbering                                   |     ViVi 3 / ViVi 4      | Automatic sequential renumbering for ordered lists (1., 2.)             |       Implemented (app) |
-| Editing Assists    | Expression Substitute (:s/.../e)              |     ViVi 3 / ViVi 4      | Dynamic evaluation of replacement string as arithmetic/script expr      |     Implemented (modes) |
-| Editing Assists    | Box Selection Calculation                     |     ViVi 3 / ViVi 4      | Instant Sum, Average, StdDev calculation on visual block numbers        |       Implemented (app) |
-| Input & Macros     | Dynamic Completion (dabbrev / Ctrl-L)         |     ViVi 3 / ViVi 4      | Dynamic forward/backward in-buffer word completion                      |       Implemented (app) |
-| Input & Macros     | Static Abbreviation (abbrev / Ctrl-;)         |     ViVi 3 / ViVi 4      | Boilerplate expansion from external abbreviation dictionary             |       Implemented (app) |
-| Input & Macros     | Dynamic Macro (Ctrl-Alt-M)                    |     ViVi 3 / ViVi 4      | Infer recurring keystrokes (XX, XYX) to repeat complex edits            |       Implemented (app) |
-| Input & Macros     | Lexical Edit Prediction (LexEdit / Ctrl-J)    |          ViVi 4          | Word-level edit history prediction in interactive popup menu            |       Implemented (app) |
-| Input & Macros     | Zen-Coding (Emmet) Expansion (Ctrl-,)         |          ViVi 4          | Expand shorthand syntax (table>tr>td*3) into HTML/XML tags              |       Implemented (app) |
-| Input & Macros     | Clipboard History (cbHist)                    |     ViVi 3 / ViVi 4      | Interactive history list and insertion of past yanks/copies             |       Implemented (app) |
-| Input & Macros     | Keyboard Macro Record & Playback              | Common (ViVi / OpenViVi) | Dynamic keystroke sequence recording and replay (@q)                    |       Implemented (app) |
-| Vi Commands        | Romaji Japanese Search (Migemo / g/)          |     ViVi 3 / ViVi 4      | Incremental Japanese search directly via Romaji (SKK / Migemo)          |       Implemented (app) |
-| Vi Commands        | fFtT Full-width Auto-Match                    |     ViVi 3 / ViVi 4      | Type ASCII char to match both half-width & full-width variants          |     Implemented (modes) |
-| Vi Commands        | Word Search (*, g*) & Prefix/Suffix Match     | Common (ViVi / OpenViVi) | Instant cursor word search & prefix/suffix matching (g<, g=)            |        Implemented (vi) |
-| Vi Commands        | Numeric/Alpha Increment & Toggle (#!))        |     ViVi 3 / ViVi 4      | Increment/decrement numbers/alpha (#+, #-), toggle true/false           |        Implemented (vi) |
-| Vi Commands        | Jump Last Edit (@, '@) & Line Replicate       |     ViVi 3 / ViVi 4      | Instant return to previous edit, replicate text from above line         |        Implemented (vi) |
-| Vi Commands        | Global Marks (mA - mZ, :marks)                |     ViVi 3 / ViVi 4      | Cross-file workspace-persistent marks using uppercase letters           |        Implemented (vi) |
-| Vi Commands        | Tag Jump (Ctrl-], Alt-])                      | Common (ViVi / OpenViVi) | Jump to declaration/definition via tags file & AST syntax analysis      |        Implemented (vi) |
-| Vi Commands        | Text Objects (iw, aw, i", a", i(, a()         |   Common (Gvim / ViVi)   | Edit/select target ranges inside or around words, quotes, and brackets  |        Implemented (vi) |
-| Vi Commands        | Case Conversion (gu, gU, guu, gUU, u, U)      |   Common (Gvim / ViVi)   | Lowercase/uppercase target motion, current line, or visual selection    |        Implemented (vi) |
-| Vi Commands        | Indent & Repeat (>>, <<, >, <, .)             |   Common (Gvim / ViVi)   | Line/block indentation shifting and dot repeat of previous change       |        Implemented (vi) |
-| Vi Commands        | Scroll Adjust & Paragraphs (zz, zt, zb, {, }) |   Common (Gvim / ViVi)   | Center/top/bottom screen scroll adjust and paragraph jump motions       |        Implemented (vi) |
-| Tools & Files      | Generational Backup (DiffLog / .difflog)      |     ViVi 3 / ViVi 4      | Differential backups on save; version rollback & per-line blame         |     Implemented (modes) |
-| Tools & Files      | Persistent Undo (undofile)                    |  Common (Gvim / Custom)  | Preserve Undo/Redo history on disk to resume undos across sessions      |      Implemented (core) |
-| Tools & Files      | In-Code ToDo Extraction (undone/TODO)         |          ViVi 4          | Scan member files for ToDo tags and interactive jump list               |     Implemented (modes) |
-| Tools & Files      | Code Folding (zc, ze, zE)                     |     ViVi 3 / ViVi 4      | Indentation & bracket scope line folding and unfolding                  |     Implemented (modes) |
-| Tools & Files      | Dual-Pane Directory View (Filer)              |     ViVi 3 / ViVi 4      | 2-pane file manager, directory diff, and 1-key file actions             |     Implemented (modes) |
-| Tools & Files      | Project Management (Project View)             |     ViVi 3 / ViVi 4      | Multi-file workspace tree, batch tags generation & backup               |     Implemented (modes) |
-| Tools & Files      | Template Auto-Loading (.template)             |     ViVi 3 / ViVi 4      | Auto-populate new files with boilerplate & macro substitutions          |     Implemented (modes) |
-| Tools & Files      | Side-by-Side Diff Comparison                  | Common (ViVi / OpenViVi) | Split-view line and character diff highlighting                         |     Implemented (modes) |
-| Tools & Files      | Project-wide Grep Search (:grep)              | Common (ViVi / OpenViVi) | High-speed recursive scan, regex engine & interactive jump list         |     Implemented (modes) |
-| Tools & Files      | Print Preview & PDF Printing                  |     ViVi 3 / ViVi 4      | Rendered Markdown preview and standalone PDF 1.4 output                 |     Implemented (modes) |
-| Tools & Files      | Help System (:help / F1 / Markdown)           |     Custom Extension     | Topic Markdown doc collection & in-app viewer (:help / F1)              |       Implemented (app) |
-| UI/UX Visual       | Multi-View Split Windows (:split, :vsplit)    |   Common (Gvim / ViVi)   | Horizontal/vertical split views, focus switching & resizing             |       Implemented (app) |
-| UI/UX Visual       | Outline Tree & Side Pane                      | Common (ViVi / OpenViVi) | Markdown headings and function/struct symbols tree sidebar              |       Implemented (app) |
-| UI/UX Visual       | Modified/Saved Line Indicators (Gutter)       |         OpenViVi         | Gutter bar markers for unsaved modified (yellow) & saved (green)        |       Implemented (app) |
-| UI/UX Visual       | Invisible Characters Rendering (:set list)    |  Common (Gvim / Custom)  | Render full-width spaces (2-cell wine-red bg), tabs (▸---), and EOL ($) |     Implemented (modes) |
-| UI/UX Visual       | Search Match Highlighting (:noh / :set hls)   |   Common (Gvim / ViVi)   | Real-time visible match highlight & :noh clearing                       |       Implemented (app) |
-| UI/UX Visual       | Mode-Synchronized Cursor Shape (DECSCUSR)     |     Custom Extension     | Block (Normal) / Bar (Insert) / Underline (Replace)                     |       Implemented (app) |
-| UI/UX Visual       | Recent Files & Favorite Files                 |         OpenViVi         | Persistent tracking and quick access modal dialog for recent files      |       Implemented (app) |
-| UI/UX Visual       | Multi-Tab Buffer Management (Tab Bar UI)      | Common (ViVi / OpenViVi) | Top tab bar for multi-buffer switching, per-tab split layouts           | Implemented (Phase 4.8) |
-| Editing Assists    | Visual Block Operations (Ctrl-v + I/A/c/r)    | Common (ViVi / OpenViVi) | Multi-line column text insertion, replacement, and blank fill           | Implemented (Phase 4.8) |
-| Config & Env       | Configuration File (config.toml / vivivirc)   | Common (ViVi / OpenViVi) | Persistent user keymaps, tab width, colors, and startup options         | Implemented (Phase 4.8) |
-| Encoding           | Explicit Encoding Reload & Format (:e ++enc)  | Common (ViVi / OpenViVi) | Force reopen with SJIS/EUC/UTF-8; convert CRLF/LF on save               | Implemented (Phase 4.8) |
-| Robustness         | Auto-Save & Crash Recovery (.swp)             | Common (ViVi / OpenViVi) | Periodic background swap dumps & unsaved recovery on startup            | Implemented (Phase 4.8) |
-| OS Integration     | System Clipboard Integration ("+y, "*p)       | Common (ViVi / OpenViVi) | Bidirectional transparent sync with OS clipboard registers              | Implemented (Phase 4.8) |
-| Languages & Syntax | Syntax Highlighting Expansion (Go, Ruby, etc) | Common (ViVi / OpenViVi) | Syntax highlighting for Go, Ruby, TOML, PowerShell, YAML, XML, BAT      | Implemented (Phase 4.8) |
-| UI/UX Visual       | Minimap Overview                              |         OpenViVi         | Bird's-eye code preview with viewport and search highlights             |       Planned (Phase 5) |
-| UI/UX Visual       | Gravity Drop Deletion Animation               |         OpenViVi         | Playful physical falling character animation upon deletion              |       Planned (Phase 5) |
-| UI/UX Visual       | Desktop GUI (egui / eframe)                   |  OpenViVi (Qt rewrite)   | Modern GUI frontend with rich borders and custom fonts                  |       Planned (Phase 5) |
-| Future             | Tree-sitter Syntax Engine Integration         |     Modern Extension     | Accurate AST-based syntax highlighting and AST node selection           |       Planned (Phase 5) |
-| Future             | Binary / Hex Editor Mode                      |     ViVi 3 / ViVi 4      | Hex dump + ASCII parallel view and byte-level editing                   |       Planned (Phase 5) |
-| Future             | Scripting Engine (Modern ViViScript)          |     ViVi 3 / ViVi 4      | Editor automation via Rhai / Lua integration                            |       Planned (Phase 5) |
-| Future             | Project Visualizer Graph (Visualize)          |          ViVi 4          | 2D force-directed graph of file sizes, dependencies & freshness         |       Planned (Phase 5) |
-| Distribution       | Update Check, Notify & Auto-Update Prep       |     Modern Extension     | GitHub Releases integration, version notification UI & self-update      |       Planned (Phase 5) |
+| Category           | Feature Name                                  |     Lineage (Origin)     | Key Capabilities & Description                                          |            vivivi Status |
+| :----------------- | :-------------------------------------------- | :----------------------: | :---------------------------------------------------------------------- | -----------------------: |
+| Data Architecture  | GapBuffer                                     |         OpenViVi         | O(1) local cursor editing with memory shifting algorithm                |       Implemented (core) |
+| Data Architecture  | UndoMgr (Transactional Undo)                  |         OpenViVi         | Undo blocks, typing merge, and Save Point tracking                      |       Implemented (core) |
+| Data Architecture  | ViewLineMgr (Wrap Line Mgr)                   |         OpenViVi         | Bi-directional mapping between logical & wrapped screen lines           |       Implemented (core) |
+| Data Architecture  | Early Encoding & Line Ending Auto-Detection   |         OpenViVi         | UTF-8, Shift_JIS, EUC-JP, BOM recognition & signature byte return       |       Implemented (core) |
+| Editing Assists    | Unicode Keisen Mode (Box-Drawing)             | Common (ViVi / OpenViVi) | Ctrl+Arrow draw/join, Shift+Arrow erase box borders                     |      Implemented (modes) |
+| Editing Assists    | Inline CSV/TSV Column Mode                    |     ViVi 3 / ViVi 4      | Auto column alignment & transparent quote editing                       |      Implemented (modes) |
+| Editing Assists    | Batch Character Conversion                    | Common (ViVi / OpenViVi) | Full-width ⇄ Half-width, Kana, Upper ⇄ Lowercase                        |      Implemented (modes) |
+| Editing Assists    | Keisen Protected Edit Mode                    |     ViVi 3 / ViVi 4      | Automatic whitespace adjust inside boxes to keep frames intact          |      Implemented (modes) |
+| Editing Assists    | Text Alignment                                |     ViVi 3 / ViVi 4      | Multi-line columnar vertical alignment on target chars (=, :)           |        Implemented (app) |
+| Editing Assists    | Batch Head/Tail Insertion                     |          ViVi 4          | Batch prefix/suffix insertion on selected lines or document             |        Implemented (app) |
+| Editing Assists    | Renumbering                                   |     ViVi 3 / ViVi 4      | Automatic sequential renumbering for ordered lists (1., 2.)             |        Implemented (app) |
+| Editing Assists    | Expression Substitute (:s/.../e)              |     ViVi 3 / ViVi 4      | Dynamic evaluation of replacement string as arithmetic/script expr      |      Implemented (modes) |
+| Editing Assists    | Box Selection Calculation                     |     ViVi 3 / ViVi 4      | Instant Sum, Average, StdDev calculation on visual block numbers        |        Implemented (app) |
+| Input & Macros     | Dynamic Completion (dabbrev / Ctrl-L)         |     ViVi 3 / ViVi 4      | Dynamic forward/backward in-buffer word completion                      |        Implemented (app) |
+| Input & Macros     | Static Abbreviation (abbrev / Ctrl-;)         |     ViVi 3 / ViVi 4      | Boilerplate expansion from external abbreviation dictionary             |        Implemented (app) |
+| Input & Macros     | Dynamic Macro (Ctrl-Alt-M)                    |     ViVi 3 / ViVi 4      | Infer recurring keystrokes (XX, XYX) to repeat complex edits            |        Implemented (app) |
+| Input & Macros     | Lexical Edit Prediction (LexEdit / Ctrl-J)    |          ViVi 4          | Word-level edit history prediction in interactive popup menu            |        Implemented (app) |
+| Input & Macros     | Zen-Coding (Emmet) Expansion (Ctrl-,)         |          ViVi 4          | Expand shorthand syntax (table>tr>td*3) into HTML/XML tags              |        Implemented (app) |
+| Input & Macros     | Clipboard History (cbHist)                    |     ViVi 3 / ViVi 4      | Interactive history list and insertion of past yanks/copies             |        Implemented (app) |
+| Input & Macros     | Keyboard Macro Record & Playback              | Common (ViVi / OpenViVi) | Dynamic keystroke sequence recording and replay (@q)                    |        Implemented (app) |
+| Vi Commands        | Romaji Japanese Search (Migemo / g/)          |     ViVi 3 / ViVi 4      | Incremental Japanese search directly via Romaji (SKK / Migemo)          |        Implemented (app) |
+| Vi Commands        | fFtT Full-width Auto-Match                    |     ViVi 3 / ViVi 4      | Type ASCII char to match both half-width & full-width variants          |      Implemented (modes) |
+| Vi Commands        | Word Search (*, g*) & Prefix/Suffix Match     | Common (ViVi / OpenViVi) | Instant cursor word search & prefix/suffix matching (g<, g=)            |         Implemented (vi) |
+| Vi Commands        | Numeric/Alpha Increment & Toggle (#!))        |     ViVi 3 / ViVi 4      | Increment/decrement numbers/alpha (#+, #-), toggle true/false           |         Implemented (vi) |
+| Vi Commands        | Jump Last Edit (@, '@) & Line Replicate       |     ViVi 3 / ViVi 4      | Instant return to previous edit, replicate text from above line         |         Implemented (vi) |
+| Vi Commands        | Global Marks (mA - mZ, :marks)                |     ViVi 3 / ViVi 4      | Cross-file workspace-persistent marks using uppercase letters           |         Implemented (vi) |
+| Vi Commands        | Tag Jump (Ctrl-], Alt-])                      | Common (ViVi / OpenViVi) | Jump to declaration/definition via tags file & AST syntax analysis      |         Implemented (vi) |
+| Vi Commands        | Text Objects (iw, aw, i", a", i(, a()         |   Common (Gvim / ViVi)   | Edit/select target ranges inside or around words, quotes, and brackets  |         Implemented (vi) |
+| Vi Commands        | Case Conversion (gu, gU, guu, gUU, u, U)      |   Common (Gvim / ViVi)   | Lowercase/uppercase target motion, current line, or visual selection    |         Implemented (vi) |
+| Vi Commands        | Indent & Repeat (>>, <<, >, <, .)             |   Common (Gvim / ViVi)   | Line/block indentation shifting and dot repeat of previous change       |         Implemented (vi) |
+| Vi Commands        | Scroll Adjust & Paragraphs (zz, zt, zb, {, }) |   Common (Gvim / ViVi)   | Center/top/bottom screen scroll adjust and paragraph jump motions       |         Implemented (vi) |
+| Tools & Files      | Generational Backup (DiffLog / .difflog)      |     ViVi 3 / ViVi 4      | Differential backups on save; version rollback & per-line blame         |      Implemented (modes) |
+| Tools & Files      | Persistent Undo (undofile)                    |  Common (Gvim / Custom)  | Preserve Undo/Redo history on disk to resume undos across sessions      |       Implemented (core) |
+| Tools & Files      | In-Code ToDo Extraction (undone/TODO)         |          ViVi 4          | Scan member files for ToDo tags and interactive jump list               |      Implemented (modes) |
+| Tools & Files      | Code Folding (zc, ze, zE)                     |     ViVi 3 / ViVi 4      | Indentation & bracket scope line folding and unfolding                  |      Implemented (modes) |
+| Tools & Files      | Dual-Pane Directory View (Filer)              |     ViVi 3 / ViVi 4      | 2-pane file manager, directory diff, and 1-key file actions             |      Implemented (modes) |
+| Tools & Files      | Project Management (Project View)             |     ViVi 3 / ViVi 4      | Multi-file workspace tree, batch tags generation & backup               |      Implemented (modes) |
+| Tools & Files      | Template Auto-Loading (.template)             |     ViVi 3 / ViVi 4      | Auto-populate new files with boilerplate & macro substitutions          |      Implemented (modes) |
+| Tools & Files      | Side-by-Side Diff Comparison                  | Common (ViVi / OpenViVi) | Split-view line and character diff highlighting                         |      Implemented (modes) |
+| Tools & Files      | Project-wide Grep Search (:grep)              | Common (ViVi / OpenViVi) | High-speed recursive scan, regex engine & interactive jump list         |      Implemented (modes) |
+| Tools & Files      | Print Preview & PDF Printing                  |     ViVi 3 / ViVi 4      | Rendered Markdown preview and standalone PDF 1.4 output                 |      Implemented (modes) |
+| Tools & Files      | Help System (:help / F1 / Markdown)           |     Custom Extension     | Topic Markdown doc collection & in-app viewer (:help / F1)              |        Implemented (app) |
+| UI/UX Visual       | Multi-View Split Windows (:split, :vsplit)    |   Common (Gvim / ViVi)   | Horizontal/vertical split views, focus switching & resizing             |        Implemented (app) |
+| UI/UX Visual       | Outline Tree & Side Pane                      | Common (ViVi / OpenViVi) | Markdown headings and function/struct symbols tree sidebar              |        Implemented (app) |
+| UI/UX Visual       | Modified/Saved Line Indicators (Gutter)       |         OpenViVi         | Gutter bar markers for unsaved modified (yellow) & saved (green)        |        Implemented (app) |
+| UI/UX Visual       | Invisible Characters Rendering (:set list)    |  Common (Gvim / Custom)  | Render full-width spaces (2-cell wine-red bg), tabs (▸---), and EOL ($) |      Implemented (modes) |
+| UI/UX Visual       | Search Match Highlighting (:noh / :set hls)   |   Common (Gvim / ViVi)   | Real-time visible match highlight & :noh clearing                       |        Implemented (app) |
+| UI/UX Visual       | Mode-Synchronized Cursor Shape (DECSCUSR)     |     Custom Extension     | Block (Normal) / Bar (Insert) / Underline (Replace)                     |        Implemented (app) |
+| UI/UX Visual       | Recent Files & Favorite Files                 |         OpenViVi         | Persistent tracking and quick access modal dialog for recent files      |        Implemented (app) |
+| UI/UX Visual       | Multi-Tab Buffer Management (Tab Bar UI)      | Common (ViVi / OpenViVi) | Top tab bar for multi-buffer switching, per-tab split layouts           |  Implemented (Phase 4.8) |
+| Editing Assists    | Visual Block Operations (Ctrl-v + I/A/c/r)    | Common (ViVi / OpenViVi) | Multi-line column text insertion, replacement, and blank fill           |  Implemented (Phase 4.8) |
+| Config & Env       | Configuration File (config.toml / vivivirc)   | Common (ViVi / OpenViVi) | Persistent user keymaps, tab width, colors, and startup options         |  Implemented (Phase 4.8) |
+| Encoding           | Explicit Encoding Reload & Format (:e ++enc)  | Common (ViVi / OpenViVi) | Force reopen with SJIS/EUC/UTF-8; convert CRLF/LF on save               |  Implemented (Phase 4.8) |
+| Robustness         | Auto-Save & Crash Recovery (.swp)             | Common (ViVi / OpenViVi) | Periodic background swap dumps & unsaved recovery on startup            |  Implemented (Phase 4.8) |
+| OS Integration     | System Clipboard Integration ("+y, "*p)       | Common (ViVi / OpenViVi) | Bidirectional transparent sync with OS clipboard registers              |  Implemented (Phase 4.8) |
+| Languages & Syntax | Syntax Highlighting Expansion (Go, Ruby, etc) | Common (ViVi / OpenViVi) | Syntax highlighting for Go, Ruby, TOML, PowerShell, YAML, XML, BAT      |  Implemented (Phase 4.8) |
+| UI/UX Visual       | Minimap Overview                              |         OpenViVi         | Bird's-eye code preview with viewport and search highlights             | Implemented (vivivi-gui) |
+| UI/UX Visual       | Sidebar File Explorer (File Tree)             |     ViVi 4 / Modern      | Hierarchical tree, async lazy loading, cloud/NAS-safe design            |  Basic Impl (vivivi-gui) |
+| UI/UX Visual       | Gravity Drop Deletion Animation               |         OpenViVi         | Playful physical falling character animation upon deletion              | Implemented (vivivi-gui) |
+| UI/UX Visual       | Desktop GUI (egui / eframe)                   |  OpenViVi (Qt rewrite)   | Modern GUI frontend with rich borders and custom fonts                  | Implemented (vivivi-gui) |
+| Future             | Tree-sitter Syntax Engine Integration         |     Modern Extension     | Accurate AST-based syntax highlighting and AST node selection           |        Planned (Phase 5) |
+| Future             | Binary / Hex Editor Mode                      |     ViVi 3 / ViVi 4      | Hex dump + ASCII parallel view and byte-level editing                   |        Planned (Phase 5) |
+| Future             | Scripting Engine (Modern ViViScript)          |     ViVi 3 / ViVi 4      | Editor automation via Rhai / Lua integration                            |        Planned (Phase 5) |
+| Future             | Project Visualizer Graph (Visualize)          |          ViVi 4          | 2D force-directed graph of file sizes, dependencies & freshness         |        Planned (Phase 5) |
+| Distribution       | Update Check, Notify & Auto-Update Prep       |     Modern Extension     | GitHub Releases integration, version notification UI & self-update      |        Planned (Phase 5) |
 
 ---
 
@@ -246,10 +247,17 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 - [x] **[Common (ViVi / OpenViVi)] Configuration File & Customization (`config.toml` / `vivivirc`)**
   - Automatic settings loading from `%USERPROFILE%\.vivivi\config.toml` (or `~/.vivivi/config.toml`)
   - User remapping for keys (Normal, Insert, Visual), tab widths, line numbers, color schemes, and invisible character symbols
-- [x] **[Common (ViVi / OpenViVi)] Explicit Encoding Reopening & Line Ending Format (:e ++enc, :set fenc, :set ff)**
+- [x] **[Common (ViVi / OpenViVi)] Early Encoding Auto-Detection & Format Conversion (:e ++enc, :set fenc, :set ff)**
+  - **Signature-Driven Early Auto-Detection Engine (`vivivi-core::encoding`)**:
+    - BOM early return (UTF-8 BOM, UTF-16LE, UTF-16BE)
+    - Fast UTF-8 validity verification (`std::str::from_utf8`)
+    - Shift_JIS deterministic early return (1st byte `0x81..=0x9F` / 2nd byte `0x40..=0x7E`) on first character
+    - EUC-JP deterministic early return (hiragana `0xA4` / katakana `0xA5` + `0xA1..=0xFE`)
+    - Line ending 3-line early return upon 3 consecutive identical endings (CRLF, LF, CR)
   - `:e ++enc=sjis [file]`, `:e ++enc=euc-jp [file]`: Force reload file with specified character encoding
   - `:set fenc=utf-8 / sjis / euc-jp`: Target file encoding on save
   - `:set ff=unix / dos`: Convert line endings (LF vs CRLF) on save
+  - Comprehensive 12-way roundtrip save-and-reload test suite implemented and verified
 - [x] **[Common (ViVi / OpenViVi)] Auto-Save & Crash Recovery (.swp)**
   - Periodic background swap file checkpoints triggered by keystroke counts or idle timer
   - Unsaved buffer recovery dialog prompt upon restarting after unexpected crash or disconnect
@@ -296,15 +304,23 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 
 ---
 
-## 4. Future Vision: Next-Gen Desktop GUI & Rich Graphics (v2.0.0 / Future)
-- [ ] **[OpenViVi (Qt Rewrite)] Desktop GUI (egui / eframe) Frontend (`vivivi-gui`)**
-  - Cross-platform desktop GUI frontend powered by OpenGL/wgpu backend alongside existing terminal TUI.
+## 4. Phase 5: Next-Gen Desktop GUI & Advanced Extensions (`vivivi-gui` / v2.0.0 Foundation)
+- [x] **[OpenViVi (Qt Rewrite)] Desktop GUI (egui / eframe) Frontend (`vivivi-gui`)**
+  - Cross-platform desktop GUI frontend powered by OpenGL/wgpu backend alongside existing terminal TUI (Steps 0–4 completed).
+  - **Step 0**: Decoupled `vivivi-app` into a headless library (`LogicalRect`, `AppKeyEvent`, shared `App` session state).
+  - **Step 1**: Tokyo Night 3-tier contrast theme & PlemolJP priority font loader (`theme.rs`, `fonts.rs`).
+  - **Step 2**: 4-pane skeletal layout (top menu & multi-tab bar, collapsible left sidebar, 2-row bottom status bar & ex command line, central nested split canvas + right-side minimap).
+  - **Step 3**: Shared `App` core coupling, custom `ui.painter()` monospaced grid rendering, inline Japanese IME integration (underlined preedit & OS candidate window rect sync), and floating modal windows.
+  - **Step 4**: Gravity-drop character deletion physics animation (0.5s fade-out) & 0% CPU reactive idle hybrid loop (`particles.rs`).
   - *(※For detailed evaluation, framework comparison, theme styling, and prompt templates, see [GUI_DESIGN.md](file:///docs/en/GUI_DESIGN.md))*
 
-- [ ] **[OpenViVi] Minimap Overview (egui-backed)**
-  - High-level bird's-eye code overview displaying viewport rectangle and search matches (requires high-res graphical rendering).
-- [ ] **[OpenViVi] Gravity Drop Character Deletion Animation (egui-backed)**
-  - Playful physical falling character animation upon deletions (requires frame-by-frame 2D physics animation).
+- [x] **[OpenViVi] Minimap Overview (egui-backed)**
+  - High-level bird's-eye code overview displaying viewport rectangle, click-to-scroll jump, and Viewport Culling (`vivivi-gui`).
+- [x] **[OpenViVi] Gravity Drop Character Deletion Animation (egui-backed)**
+  - Playful physical falling character animation upon deletions (`vivivi-gui::particles`).
+- [ ] **[ViVi 4 / Modern Extension] Sidebar File Explorer Async Cloud-Resilient Enhancements**
+  - Basic left-pane directory listing, parent `..` traversal, and click-to-open are implemented in `vivivi-gui`.
+  - Future enhancements: keyboard-driven tree navigation (`:tree` / `Ctrl-e`) and **async on-demand lazy loading with I/O timeouts** for network drives & cloud storage (Box/OneDrive).
 - [ ] **[ViVi 3 / ViVi 4] Binary / Hex Editor Mode**
   - Hex dump + ASCII parallel view and byte-level editing.
 - [ ] **[ViVi 3 / ViVi 4] Scripting Engine Integration (Modern ViViScript via Rhai / Lua)**
@@ -312,6 +328,11 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 - [ ] **[ViVi 4] Project Visualizer Graph (Visualize / Force-Directed Graph)**
   - 2D force-directed layout graph visualizing file sizes, include dependencies, and edit freshness.
 - [ ] **[Original]** Gigabyte file (1GB+) handling via Piece Tree & Memory-Mapped Files (`memmap2`).
+- [ ] **[Modern Extension] Tree-sitter Syntax Engine Integration**
+  - Integrate AST (Abstract Syntax Tree) parsing engine via `tree-sitter` crate.
+  - Accurate contextual highlighting for nested scopes, blocks, and identifiers (collaborating with builtin tokenizers).
+  - Syntax node-based smart selection (expand/shrink visual selection by AST node).
+  - Incremental parsing architecture guaranteeing zero input latency during typing.
 - [ ] **[Original]** LSP (Language Server Protocol) client integration.
 - [ ] **[Original]** Multi-cursor editing.
 - [ ] **[Platform Expansion] macOS Support (Low priority)**

@@ -99,14 +99,16 @@ fn test_nested_split_vim_behavior() {
     assert_eq!(app.active_window, 2); // 右下の win 2 がアクティブ
 
     // 画面サイズ 100 x 40 で領域計算を検証
-    let rects = app.window_tree.compute_rects(Rect::new(0, 0, 100, 40));
+    let rects = app
+        .window_tree
+        .compute_logical_rects(LogicalRect::new(0, 0, 100, 40));
     assert_eq!(rects.len(), 3);
     // 上半分 (win 0): y=0, height=20, width=100
-    assert_eq!(rects[0], (0, Rect::new(0, 0, 100, 20)));
+    assert_eq!(rects[0], (0, LogicalRect::new(0, 0, 100, 20)));
     // 左下 (win 1): y=20, height=20, width=50
-    assert_eq!(rects[1], (1, Rect::new(0, 20, 50, 20)));
+    assert_eq!(rects[1], (1, LogicalRect::new(0, 20, 50, 20)));
     // 右下 (win 2): y=20, height=20, width=50, x=50
-    assert_eq!(rects[2], (2, Rect::new(50, 20, 50, 20)));
+    assert_eq!(rects[2], (2, LogicalRect::new(50, 20, 50, 20)));
 
     // 3. 幾何学的ナビゲーション (Ctrl-W h/j/k/l) の検証
     app.window_rects = rects;
@@ -130,10 +132,12 @@ fn test_nested_split_vim_behavior() {
     // 4. close_window で右下 (win 2) を閉じる -> 下半分が win 1 のみになり、上下2分割に戻る
     app.close_window();
     assert_eq!(app.windows.len(), 2);
-    let rects2 = app.window_tree.compute_rects(Rect::new(0, 0, 100, 40));
+    let rects2 = app
+        .window_tree
+        .compute_logical_rects(LogicalRect::new(0, 0, 100, 40));
     assert_eq!(rects2.len(), 2);
-    assert_eq!(rects2[0], (0, Rect::new(0, 0, 100, 20)));
-    assert_eq!(rects2[1], (1, Rect::new(0, 20, 100, 20)));
+    assert_eq!(rects2[0], (0, LogicalRect::new(0, 0, 100, 20)));
+    assert_eq!(rects2[1], (1, LogicalRect::new(0, 20, 100, 20)));
 }
 
 #[test]

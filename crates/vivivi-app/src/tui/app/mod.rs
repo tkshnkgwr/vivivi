@@ -1,6 +1,5 @@
 use super::window::{EditorWindow, SplitAxis, WindowDirection, WindowTreeNode};
-use crossterm::event::KeyEvent;
-use ratatui::layout::Rect;
+use crate::types::{AppKeyEvent, LogicalRect};
 use std::path::PathBuf;
 use vivivi_core::{CharEncoding, CursorPosition, NewlineType, TextBuffer, TextCursor};
 use vivivi_modes::{
@@ -68,8 +67,8 @@ pub struct App {
     pub active_window: usize,
     /// 階層的ウィンドウレイアウトツリー（Window Layout Tree）
     pub window_tree: WindowTreeNode,
-    /// 各ウィンドウの最新描画領域矩形キャッシュ [(win_idx, Rect)]
-    pub window_rects: Vec<(usize, Rect)>,
+    /// 各ウィンドウの最新描画領域矩形キャッシュ [(win_idx, LogicalRect)]
+    pub window_rects: Vec<(usize, LogicalRect)>,
     /// 直近の分割方向 (水平/垂直)
     pub split_axis: SplitAxis,
     /// Ctrl-W ウィンドウコマンド入力待ちフラグ
@@ -99,8 +98,8 @@ pub struct App {
 
     // --- キーボードマクロ (Ctrl-Alt-R / Ctrl-Alt-P) ---
     pub is_recording_macro: bool,
-    pub recorded_macro_events: Vec<KeyEvent>,
-    pub last_macro_events: Option<Vec<KeyEvent>>,
+    pub recorded_macro_events: Vec<AppKeyEvent>,
+    pub last_macro_events: Option<Vec<AppKeyEvent>>,
 
     // --- クリップボード履歴 (cbHist) ---
     pub show_clipboard_hist: bool,
@@ -730,6 +729,17 @@ impl App {
         let display_path = out_path.display().to_string();
         self.status_message = Some(format!("PDFを出力しました: {display_path}"));
         Ok(out_path)
+    }
+
+    /// フロントエンド非依存のキーイベントを処理します（GUI / TUI 共通）。
+    pub fn handle_key(&mut self, event: impl Into<AppKeyEvent>) {
+        let app_ev: AppKeyEvent = event.into();
+        crate::tui::event::handle_key_event(self, app_ev.into());
+    }
+
+    /// Exコマンド文字列を実行します（`:w`, `:q`, `:set fenc=...` 等、GUI / TUI 共通）。
+    pub fn execute_ex(&mut self, cmd: &str) {
+        crate::tui::event::execute_ex_command(self, cmd);
     }
 }
 

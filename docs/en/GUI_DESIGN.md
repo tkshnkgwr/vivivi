@@ -1,236 +1,333 @@
-# ViViVi: Next-Generation Desktop GUI Architecture & Design Specification (GUI_DESIGN)
+# ViViVi: Next-Generation Desktop GUI Architecture & Technical Specifications (GUI_DESIGN)
 
 > [!NOTE]
-> This document specifies the technical selection, rendering architecture, design principles, and implementation roadmap for the future desktop GUI frontend (Phase 5).
-> (Consolidated and synthesized from design discussions conducted via smartphone / Web Gemini).
+> This specification systematically outlines the technical selection, rendering architecture, design principles, and implementation roadmap for the future desktop GUI frontend (Phase 5).
+> (Synthesized and elevated from mobile/web Gemini architectural discussions).
 
 ---
 
-## 1. Development Environment & AI Model Orchestration Strategy (Gemini 3.8 Flash vs Gemini 4 Argon)
+## 1. Development Workflow & AI Model Selection Strategy (Gemini Flash vs Gemini Pro / Argon)
 
-Optimization strategy based on task characteristics in agentic AI development environments (e.g., Antigravity).
+Optimal model selection strategy based on task characteristics in agentic AI environments such as Antigravity.
 
-### 1.1 Model Characteristics & Task Allocation
+### 1.1 Model Characteristics & Task Allocation Criteria
 
-| Development Phase / Problem               | Recommended Model    | Rationale & Responsibility                                                                                                     |
-| :---------------------------------------- | :------------------- | :----------------------------------------------------------------------------------------------------------------------------- |
-| **GUI Boundary & Async Architecture**     | **Gemini 4 Argon**   | UI thread & worker thread channel design; lifecycle and concurrency consistency.                                               |
-| **Rust Borrow Checker / Lifetime Errors** | **Gemini 4 Argon**   | Resolving mutable borrow conflicts in immediate mode (`eframe::App::update`) and thread boundary constraints (`Send + 'Sync`). |
-| **Multi-Crate Boundary Refactoring**      | **Gemini 4 Argon**   | Redefining dependency graphs across `vivivi-core`, `vivivi-vi`, `vivivi-modes`, `vivivi-app`, and `vivivi-gui`.                |
-| **Widget Placement & Layout Tuning**      | **Gemini 3.8 Flash** | High-velocity trial-and-error leveraging low latency and rapid code generation.                                                |
-| **Local Syntax Fixes & Minor Refactors**  | **Gemini 3.8 Flash** | Fast turnarounds to maintain high coding rhythm without blocking flow.                                                         |
+| Development Phase / Problem Domain        | Recommended Model        | Rationale & Role                                                                                               |
+| :---------------------------------------- | :----------------------- | :------------------------------------------------------------------------------------------------------------- |
+| **GUI Boundaries & Async Architecture**   | **Gemini Pro / 4 Argon** | UI-worker channel design and lifecycle/concurrency invariants.                                                 |
+| **Complex Rust Borrow & Lifetime Errors** | **Gemini Pro / 4 Argon** | Mutable aliasing inside immediate-mode (`eframe::App::update`) and thread boundary bounds (`Send + 'Sync`).    |
+| **Multi-Crate Workspace Boundaries**      | **Gemini Pro / 4 Argon** | Re-architecting boundaries between `vivivi-core`, `vivivi-vi`, `vivivi-modes`, `vivivi-app`, and `vivivi-gui`. |
+| **Widget Placement & Layout Tweaks**      | **Gemini 3.8 Flash**     | Rapid trial-and-error leveraging ultra-low latency code generation.                                            |
+| **Local Syntax Fixes & Refactoring**      | **Gemini 3.8 Flash**     | High-velocity incremental tasks maintaining flow state.                                                        |
 
-### 1.2 Pragmatic Switching Protocol
-1. **Default Routine on 3.8 Flash**: Basic component construction, widget addition, styling tweaks.
-2. **"Two-Round Rule" Switch to 4 Argon**: If 3.8 Flash cannot resolve compilation issues within two consecutive attempts (often creating cascading borrow errors), escalate immediately to 4 Argon with full `cargo check` logs to review fundamental architectural design.
-3. **Revert to 3.8 Flash upon Stability**: Once crate boundaries and types stabilize, return to 3.8 Flash to maximize development speed.
+### 1.2 Practical Switching Rules
+1. **Drive normal implementation with Flash**: Basic coding, widget additions, visual tweaks.
+2. **Switch to Pro / Argon on "2-Round Trip Rule"**: If 2 round-trips with Flash fail to resolve a compiler borrow check error, switch immediately to Pro / Argon, feeding raw `cargo check` logs to review core architectural assumptions.
+3. **Return to Flash once skeletal integrity passes**: Once architectural invariants are established, return to Flash to maximize velocity.
 
 ---
 
-## 2. GUI Infrastructure: Division of Labor between eframe and egui
+## 2. Framework Division of Labor: eframe vs egui
 
-### 2.1 Distinct Roles
+### 2.1 Clear Separation of Responsibilities
 
 * **egui (GUI Library)**:
-  * Manages UI logic, layout calculation, input event handling, and rendering mesh generation.
-  * Completely platform-agnostic; cannot display windows on its own (pure rendering instruction generator).
-* **eframe (egui framework / Official Framework)**:
-  * Manages OS windows (winit), GPU rendering backend initialization (wgpu / OpenGL), and OS event abstractions.
-  * Provides the `eframe::App` trait, running the main event loop and invoking `update` per frame.
+  * Pure UI logic, layout calculation, input event evaluation, and drawing mesh generation.
+  * OS-agnostic; cannot display windows by itself (pure rendering command generator).
+* **eframe (egui framework)**:
+  * OS window management (via winit), GPU backend initialization (wgpu / OpenGL), OS input event abstraction.
+  * Provides `eframe::App` trait and runs the main event loop calling `update` every frame.
 
-### 2.2 Architectural Relationship
+### 2.2 Structural Architecture
 
 ```text
 +-------------------------------------------------------------------+
 | OS (Windows / macOS / Linux / WebAssembly)                        |
 +-------------------------------------------------------------------+
                                 ▲
-                                │ Window Management / Input / GPU
+                                │ Windowing / Input / GPU (DirectX 12 / Metal / Vulkan)
 +-------------------------------▼-----------------------------------+
-| eframe (NativeOptions, run_native, Event Loop)                     |
+| eframe (NativeOptions, run_native, event loop, wgpu)              |
 +-------------------------------------------------------------------+
-                                │ Context per frame (ctx)
+                                │ Per-frame context (ctx)
 +-------------------------------▼-----------------------------------+
-| egui (CentralPanel, Layout, Painter, Visuals, Interaction State)   |
+| egui (CentralPanel, SidePanel, Layout, Painter, Visuals, State)   |
 +-------------------------------------------------------------------+
                                 ▲
-                                │ Invocation
+                                │ Calls
 +-------------------------------▼-----------------------------------+
-| vivivi-core / vivivi-modes (GapBuffer, Undo, Box/CSV Logic, etc.)  |
+| vivivi Shared Layer (vivivi-core / modes / vi / app headless core)|
 +-------------------------------------------------------------------+
 ```
 
 ---
 
-## 3. Rust Native GUI Framework Comparison
+## 3. Comparative Evaluation of Native Rust GUI Frameworks
 
-Evaluation of pure native rendering stacks, excluding web technologies (React, HTML/CSS, Tauri / WebView).
+Excluding web-based wrappers (React, HTML/CSS, Tauri / WebView), evaluation of native Rust GUI candidates:
 
-| Framework                        | Rendering Architecture                         | Performance & Latency                                     | Design & Aesthetic Quality                                                                    | AI (LLM) Accuracy                                    | Fit for ViViVi                            |
-| :------------------------------- | :--------------------------------------------- | :-------------------------------------------------------- | :-------------------------------------------------------------------------------------------- | :--------------------------------------------------- | :---------------------------------------- |
-| **egui + eframe**<br>*(Adopted)* | **Immediate Mode**<br>Re-evaluates every frame | **Extremely Fast**<br>(Direct lightweight GPU)            | Pure Rust. Fully customizable with modern theme (`Visuals`) overrides.                        | **Extremely High**<br>(Abundant knowledge & samples) | **Optimal**<br>(Direct link to TUI core)  |
-| **GPUI**<br>*(Zed base)*         | **Retained + GPU Direct**<br>(Tailwind-like)   | **Ultra Fast / Lowest Latency**<br>(Metal/DirectX/Vulkan) | Utility-first syntax. Lacks off-the-shelf widgets; requires building primitives from scratch. | **Low**<br>(Rapidly changing API)                    | **Premature**<br>(Excessive dev overhead) |
-| **Slint**                        | **Retained Mode**<br>(Declarative DSL + Rust)  | **Top Tier**<br>(Runs on MCUs)                            | Uses dedicated `.slint` DSL. QML-like, polished defaults.                                     | **High**<br>(Clear DSL grammar)                      | **On Hold**<br>(Requires DSL sync layer)  |
-| **Iced**                         | **Retained / Reactive**<br>(Elm Architecture)  | **Fast**<br>(wgpu-based)                                  | Robust state management (Model-Update-View). Verbose code structure.                          | **Moderate to High**                                 | **On Hold**<br>(Key latency impedance)    |
-
----
-
-## 4. Why Zed Developed & Chose GPUI
-
-Key reasons why Nathan Sobo and the Zed team opted for custom GPUI over existing libraries:
-
-1. **Overcoming Atom (Electron/Web) Bottlenecks**:
-   Zero input latency is structurally impossible while traversing DOM, CSS engines, and JS runtimes.
-2. **ProMotion (120Hz) Smooth Tracking**:
-   Render full frames within 8.33ms by binding directly to low-level platform APIs (Metal on macOS) rather than generic abstraction layers.
-3. **Immediate Mode Battery & CPU Constraints**:
-   Avoid recalculating tens of thousands of line layouts on the CPU per frame when scrolling large files; GPUI relies on diff-based updates and aggressive GPU caching.
-4. **Non-Blocking Asynchronous Core**:
-   Architected so Tree-sitter parsing, LSP communication, and async I/O never block UI rendering by even a single frame.
+| Framework                       | Architecture                                 | Rendering Performance & Latency                       | Design Flexibility & Look-and-Feel                                        | Ecosystem & Maturity               | Fitness for vivivi                  |
+| :------------------------------ | :------------------------------------------- | :---------------------------------------------------- | :------------------------------------------------------------------------ | :--------------------------------- | :---------------------------------- |
+| **egui / eframe**<br>*(Chosen)* | **Immediate Mode**<br>(Per-frame UI re-eval) | **Extremely Fast**<br>(Direct wgpu GPU)               | Single Rust codebase. Fully customizable via theme overrides (`Visuals`). | **Very High**<br>(Abundant crates) | **Optimal**<br>(TUI logic coupling) |
+| **GPUI**<br>*(Zed base)*        | **Retained + Direct GPU**<br>(Tailwind-like) | **Ultra-fast, lowest latency**<br>(Direct Metal/DX12) | Tailwind CSS-like utility syntax. Few reusable components.                | **Low**<br>(Rapid API shifts)      | **Premature**<br>(High design cost) |
+| **Slint**                       | **Retained**<br>(Declarative DSL + Rust)     | **Fastest class**<br>(Runs on MCUs)                   | Uses dedicated `.slint` DSL. Clean defaults similar to Qt QML.            | **High**<br>(Clean grammar)        | **On Hold**<br>(DSL sync overhead)  |
+| **Iced**                        | **Retained Reactive**<br>(Elm Architecture)  | **Fast**<br>(wgpu backend)                            | Robust Model-Update-View state machine. Verbose boilerplate.              | **Moderate - High**                | **On Hold**<br>(Vi latency match)   |
 
 ---
 
-## 5. Modernizing egui: Eliminating "Utility/Debug Look"
+## 4. Why Zed Developed GPUI (Importance of Async Architecture)
 
-egui's default look stems from game debugging tools. Overriding `Visuals` at startup transforms it into an elegant modern editor.
+Key motivations behind Atom creators (Nathan Sobo et al.) building GPUI:
+
+1. **Overcoming Atom (Electron/Web) Latency Limits**:
+   Input latency cannot drop to absolute zero when bridging DOM, CSS engines, and JavaScript runtimes.
+2. **Seamless 120Hz ProMotion Sync**:
+   Direct OS low-level GPU APIs (DirectX 12 / Metal / Vulkan) to ensure complete rendering within 8.33ms per frame.
+3. **Power Efficiency in Immediate Mode (Hybrid Repaint)**:
+   Maintains 0% CPU via reactive event-driven polling during typing, switching to continuous 120fps GPU loops during scrolling/physics.
+4. **Multithreaded Asynchronous Architecture**:
+   Tree-sitter parsing, LSP communication, and async I/O never block UI rendering by even a single frame.
+
+---
+
+## 5. Modernizing egui: Eliminating "Toolbox" Aesthetics
+
+Default egui styling feels like a debug utility. Overriding `Visuals` at launch yields a sleek modern code editor.
 
 ### 5.1 Modern Theme Comparison
 
-| Dimension            | **Tokyo Night**                             | **Catppuccin (Mocha)**                        |
-| :------------------- | :------------------------------------------ | :-------------------------------------------- |
-| **Base Tone**        | Cool deep-sea blue-violet & dark navy       | Warm espresso mocha & soft dark charcoal      |
-| **Accents**          | Neon cyan, light blue, magenta              | Lavender, mint, peach, rosewater              |
-| **Aesthetic Feel**   | Sharp, futuristic cyber aesthetic           | Gentle on eyes, calm and cozy                 |
-| **Target Use Cases** | Log viewers, terminal integration, monitors | Text editor, documentation reader, daily tool |
+| Dimension           | **Tokyo Night**                       | **Catppuccin (Mocha)**                      |
+| :------------------ | :------------------------------------ | :------------------------------------------ |
+| **Base Tone**       | Cool, oceanic deep blue-purple/navy   | Warm, mocha/espresso dark charcoal          |
+| **Accent Colors**   | Neon cyan, light blue, magenta        | Lavender, mint, peach, rosewater            |
+| **Impression**      | Cyberpunk, crisp technical feel       | Soft on eyes, cozy, comfortable             |
+| **Best Suited For** | Log viewers, terminal tools, monitors | Code editor, document reading, daily driver |
 
-### 5.2 Four Rules to Prevent Design Rework
-1. **Remove White Outlines (Stroke)**: Eliminate harsh white borders around rectangular buttons; represent states through hover brightness contrast.
-2. **Apply Rounded Corners (Rounding)**: Use 4px to 6px radii for panels and buttons.
+### 5.2 Four Rules for Clean UI
+1. **Eliminate Strokes**: Remove white borders around buttons; represent hover states via subtle brightness contrast.
+2. **Apply Rounding**: 4px-6px border radiuses on panels and buttons.
 3. **Three-Tier Background Contrast**:
-   - Base background (darkest editor canvas)
-   - Panels / Sidebars (medium dark)
-   - Selected items / Active lines (subtly highlighted)
-4. **Monospace Typography & Clean Line Icons (Phosphor Icons)**:
-   Avoid plain text buttons; maintain generous `item_spacing`.
+   - Base background (darkest code editor canvas)
+   - Panel/sidebar (intermediate dark tone)
+   - Selected items/active lines (subtle highlight)
+4. **Monospace & Line Icons (Phosphor Icons)**: Avoid text-only buttons; enforce clean spacing (`item_spacing`).
 
 ---
 
-## 6. GUI Font Strategy: Standard Adoption of PlemolJP & Strict 1:2 Half/Full-width Ratio
+## 6. GUI Font Strategy: Standardizing on PlemolJP with Strict 1:2 Width Ratio
 
-While the TUI edition relies on the host terminal's configured font (Windows Terminal, Alacritty, WezTerm, etc.), **the GUI edition (`vivivi-gui`) officially adopts "PlemolJP" as its standard built-in font**.
+While TUI relies on the host terminal font, **GUI (`vivivi-gui`) adopts "PlemolJP" as its official bundled/recommended font**.
 
-### 6.1 Decisive Rationale for Adopting PlemolJP
+### 6.1 Why PlemolJP is the Definitive Choice
 
-1. **Aesthetic Parity with Zed (Derived from IBM Plex Mono)**:
-   PlemolJP uses **IBM Plex Mono** (the parent of `Zed Mono`) for Latin alphanumeric glyphs, delivering an identical intellectual, polished, and modern visual tone.
-2. **Strict "1 : 2" Monospace Aspect Ratio (East Asian Width)**:
-   Synthesized with "IBM Plex Sans JP" so full-width CJK characters precisely occupy double the width of half-width characters.
-   - **Box Drawing Mode**: Horizontal and vertical intersecting lines (`┌ ─ ┐ │ ┼`) meet orthogonally with zero pixel offset.
-   - **CSV Mode & Markdown Tables**: Column borders align vertically with mathematical precision, eliminating visual jitter.
-3. **Clean Licensing (SIL Open Font License)**:
-   Free for both commercial and personal use, and safe to bundle within standalone portable application releases.
+1. **Same Elegance as Zed (IBM Plex Mono base)**:
+   Uses **IBM Plex Mono** for Latin glyphs (same foundation as Zed Mono), providing a sophisticated, technical coding feel.
+2. **Strict "1 Half-width : 2 Full-width" East Asian Ratio**:
+   Synthesized with IBM Plex Sans JP so Japanese full-width characters are exactly twice the width of half-width characters.
+   - **Box Drawing Mode**: Intersections (`┌ ─ ┐ │ ┼`) align with sub-pixel precision.
+   - **CSV Mode & Markdown Tables**: Column borders remain perfectly vertical without jitter.
+3. **Safe Licensing (SIL Open Font License)**:
+   Fully permissible for commercial/personal use and portable application bundling.
 
-### 6.2 Font Loading & Fallback Hierarchy
+### 6.2 Font Loading Pipeline & Fallback Hierarchy
+
+To preserve lightweight binary size and portable flexibility:
 
 ```text
-[Priority 1: Official Standard]
-PlemolJP / PlemolJP Console (Bundled or System Installed)
+[Priority 1: Portable Local Font]
+`fonts/PlemolJP-*.ttf` located in the same directory as vivivi.exe
        │ (If not found)
        ▼
-[Priority 2: Windows High-Quality Standard]
-BIZ UD Gothic (MORISAWA) / MS Gothic
-       │ (Non-Windows / Fallback)
+[Priority 2: System Installed Font]
+Registered OS fonts ("PlemolJP", "PlemolJP Console")
+       │ (If not installed)
        ▼
-[Priority 3: OS System Default]
-System Monospace Font (Monospace / Courier)
+[Priority 3: Windows High-Quality Default]
+"BIZ UD Gothic" (MORISAWA) / "MS Gothic"
+       │ (If non-Windows / not found)
+       ▼
+[Priority 4: System Monospace]
+OS default monospace font (Monospace / Courier)
 ```
 
 ---
 
-## 7. Project Architecture: The Purpose of Multi-Crate Structure
+## 7. Project Structure: Headless Core Layer & Dual Frontends
 
-Rationale for Cargo Workspace separation in vivivi:
+### 7.1 Re-architecting Crate Boundaries (Preventing Massive Refactoring)
 
-1. **Complete Decoupling of Core Logic**:
-   The editor core (`GapBuffer`, `UndoMgr`, Vi engine, Box Drawing, CSV logic) remains headless and 100% shared across TUI and GUI.
-2. **Preventing Dependency Bloat**:
-   Isolates heavy GUI dependencies (`wgpu`, `eframe`) from the streamlined TUI crate (`vivivi-app`, `crossterm`, `ratatui`).
-3. **Minimizing Incremental Compile Times**:
-   Modifications to GUI layouts never trigger recompilation of `vivivi-core` or TUI modules.
+Currently, `vivivi-app` houses not only TUI rendering code, but also core editor session states: multi-tab manager (`Tab`), split-window tree (`WindowTreeNode`), file I/O & encoding auto-detection, swap protection, ex command engine, and configuration management.
+To avoid re-implementing these core mechanisms for `vivivi-gui`, we cleanly isolate the **Headless Application Core** from the **Rendering Frontends**:
 
 ```text
 vivivi/
-├── Cargo.toml               (Workspace Manifest)
+├── Cargo.toml               (Workspace definition)
 ├── crates/
-│   ├── vivivi-core          (Headless Buffer & Undo Engine)
-│   ├── vivivi-vi            (Vi Modal Engine & Ex Parser)
-│   ├── vivivi-modes         (Box Drawing, CSV, Migemo, Outline, Diff)
-│   ├── vivivi-app           (Active Ratatui TUI Frontend)
-│   └── vivivi-gui           (Planned egui / eframe GUI Frontend - Phase 5)
+│   ├── vivivi-core          (Pure headless buffer, undo manager, encoding layer)
+│   ├── vivivi-vi            (Vi mode state machine, command parser, keybinding engine)
+│   ├── vivivi-modes         (Box drawing, CSV, Migemo, outline, diff, project management)
+│   ├── vivivi-app           (Core editor session state library & TUI frontend)
+│   │   ├── src/lib.rs       (Headless App, Tab, WindowTreeNode, Ex command dispatch)
+│   │   ├── src/main.rs      (TUI binary entry: vivivi.exe)
+│   │   └── src/tui/         (Ratatui / Crossterm rendering & event handlers)
+│   └── vivivi-gui           (Phase 5: egui / eframe desktop GUI frontend)
+│       ├── src/main.rs      (GUI binary entry: vivivi-gui.exe)
+│       └── src/gui/         (egui widgets & Painter rendering layer)
 ```
+
+### 7.2 Core Architectural Principles & Decoupling Prerequisites
+1. **Eliminating TUI-Specific Types (Prerequisite Step 0)**:
+   Currently, `vivivi-app::tui::App` directly references `ratatui::layout::Rect` (`window_rects`) and `crossterm::event::KeyEvent` (`recorded_macro_events`), and `Cargo.toml` lacks a `[lib]` target.
+   As **Step 0** of Phase 5, these types must be abstracted into frontend-agnostic types (`LogicalRect`, `AppKeyEvent`) and exposed via `src/lib.rs`.
+2. **Shared Session State & Multi-Cursor Extensibility**:
+   Tab management (`gt`), nested window splits (`:split`/`:vsplit`), and ex commands (`:w`, `:%s`) live in the headless core. Furthermore, to support Phase 5's "Multi-cursor editing", the cursor rendering layer is designed to iterate over both the primary cursor (`cursor: TextCursor`) and secondary cursors (`extra_cursors: Vec<TextCursor>`).
+3. **Coordinate Space Abstraction (Character Cells vs. Pixels)**:
+   While TUI layouts operate on `u16` character cells, GUI (egui) performs smooth scrolling in `f32` pixels. The shared core tracks logical line/column offsets, which the GUI multiplies by glyph width and `line_height` to compute exact pixel coordinates.
 
 ---
 
-## 8. Historical Legacy of ViVi / openViVi & Purpose of ViViVi
+## 8. Phase 5 Killer Features: GUI Integration Architecture
 
-### 8.1 Nobuhide Tsuda's Pioneering Work
-* **Windows Pioneer**:
-  Built ViVi as a native Win32 Vi clone during Windows 95/NT, setting the benchmark for stability and responsiveness.
-* **Flawless Japanese IME Integration**:
-  Achieved inline IME composition and Vi mode switching long before overseas editors handled CJK inputs properly.
-* **Qt Port & Open Source**:
-  Migrated extensive C++ codebases to Qt as openViVi for cross-platform support.
+Layout and container mapping of Phase 5 features within egui:
 
-### 8.2 Why ViViVi Coexists with Zed
-Zed is a heavy-duty IDE. ViViVi is a nimble, razor-sharp craftsman tool:
+```text
++-----------------------------------------------------------------------------------------+
+| TopBottomPanel::top("menu_bar") : Menu Bar / Tab Bar (Multi-tab switching)              |
++-----------------------------------------------------------------------------------------+
+| SidePanel::left("sidebar") | CentralPanel ("editor_workspace")                       |                                         |             |     |
+| :------------------------- | :------------------------------------------------------ | :-------------------------------------- | :---------- | :-- |
+|                            |                                                         | View Mode: Text / Hex Editor / 2D Graph | Minimap     |     |
+| ▼ project/                 |                                                         | Line No │ Code Buffer (Painter)         | Overview    |     |
+| ▶ src/                     |                                                         | 1       │ fn main() {                   | [Bird's-eye |     |
+| main.rs                    |                                                         | 2       │     println!("Hello");        | ==          |     |
+| lib.rs                     |                                                         | 3       │ }                             |             |     |
+| Cargo.toml                 | +----------------------------------------+------------+ |                                         |             |     |
+|                            | [Topmost Floating Area] LSP completions / Hover docs    |                                         |             |     |
+|                            | [Painter Overlay] Physical falling character animation  |                                         |             |     |
++-----------------------------------------------------------------------------------------+
+| TopBottomPanel::bottom("status_bar") : Mode, Line/Col, Update Alert, Ex Command Line    |
++-----------------------------------------------------------------------------------------+
+```
+
+### 8.1 Sidebar File Explorer (Box/NAS Resilient Design)
+* Managed inside `egui::SidePanel::left("file_explorer")` (`:tree` / `:Explore` / `Ctrl-e` toggle).
+* **Async On-Demand Lazy Loading**: Fetches only immediate children in background threads, completely shielding the UI thread from network SMB or Box Drive cloud placeholder synchronization stalls.
+
+### 8.2 Minimap Overview & Gigabyte File (1GB+) Viewport Culling
+* Docked on the right side of `CentralPanel`, highlighting the active viewport rectangle with smooth drag-to-scroll synchronization.
+* **Viewport Culling & Safeguards**:
+  To coexist with Phase 5's "Gigabyte file (1GB+ / `memmap2`) handling", both the main editor canvas and minimap strictly enforce $O(\text{visible lines})$ rendering—tokenizing and meshing only the currently visible lines. For files exceeding a size threshold (e.g., 10MB), full-buffer minimap scanning and full Tree-sitter/LSP parsing automatically throttle down to sampled/partial modes to prevent OOM and frame drops.
+
+### 8.3 Gravity Drop Deletion Animation (2D Physics & Hybrid Repainting)
+* On deletion commands (`x`, `dd`, `dw`), spawns particles with initial pixel coordinates, glyph characters, and randomized launch velocities.
+* Renders overlay via `ui.painter().text()` simulating downward gravitational acceleration $g$ and fading out.
+* **Hybrid Energy-Saving Control**: Triggers `ctx.request_repaint()` (60-120fps) only while active particles exist, immediately returning to reactive 0% CPU sleep once particles vanish.
+
+### 8.4 Tree-sitter & LSP GUI Rendering
+* **Multi-Layered Highlighting**: Frame 0 (0ms) renders immediately using the built-in tokenizer (`vivivi-modes::syntax`), seamlessly upgrading to Tree-sitter AST highlights and LSP Semantic Tokens as background workers complete.
+* **LSP Diagnostics**: Squiggly error/warning underlines rendered below spans with gutter status icons (`E`/`W`).
+* **Hover Docs & Completion Popups**: Displayed in dynamic floating overlays using `egui::Area` directly below cursor position.
+
+### 8.5 Japanese IME Inline Input & Vi Mode Coordination (Critical Custom Widget Requirement)
+When bypassing egui's built-in `TextEdit` in favor of custom `Painter` rendering, OS IME will not function without explicit integration. The following protocol is mandatory:
+1. **IME Cursor Rect Notification**: While in `ViMode::Insert` or ex command input, emit `ctx.output_mut(|o| o.ime = Some(egui::output::IMEOutput { rect, cursor_rect }))` every frame so the OS candidate window tracks the cursor position.
+2. **Inline Preedit Rendering**: Capture not only `egui::Event::Key`, but also committed text `egui::Event::Text(String)` and active composition `egui::Event::Ime(egui::ImeEvent::Preedit(String))`, rendering uncommitted preedit text inline with an underline at the cursor.
+3. **Auto-Reset IME on Normal Mode Return**: Upon pressing `Esc` to return to `ViMode::Normal`, immediately set `o.ime = None` to prevent accidental Japanese composition in Normal mode.
+
+### 8.6 Binary / Hex Editor Mode & Project Visualizer Graph
+* **Binary / Hex Editor Mode**: Switches `CentralPanel` into a 3-column synchronized grid ("Address Offset", "16-Byte Hex Dump", "ASCII Representation") rendered via `Painter` for direct byte-level navigation and editing.
+* **Project Visualizer Graph**: Renders a 2D Force-Directed Graph on `CentralPanel` illustrating include dependencies, file sizes, and edit freshness. Applies Coulomb repulsion and Hooke spring attraction, automatically halting `ctx.request_repaint()` once total kinetic energy settles below threshold.
+
+---
+
+## 9. History of ViVi / openViVi & Purpose of ViViVi
+
+### 9.1 Legacy of Nobuhide Tsuda
+* **Pioneer of Windows Vi Clones**:
+  Authored ViVi in the Windows 95/NT era using direct Win32 API calls, earning wide acclaim for blistering speed and rock-solid reliability.
+* **Harmony Between Japanese IME and Vi Modes**:
+  Solved the seamless coordination between inline Japanese IME and Vi modal states long before overseas editors caught on.
+* **Qt Port and Open Source (openViVi)**:
+  Ported extensive C++ codebases to Qt to achieve cross-platform viability, published as openViVi.
+
+### 9.2 Why ViViVi is Needed in the Era of Zed
+While Zed is an expansive code IDE (heavy industrial machinery), ViViVi serves as an ultra-lightweight, razor-sharp craft tool.
 
 1. **Box Drawing Mode**:
-   Draw ASCII/Unicode boxes (`┌ ─ ┐ │ └ ┘ ┼`) along cursor motion with automatic intersection resolution. Zero-latency diagramming in plain text.
-2. **CSV Column Mode**:
-   Tabular column alignment and editing without launching heavy spreadsheet suites.
+   Draws unicode box borders (`┌ ─ ┐ │ └ ┘ ┼`) following cursor movement with automatic cross-junction recognition—ideal for instant architectural diagrams.
+2. **CSV / TSV Column Mode**:
+   Auto-aligns tabular columns without opening spreadsheets, enabling instant column hopping, calculation, and filtering.
 3. **TUI & GUI Dual Capability**:
-   Use `vivivi` over SSH/terminal and `vivivi-gui` on the desktop with identical muscle memory and configurations.
+   Deployable as a zero-dependency terminal TUI over SSH, while delivering a sleek 120Hz GPU GUI on local desktops.
 
 ---
 
-## 9. Prompt Template for Phase 5 egui Implementation
+## 10. Concrete Prompt Templates for GUI (egui) Implementation
 
-Ready-to-use prompt blueprints when commencing Phase 5:
+Standard prompts ready to use when initiating Phase 5 implementation:
 
-### Step 1: Style & Font Setup (Prioritize PlemolJP)
+### 10.1 Step-by-Step Recommended Model & Implementation Status Quick Reference
+
+| Implementation Step                       | Recommended Model    | Primary Role & Selection Rationale                          |    Status    |
+| :---------------------------------------- | :------------------- | :---------------------------------------------------------- | :----------: |
+| **Step 0**: Decouple `vivivi-app` Library | **Gemini 4 Argon**   | Crate boundary redesign, type abstraction, 100% test pass   | ✅ Completed |
+| **Step 1**: Styling & Font Setup          | **Gemini 3.8 Flash** | Rapid generation of boilerplate PlemolJP/theme config       | ✅ Completed |
+| **Step 2**: Window Skeletal Layout        | **Gemini 3.8 Flash** | Fast trial-and-error for panels and responsive layout       | ✅ Completed |
+| **Step 3**: Core Coupling & Japanese IME  | **Gemini 4 Argon**   | **[Crucial]** `eframe` borrow puzzles, ownership, IME rects | ✅ Completed |
+| **Step 4**: Physics & Energy Saving       | **Gemini 3.8 Flash** | Tuning particle physics parameters with rapid iteration     | ✅ Completed |
+
+> [!TIP]
+> **Simple Rule of Thumb**:
+> Use **Gemini 4 Argon** for foundational architectural steps (Steps 0 & 3) to solve Rust borrow checker invariants in one shot. Use ultra-fast **Gemini 3.8 Flash** for visual layout, styling, and physics animation tuning (Steps 1, 2, & 4).
+
+### Step 0: Decoupling `vivivi-app` into a Shared Headless Library (Prerequisite) [Recommended: Gemini 4 Argon]
 ```text
-Create a new GUI crate (vivivi-gui) using egui / eframe for our Vi-like text editor.
-Configure a modern editor look based on Tokyo Night (or Catppuccin Mocha).
+Refactor the vivivi-app crate so that the Phase 5 GUI crate (vivivi-gui) can share all editor session states (App, Tab, WindowTreeNode, Ex commands):
+1. Add a [lib] section to crates/vivivi-app/Cargo.toml and create src/lib.rs exposing shared modules.
+2. Abstract direct dependencies on ratatui::layout::Rect and crossterm::event::KeyEvent inside App into frontend-agnostic types (LogicalRect, AppKeyEvent).
+3. Verify that the existing TUI binary (vivivi) and all unit tests pass 100% via cargo test.
+```
 
-Requirements:
+### Step 1: Styling & Font Initialization (PlemolJP Setup) [Recommended: Gemini 3.8 Flash]
+```text
+Create a new GUI crate (vivivi-gui) using egui / eframe for a Vi-like text editor.
+Configure a modern Tokyo Night (or Catppuccin Mocha) theme.
+
+Implement initialization code:
 1. cc.egui_ctx.set_visuals:
-   - Avoid pitch black; use 3 levels of brightness across editor background, panel background, and status line.
-   - Remove button strokes and set rounding to 4px.
-2. cc.egui_ctx.set_fonts (Prioritize PlemolJP in font definitions):
+   - Avoid pure pitch black; create 3 tiers of contrast across editor canvas, side panels, and statusline.
+   - Eliminate harsh button strokes; set corner radiuses to 4px.
+2. cc.egui_ctx.set_fonts:
    - Configure egui::FontDefinitions.
-   - Register "PlemolJP" (or "PlemolJP Console") TTF/OTF data into font definitions.
-   - Place "PlemolJP" at the front of FontFamily::Monospace and FontFamily::Proportional priority lists.
-   - Set "BIZ UD Gothic" and system monospace as subsequent fallback options.
+   - Load fonts/PlemolJP-*.ttf in executable directory or system-installed PlemolJP first.
+   - Fallback to BIZ UD Gothic and system monospace fonts.
 ```
 
-
-### Step 2: Screen Wireframe & Layout
+### Step 2: Workspace Layout & Panels [Recommended: Gemini 3.8 Flash]
 ```text
-Implement the basic layout inside eframe::App::update.
-Use mock data for internal logic to ensure proper container partitions:
-1. TopBottomPanel::top("menu_bar"): Compact top menu bar.
-2. TopBottomPanel::bottom("status_bar"): Mode indicator (-- NORMAL --), cursor coordinates, command line.
-3. CentralPanel: Text canvas (line numbers + editor text).
-Ensure the central editor canvas maximizes dynamically on resize.
+Construct the primary editor window layout inside eframe::App::update:
+1. TopBottomPanel::top("menu_bar"): Compact menu bar & multi-tab bar
+2. SidePanel::left("sidebar"): Collapsible sidebar for File Explorer / Outline Tree
+3. TopBottomPanel::bottom("status_bar"): Mode indicator (-- NORMAL --), cursor position, update notification, ex command line
+4. CentralPanel: Nested split editor views (WindowTreeNode) + right-side Minimap area (with Viewport Culling)
+Ensure editor workspace maximizes dynamically on window resize.
 ```
 
-### Step 3: Key Interception & Custom Painting (Crucial)
+### Step 3: Coupling with Shared Headless App Core & Japanese IME Integration (Crucial) [Recommended: Gemini 4 Argon]
 ```text
-Connect the existing vivivi-core / vivivi-vi crates to the GUI.
-Important: Do NOT use egui's default TextEdit widget.
+Connect the shared session layer (App struct in vivivi-app) to vivivi-gui.
+※Important: Do not use egui's default TextEdit widget.
 
 Requirements:
-1. Intercept raw key events (Esc, h, j, k, l, i, colon, etc.) in CentralPanel via ctx.input(|i| ...) and feed into vivivi-vi handler.
-2. Render line numbers and buffer contents using ui.painter() with monospace font metrics.
-3. Render modal cursor shapes (Block vs I-beam) according to current Vi state.
+1. In CentralPanel, use ctx.input(|i| ...) to capture Event::Key, committed text Event::Text, and IME preedit Event::Ime(Preedit), dispatching to the shared input handler.
+2. In CentralPanel::show, use ui.painter() to render visible line numbers, buffer text, and underlined IME preedit text with fixed-width spacing.
+3. Render mode-appropriate cursors (solid block for NORMAL, vertical I-beam for INSERT), and emit ctx.output_mut(|o| o.ime = ...) with the cursor rectangle every frame during Insert mode.
+```
+
+### Step 4: Particle Animation & Energy-Saving Hybrid Loop [Recommended: Gemini 3.8 Flash]
+```text
+Implement a particle manager for falling character deletion animations:
+1. Particle array tracking glyph character, initial position/velocity, and fade-out timer (0.5s).
+2. While particles exist, update physics each frame, render with ui.painter().text(), and request ctx.request_repaint().
+3. Once particles terminate, cease repaint requests, preserving egui's reactive idle mode (0% CPU).
 ```

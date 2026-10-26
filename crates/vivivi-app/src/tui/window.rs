@@ -113,6 +113,17 @@ impl WindowTreeNode {
         out
     }
 
+    /// フロントエンド非依存の [`crate::types::LogicalRect`] を用いて各ウィンドウの矩形領域を計算します。
+    pub fn compute_logical_rects(
+        &self,
+        area: crate::types::LogicalRect,
+    ) -> Vec<(usize, crate::types::LogicalRect)> {
+        self.compute_rects(area.into())
+            .into_iter()
+            .map(|(idx, r)| (idx, r.into()))
+            .collect()
+    }
+
     fn collect_rects(&self, area: Rect, out: &mut Vec<(usize, Rect)>) {
         match self {
             WindowTreeNode::Leaf(idx) => {
