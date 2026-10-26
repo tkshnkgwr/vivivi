@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [0.9.6-beta] - 2026-10-26
+
+### Refactored
+- **Modular Refactoring of Monolithic Source Files**:
+  - Deconstructed large source files exceeding or nearing the 1,000-line modular design threshold into single-responsibility submodules while retaining 100% backward API compatibility:
+    1. **`vivivi-gui` Main App Deconstruction (`crates/vivivi-gui/src/app/`)**:
+       - Split the monolithic `app.rs` (2,074 lines) into 5 focused modules: `mod.rs` (struct definition & `eframe::App` trait impl), `input.rs` (event handling & particle emission), `panels.rs` (top menu/tabs, sidebar, bottom statusbar), `canvas.rs` (central editor split grid, custom painter, IME preedit underline, OS IME rect notification, minimap), and `modals.rs` (floating modal windows).
+    2. **`vivivi-app` Tooling Deconstruction (`crates/vivivi-app/src/tui/app/tools/`)**:
+       - Split `tools.rs` (1,000 lines) into `mod.rs` (outline parsing, text conversion, box calculation, clipboard history, Migemo search, help viewer) and `macros.rs` (text align, renumbering, insert beg/end, dabbrev, abbrev, Zen-Coding, Dynamic Macro, LexEdit, keyboard macro recording).
+    3. **`vivivi-vi` Parser State Machine Deconstruction (`crates/vivivi-vi/src/parser/`)**:
+       - Split `parser.rs` (983 lines) into `mod.rs` (state enum definition, command line & multi-stroke transitions) and `idle.rs` (Visual mode key handling, idle single-key dispatch, motion parsing).
+
+---
+
 ## [0.9.5-beta] - 2026-10-26
 
 ### Added / Improved

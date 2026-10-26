@@ -4,6 +4,20 @@
 
 ---
 
+## [0.9.6-beta] - 2026-10-26
+
+### Refactored
+- **巨大モジュールの単一責任サブモジュール分割リファクタリング**:
+  - プロダクションコードの 1,000 行制限規約に基づき、肥大化していた 3 つの主要モジュールを分割・整理（すべての公開 API の 100% 後方互換を維持）：
+    1. **`vivivi-gui` メインモジュール分割 (`crates/vivivi-gui/src/app/`)**:
+       - 2,000 行を超えていた `app.rs` を、`mod.rs`（構造体・`eframe::App` 実装）、`input.rs`（キー・テキスト・IME 入力ハンドラおよびパーティクル発火）、`panels.rs`（上部メニュー＆タブ、左サイドバー、下部ステータスバー）、`canvas.rs`（中央エディタ分割ビュー、等幅グリッド描画、IME Preedit 下線、OS IME 座標通知、ミニマップ）、`modals.rs`（各種モーダルウィンドウ）の 5 モジュールに分割。
+    2. **`vivivi-app` 編集支援ツールモジュール分割 (`crates/vivivi-app/src/tui/app/tools/`)**:
+       - 1,000 行に達していた `tools.rs` を、`mod.rs`（アウトライン解析、文字種変換、BOX集計、クリップボード履歴、Migemo検索、ヘルプ等）と `macros.rs`（テキスト整列、リナンバ、一括挿入、dabbrev、abbrev、Zen-Coding、Dynamic Macro、LexEdit、キーボードマクロ記録）に分割。
+    3. **`vivivi-vi` キー入力パーサー分割 (`crates/vivivi-vi/src/parser/`)**:
+       - 1,000 行直前（983行）に達していた `parser.rs` を、`mod.rs`（パーサー状態機械定義、コマンドライン入力、多打鍵待機遷移）と `idle.rs`（Visual モード入力解釈、Idle 状態単発コマンド解決、単独モーション解決）に分割。
+
+---
+
 ## [0.9.5-beta] - 2026-10-26
 
 ### Added / Improved
