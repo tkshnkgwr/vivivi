@@ -4,6 +4,16 @@
 
 ---
 
+## [0.9.7-beta] - 2026-10-27
+
+### Changed
+- **プロジェクトライセンスの変更 (GPL-3.0-or-later)**:
+  - ライセンスを従来の MIT License から GNU General Public License v3.0 以降（GPL-3.0-or-later）へと変更。
+  - `LICENSE` ファイルを GNU GPL v3 全文に更新。
+  - `Cargo.toml` の `license` メタデータおよびドキュメント（`README.md`, `README_JA.md`）のライセンス表記・バッジを GPL-3.0-or-later へ更新。
+
+---
+
 ## [0.9.6-beta] - 2026-10-26
 
 ### Refactored

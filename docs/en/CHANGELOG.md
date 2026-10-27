@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [0.9.7-beta] - 2026-10-27
+
+### Changed
+- **Project License Transition (GPL-3.0-or-later)**:
+  - Transitioned the project license from MIT License to GNU General Public License v3.0 or later (GPL-3.0-or-later).
+  - Updated `LICENSE` with the full text of GNU GPL v3.
+  - Updated `Cargo.toml` package license metadata and documentation (`README.md`, `README_JA.md`) license notices and badges.
+
+---
+
 ## [0.9.6-beta] - 2026-10-26
 
 ### Refactored

@@ -4,9 +4,9 @@
 
 **高機能テキストエディタ「OpenViVi」を現代のRustで安全・高速に再構築するオープンソースプロジェクト**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024%20Edition-orange.svg)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/version-v0.9.5--beta-brightgreen.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/version-v0.9.7--beta-brightgreen.svg)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/tkshnkgwr/vivivi)
 
 [English](./README.md) | [日本語](./README_JA.md)
@@ -27,7 +27,7 @@
 * **開発体制**:  
   Rustによるコード実装は、AI（Gemini）と相談しながら進めています。また、筆者自身GitHubの運用全般に不慣れな点が多く、至らない点があるかと思いますがご容赦ください。
 * **現在のステータス**:  
-  現在はβ版（`v0.9.6-beta`）です。共通のヘッドレスコア（`vivivi-app`）を基盤として、ターミナルTUI版（`vivivi`）とデスクトップGUI版（`vivivi-gui` / `egui` + `eframe`）の両方が動作します。
+  現在はβ版（`v0.9.7-beta`）です。共通のヘッドレスコア（`vivivi-app`）を基盤として、ターミナルTUI版（`vivivi`）とデスクトップGUI版（`vivivi-gui` / `egui` + `eframe`）の両方が動作します。
 * **TUI ＆ GUI ハイブリッド構成**:  
   コンソールやSSH環境では超軽量な `vivivi`（TUI）、デスクトップ環境では Tokyo Night テーマ・PlemolJP 等幅フォント・日本語IMEインライン変換・削除文字落下アニメーションを備えた `vivivi-gui`（GUI）をシームレスに使い分けられます。
 
@@ -167,7 +167,7 @@ cargo test --doc
 
 ## 📄 ライセンス
 
-本プロジェクトは **[MIT License](LICENSE)** のもとで公開されています。
+本プロジェクトは **[GNU General Public License v3.0 or later (GPL-3.0-or-later)](LICENSE)** のもとで公開されています。
 
 ```text
 Copyright (c) 2026 tkshnkgwr
