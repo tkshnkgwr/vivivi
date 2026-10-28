@@ -177,6 +177,52 @@ impl ChangeTracker {
 
         markers
     }
+
+    /// 指定された単一行インデックスとその内容に対する変更状態（[LineChangeState]）を直接算出します。
+    ///
+    /// バッファ全体の走査や行文字列ベクタの生成を回避し、画面可視行のみを $O(1)$ かつアロケーションフリーで高速判定します。
+    ///
+    /// # 引数
+    /// - line_idx: 判定対象の行番号（0-based）
+    /// - line: 判定対象の行文字列スライス
+    ///
+    /// # 戻り値
+    /// 直近保存時および初回読み込み時からの差分に基づく変更状態
+    ///
+    /// # Examples
+    ///
+    /// `
+    /// use vivivi_modes::gutter::{ChangeTracker, LineChangeState};
+    ///
+    /// let tracker = ChangeTracker::new(&["initial".to_string()]);
+    /// assert_eq!(tracker.marker_at(0, "initial"), LineChangeState::Unchanged);
+    /// assert_eq!(tracker.marker_at(0, "modified"), LineChangeState::Modified);
+    /// assert_eq!(tracker.marker_at(1, "new line"), LineChangeState::Added);
+    /// `
+    pub fn marker_at(&self, line_idx: usize, line: &str) -> LineChangeState {
+        if !self.enabled {
+            return LineChangeState::Unchanged;
+        }
+
+        let orig_len = self.original_hashes.len();
+        let saved_len = self.saved_hashes.len();
+        let cur_hash = hash_line(line);
+
+        let matches_saved = line_idx < saved_len && self.saved_hashes[line_idx] == cur_hash;
+        let matches_orig = line_idx < orig_len && self.original_hashes[line_idx] == cur_hash;
+
+        if matches_saved {
+            if matches_orig {
+                LineChangeState::Unchanged
+            } else {
+                LineChangeState::SavedModified
+            }
+        } else if line_idx >= saved_len {
+            LineChangeState::Added
+        } else {
+            LineChangeState::Modified
+        }
+    }
 }
 
 /// 1行の文字列からハッシュ値を計算
@@ -189,6 +235,19 @@ fn hash_line(line: &str) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_change_tracker_marker_at() {
+        let lines = vec!["line 1".to_string(), "line 2".to_string()];
+        let tracker = ChangeTracker::new(&lines);
+        assert_eq!(tracker.marker_at(0, "line 1"), LineChangeState::Unchanged);
+        assert_eq!(tracker.marker_at(1, "line 2"), LineChangeState::Unchanged);
+        assert_eq!(
+            tracker.marker_at(0, "line 1 mod"),
+            LineChangeState::Modified
+        );
+        assert_eq!(tracker.marker_at(2, "line 3 added"), LineChangeState::Added);
+    }
 
     #[test]
     fn test_change_tracker_unchanged() {

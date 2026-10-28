@@ -208,6 +208,18 @@ impl ViviviGuiApp {
 
                 // 5. マウスホイールによるスクロール
                 Event::MouseWheel { delta, .. } => {
+                    let view_height = ((self
+                        .core
+                        .window_rects
+                        .iter()
+                        .find(|(idx, _)| *idx == self.core.active_window)
+                        .map(|(_, r)| r.height)
+                        .unwrap_or(24) as f32
+                        - 12.0)
+                        / self.line_height)
+                        .floor()
+                        .max(1.0) as usize;
+
                     if delta.y < -0.1 {
                         let lines = ((-delta.y).ceil() as usize).clamp(1, 5);
                         let max_line = self.core.buffer.line_count().saturating_sub(1);
@@ -219,6 +231,11 @@ impl ViviviGuiApp {
                     } else if delta.y > 0.1 {
                         let lines = (delta.y.ceil() as usize).clamp(1, 5);
                         self.core.scroll.0 = self.core.scroll.0.saturating_sub(lines);
+                        let max_vis_line = self.core.scroll.0 + view_height.saturating_sub(1);
+                        if self.core.cursor.pos.line > max_vis_line {
+                            self.core.cursor.pos.line = max_vis_line;
+                            self.core.clamp_cursor();
+                        }
                     }
                 }
 

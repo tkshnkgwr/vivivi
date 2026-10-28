@@ -1,6 +1,24 @@
 use super::*;
 
 #[test]
+fn test_100g_jump() {
+    let lines = (1..=200)
+        .map(|i| format!("line {}", i))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut app = App::new(&lines, None, CharEncoding::Utf8, NewlineType::Lf);
+    assert_eq!(app.cursor_pos().line, 0);
+
+    app.handle_key(AppKeyEvent::char('1'));
+    app.handle_key(AppKeyEvent::char('0'));
+    app.handle_key(AppKeyEvent::char('0'));
+    app.handle_key(AppKeyEvent::char('G'));
+
+    println!("CURSOR LINE: {}", app.cursor_pos().line);
+    assert_eq!(app.cursor_pos().line, 99);
+}
+
+#[test]
 fn test_convert_buffer_text() {
     let mut app = App::new("Hello 123", None, CharEncoding::Utf8, NewlineType::Lf);
     app.convert_buffer_text(ConversionType::ToZenkakuAlphanumeric);

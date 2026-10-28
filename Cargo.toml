@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.9.7-beta"
+version = "0.9.8-beta"
 edition = "2024"
 authors = ["vivivi developers"]
 license = "GPL-3.0-or-later"

@@ -50,7 +50,7 @@ pub enum ParserState {
         register: Option<char>,
     },
     /// `g` の2打鍵目待ち (`gg`, `g*`, `g#`, `g<`, `g=`)
-    WaitingForG { count: usize },
+    WaitingForG { count: usize, has_count: bool },
     /// `#` の2打鍵目待ち (`#+`, `##`, `#-`, `#!`, または単語後方検索 `#`)
     WaitingForHash { count: usize },
     /// 直前行文字複製待ち (`=<char>`)
@@ -322,12 +322,17 @@ impl CommandParser {
                 }
             }
 
-            ParserState::WaitingForG { count } => {
+            ParserState::WaitingForG { count, has_count } => {
+                let has_count = *has_count;
                 let count = *count;
                 match ch {
                     'g' => {
                         self.state = ParserState::Idle;
-                        Some(ViCommand::Move(Motion::DocumentStart))
+                        if has_count {
+                            Some(ViCommand::Move(Motion::DocumentEnd(Some(count))))
+                        } else {
+                            Some(ViCommand::Move(Motion::DocumentStart))
+                        }
                     }
                     'u' => {
                         self.state = ParserState::WaitingForMotion {
@@ -552,7 +557,7 @@ impl CommandParser {
                 }
 
                 // モーションのパース
-                if let Some(motion) = self.parse_motion(ch, count) {
+                if let Some(motion) = self.parse_motion(ch, count, count > 1) {
                     self.reset();
                     Some(ViCommand::Operate {
                         op,

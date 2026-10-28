@@ -141,11 +141,8 @@ pub fn expand_zen_coding(input: &str) -> Option<String> {
     let mut root_elements = Vec::new();
 
     for sib in siblings {
-        if let Some(el) = parse_chain(sib) {
-            root_elements.push(el);
-        } else {
-            return None;
-        }
+        let el = parse_chain(sib)?;
+        root_elements.push(el);
     }
 
     let mut result = String::new();

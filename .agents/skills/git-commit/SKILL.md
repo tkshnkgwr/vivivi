@@ -57,3 +57,16 @@ git commit -m "<prefix>: <要約>"
 # 3. ボスから Push の指示もある場合のみ Push 実行
 git push
 ```
+
+## 4. バージョン更新（リリース）時のタグ付け規約
+
+`Cargo.toml` のバージョン更新を伴うコミット、またはボスから「タグも付けて」「バージョン上げてPushして」等の指示があった場合は、以下の手順で注釈付きタグを作成してリモートへ同時Pushします。
+
+```powershell
+# 1. 注釈付きタグの作成（CHANGELOG等の要約を付与）
+git tag -a v<Version> -m "Release v<Version>: <主な変更要約>"
+
+# 2. コミットとタグを同時にPush
+git push origin <ブランチ名> --tags
+```
+

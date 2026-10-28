@@ -87,13 +87,8 @@ impl ViviviGuiApp {
                 let mut active_cursor_screen_rect: Option<Rect> = None;
                 let active_search_re = self.core.active_search_regex();
 
-                // 変更追跡マーカーと対応括弧ペアの計算
+                // 対応括弧ペアの計算
                 let total_lines = self.core.buffer.line_count();
-                let all_lines: Vec<String> = (0..total_lines)
-                    .filter_map(|i| self.core.buffer.get_line(i))
-                    .collect();
-                let change_markers = self.core.change_tracker.compute_markers(&all_lines);
-
                 let active_cur_offset = self.core.buffer.cursor_to_position(self.core.cursor_pos());
                 let paren_positions =
                     vivivi_core::get_cursor_matching_paren(&self.core.buffer, active_cur_offset)
@@ -168,7 +163,7 @@ impl ViviviGuiApp {
                     painter.rect_filled(gutter_rect, 0.0, Color32::from_rgb(24, 25, 36));
                     painter.line_segment(
                         [gutter_rect.right_top(), gutter_rect.right_bottom()],
-                        Stroke::new(1.0, colors::BG_STATUSLINE),
+                        Stroke::new(1.0_f32, colors::BG_STATUSLINE),
                     );
 
                     let visible_lines = ((win_rect.height() - padding * 2.0) / line_height)
@@ -235,26 +230,25 @@ impl ViviviGuiApp {
                             );
                         }
 
-                        // 変更追跡ガターマーカー (Added / Modified / SavedModified) の描画
-                        if let Some(marker) = change_markers.get(line_idx) {
-                            let marker_color = match marker {
-                                LineChangeState::Added | LineChangeState::Modified => {
-                                    Some(colors::ACCENT_YELLOW)
-                                }
-                                LineChangeState::SavedModified => Some(colors::ACCENT_GREEN),
-                                LineChangeState::Unchanged => None,
-                            };
-                            if let Some(mc) = marker_color {
-                                let marker_rect = Rect::from_min_size(
-                                    Pos2::new(gutter_rect.right() - 3.0, row_y + 2.0),
-                                    Vec2::new(2.5, line_height - 4.0),
-                                );
-                                painter.rect_filled(marker_rect, 1.0, mc);
-                            }
-                        }
-
                         // 行テキストの取得と折り畳み・CSV・不可視文字フォーマット
                         let raw_line = self.core.buffer.get_line(line_idx).unwrap_or_default();
+
+                        // 変更追跡ガターマーカー (Added / Modified / SavedModified) の描画（O(1) アロケーションフリー判定）
+                        let marker = self.core.change_tracker.marker_at(line_idx, &raw_line);
+                        let marker_color = match marker {
+                            LineChangeState::Added | LineChangeState::Modified => {
+                                Some(colors::ACCENT_YELLOW)
+                            }
+                            LineChangeState::SavedModified => Some(colors::ACCENT_GREEN),
+                            LineChangeState::Unchanged => None,
+                        };
+                        if let Some(mc) = marker_color {
+                            let marker_rect = Rect::from_min_size(
+                                Pos2::new(gutter_rect.right() - 3.0, row_y + 2.0),
+                                Vec2::new(2.5, line_height - 4.0),
+                            );
+                            painter.rect_filled(marker_rect, 1.0, mc);
+                        }
                         let display_line = if self.core.is_csv_active {
                             self.core.csv_mode.format_line(&raw_line, is_current_line)
                         } else {
@@ -385,6 +379,7 @@ impl ViviviGuiApp {
                         // 文字単位のグリッド整列描画 ＆ IME Preedit インライン挿入
                         let mut visual_col: usize = 0;
                         let scroll_col = scroll.1;
+                        let mut text_batch: Option<(String, f32, Color32)> = None;
 
                         for idx in 0..=chars.len() {
                             // アクティブカーソル位置に到達した場合、IME Preedit（未確定文字列）をインライン描画
@@ -393,6 +388,15 @@ impl ViviviGuiApp {
                                 && idx == cur.col.min(chars.len())
                                 && !self.ime_preedit.is_empty()
                             {
+                                if let Some((b_text, b_x, b_fg)) = text_batch.take() {
+                                    painter.text(
+                                        Pos2::new(b_x, row_y),
+                                        Align2::LEFT_TOP,
+                                        b_text,
+                                        font_id.clone(),
+                                        b_fg,
+                                    );
+                                }
                                 let preedit_start_col = visual_col;
                                 for pch in self.ime_preedit.chars() {
                                     let pw = UnicodeWidthChar::width(pch).unwrap_or(1).max(1);
@@ -428,7 +432,7 @@ impl ViviviGuiApp {
                                     let ul_y = row_y + line_height - 2.0;
                                     painter.line_segment(
                                         [Pos2::new(ul_x1, ul_y), Pos2::new(ul_x2, ul_y)],
-                                        Stroke::new(2.0, colors::ACCENT_CYAN),
+                                        Stroke::new(2.0_f32, colors::ACCENT_CYAN),
                                     );
                                 }
                             }
@@ -487,20 +491,74 @@ impl ViviviGuiApp {
                                     );
                                 }
 
-                                if ch != '\t' && ch != ' ' {
+                                if ch != '\t' {
                                     let fg =
                                         char_colors.get(idx).copied().unwrap_or(colors::FG_TEXT);
+                                    if ch_cols == 1 {
+                                        // 半角文字（ASCII/等幅1桁）は同色連続バッチにまとめてアロケーションと描画回数を削減
+                                        if let Some((ref mut text, _, cur_fg)) = text_batch {
+                                            if cur_fg == fg {
+                                                text.push(ch);
+                                            } else {
+                                                if let Some((b_text, b_x, b_fg)) = text_batch.take()
+                                                {
+                                                    painter.text(
+                                                        Pos2::new(b_x, row_y),
+                                                        Align2::LEFT_TOP,
+                                                        b_text,
+                                                        font_id.clone(),
+                                                        b_fg,
+                                                    );
+                                                }
+                                                text_batch = Some((String::from(ch), char_x, fg));
+                                            }
+                                        } else {
+                                            text_batch = Some((String::from(ch), char_x, fg));
+                                        }
+                                    } else {
+                                        // 全角文字はバッチをフラッシュして個別描画
+                                        if let Some((b_text, b_x, b_fg)) = text_batch.take() {
+                                            painter.text(
+                                                Pos2::new(b_x, row_y),
+                                                Align2::LEFT_TOP,
+                                                b_text,
+                                                font_id.clone(),
+                                                b_fg,
+                                            );
+                                        }
+                                        if ch != ' ' {
+                                            painter.text(
+                                                Pos2::new(char_x, row_y),
+                                                Align2::LEFT_TOP,
+                                                ch.to_string(),
+                                                font_id.clone(),
+                                                fg,
+                                            );
+                                        }
+                                    }
+                                } else if let Some((b_text, b_x, b_fg)) = text_batch.take() {
                                     painter.text(
-                                        Pos2::new(char_x, row_y),
+                                        Pos2::new(b_x, row_y),
                                         Align2::LEFT_TOP,
-                                        ch.to_string(),
+                                        b_text,
                                         font_id.clone(),
-                                        fg,
+                                        b_fg,
                                     );
                                 }
                             }
 
                             visual_col += ch_cols;
+                        }
+
+                        // 行末に残った半角テキストバッチを一括描画
+                        if let Some((b_text, b_x, b_fg)) = text_batch {
+                            painter.text(
+                                Pos2::new(b_x, row_y),
+                                Align2::LEFT_TOP,
+                                b_text,
+                                font_id.clone(),
+                                b_fg,
+                            );
                         }
 
                         // 空行での VisualLine 選択表示
@@ -606,7 +664,7 @@ impl ViviviGuiApp {
                     painter.rect_stroke(
                         win_rect,
                         0.0,
-                        Stroke::new(1.0, stroke_color),
+                        Stroke::new(1.0_f32, stroke_color),
                         egui::StrokeKind::Inside,
                     );
                 }
@@ -671,35 +729,52 @@ impl ViviviGuiApp {
                     mm_painter.rect_filled(minimap_rect, 0.0, colors::BG_PANEL);
                     mm_painter.line_segment(
                         [minimap_rect.left_top(), minimap_rect.left_bottom()],
-                        Stroke::new(1.0, colors::BG_STATUSLINE),
+                        Stroke::new(1.0_f32, colors::BG_STATUSLINE),
                     );
 
                     let total_lines_mm = self.core.buffer.line_count().max(1);
                     let scroll_row = self.core.scroll.0;
                     let visible_rows = (editor_rect.height() / line_height).max(1.0) as usize;
 
-                    // 可視範囲周辺のコード構造ミニライン描画（Viewport Culling）
+                    // 可視範囲周辺のコード構造ミニライン描画（バッファ内容キーによるキャッシュ化）
                     let max_mm_rows = (minimap_rect.height() / 3.0) as usize;
-                    let step = (total_lines_mm / max_mm_rows.max(1)).max(1);
-                    for i in 0..max_mm_rows {
-                        let l_idx = i * step;
-                        if l_idx >= total_lines_mm {
-                            break;
-                        }
-                        if let Some(line_str) = self.core.buffer.get_line(l_idx) {
-                            let trimmed = line_str.trim_start();
-                            if !trimmed.is_empty() {
-                                let indent = (line_str.len() - trimmed.len()).min(20) as f32;
-                                let len = (trimmed.len().min(40) as f32) * 0.9;
-                                let y = minimap_rect.top() + (i as f32) * 3.0 + 2.0;
-                                let x1 = minimap_rect.left() + 6.0 + indent * 1.2;
-                                let x2 = (x1 + len).min(minimap_rect.right() - 4.0);
-                                if x2 > x1 {
-                                    mm_painter.line_segment(
-                                        [Pos2::new(x1, y), Pos2::new(x2, y)],
-                                        Stroke::new(1.5, colors::FG_LINENUMBER),
-                                    );
+                    let current_key = (self.core.buffer.len(), total_lines_mm);
+                    if self.minimap_cache_key != current_key
+                        || self.minimap_cache.len() != max_mm_rows
+                    {
+                        self.minimap_cache.clear();
+                        let step = (total_lines_mm / max_mm_rows.max(1)).max(1);
+                        for i in 0..max_mm_rows {
+                            let l_idx = i * step;
+                            if l_idx >= total_lines_mm {
+                                break;
+                            }
+                            if let Some(line_str) = self.core.buffer.get_line(l_idx) {
+                                let trimmed = line_str.trim_start();
+                                if !trimmed.is_empty() {
+                                    let indent = (line_str.len() - trimmed.len()).min(20) as f32;
+                                    let len = (trimmed.len().min(40) as f32) * 0.9;
+                                    self.minimap_cache.push((indent, len));
+                                } else {
+                                    self.minimap_cache.push((0.0, 0.0));
                                 }
+                            } else {
+                                self.minimap_cache.push((0.0, 0.0));
+                            }
+                        }
+                        self.minimap_cache_key = current_key;
+                    }
+
+                    for (i, &(indent, len)) in self.minimap_cache.iter().enumerate() {
+                        if len > 0.0 {
+                            let y = minimap_rect.top() + (i as f32) * 3.0 + 2.0;
+                            let x1 = minimap_rect.left() + 6.0 + indent * 1.2;
+                            let x2 = (x1 + len).min(minimap_rect.right() - 4.0);
+                            if x2 > x1 {
+                                mm_painter.line_segment(
+                                    [Pos2::new(x1, y), Pos2::new(x2, y)],
+                                    Stroke::new(1.5_f32, colors::FG_LINENUMBER),
+                                );
                             }
                         }
                     }
@@ -725,7 +800,7 @@ impl ViviviGuiApp {
                     mm_painter.rect_stroke(
                         vp_rect,
                         CornerRadius::same(2),
-                        Stroke::new(1.0, Color32::from_rgba_unmultiplied(122, 162, 247, 100)),
+                        Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(122, 162, 247, 100)),
                         egui::StrokeKind::Inside,
                     );
                 }

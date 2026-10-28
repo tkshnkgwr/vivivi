@@ -87,12 +87,6 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
     // アクティブな検索正規表現 (hlsearch)
     let active_search_re = app.active_search_regex();
 
-    // 変更行マーカーの算出
-    let all_lines: Vec<String> = (0..total_lines)
-        .filter_map(|i| app.buffer.get_line(i))
-        .collect();
-    let change_markers = app.change_tracker.compute_markers(&all_lines);
-
     let mut line_idx = scroll.0;
     while line_idx < total_lines && lines_spans.len() < max_display_lines {
         // コード折り畳みによって隠されている行ならスキップ
@@ -124,11 +118,11 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
             Style::default().fg(Color::DarkGray)
         };
 
-        // ガター変更マーカーのスタイル判定
-        let marker = change_markers
-            .get(line_idx)
-            .copied()
-            .unwrap_or(vivivi_modes::LineChangeState::Unchanged);
+        // 行テキストの取得（CSVモード有効時は整列フォーマット適用）
+        let raw_line = app.buffer.get_line(line_idx).unwrap_or_default();
+
+        // ガター変更マーカーのスタイル判定（O(1) アロケーションフリー判定）
+        let marker = app.change_tracker.marker_at(line_idx, &raw_line);
         let (gutter_sym, gutter_style) = match marker {
             vivivi_modes::LineChangeState::Added | vivivi_modes::LineChangeState::Modified => (
                 "▌",
@@ -144,9 +138,6 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
             ),
             vivivi_modes::LineChangeState::Unchanged => ("│", Style::default().fg(Color::DarkGray)),
         };
-
-        // 行テキストの取得（CSVモード有効時は整列フォーマット適用）
-        let raw_line = app.buffer.get_line(line_idx).unwrap_or_default();
         let display_line = if app.is_csv_active {
             app.csv_mode.format_line(&raw_line, is_current_line)
         } else {

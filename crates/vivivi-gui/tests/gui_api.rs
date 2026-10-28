@@ -13,6 +13,74 @@ use vivivi_vi::ViMode;
 
 /// シナリオ 1: Vi モード遷移と ASCII 文字入力 (`i` -> テキスト入力 -> `Esc`) の統合検証。
 #[test]
+fn test_gui_100g() {
+    let lines = (1..=200)
+        .map(|i| format!("line {}", i))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let core = App::new(&lines, None, CharEncoding::Utf8, NewlineType::Lf);
+    let mut gui = ViviviGuiApp::from_core(core);
+
+    gui.process_egui_events(
+        &[
+            Event::Key {
+                key: Key::Num1,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers::NONE,
+            },
+            Event::Text("1".to_string()),
+        ],
+        Modifiers::NONE,
+    );
+
+    gui.process_egui_events(
+        &[
+            Event::Key {
+                key: Key::Num0,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers::NONE,
+            },
+            Event::Text("0".to_string()),
+        ],
+        Modifiers::NONE,
+    );
+
+    gui.process_egui_events(
+        &[
+            Event::Key {
+                key: Key::Num0,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers::NONE,
+            },
+            Event::Text("0".to_string()),
+        ],
+        Modifiers::NONE,
+    );
+
+    gui.process_egui_events(
+        &[
+            Event::Key {
+                key: Key::G,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers::SHIFT,
+            },
+            Event::Text("G".to_string()),
+        ],
+        Modifiers::SHIFT,
+    );
+
+    println!("GUI CURSOR LINE: {}", gui.core.cursor_pos().line);
+    assert_eq!(gui.core.cursor_pos().line, 99);
+}
+#[test]
 fn test_public_gui_vi_mode_and_text_input_scenario() {
     let core = App::new("hello\nworld", None, CharEncoding::Utf8, NewlineType::Lf);
     let mut gui = ViviviGuiApp::from_core(core);

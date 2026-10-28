@@ -99,3 +99,46 @@ fn test_command_line_parsing() {
         Some(ViCommand::SearchForward("hi".to_string()))
     );
 }
+#[test]
+fn test_goto_line_commands() {
+    let mut parser = CommandParser::new();
+
+    // G -> DocumentEnd(None)
+    assert_eq!(
+        parser.feed_char('G', ViMode::Normal),
+        Some(ViCommand::Move(Motion::DocumentEnd(None)))
+    );
+
+    // 1G -> DocumentEnd(Some(1))
+    assert_eq!(parser.feed_char('1', ViMode::Normal), None);
+    assert_eq!(
+        parser.feed_char('G', ViMode::Normal),
+        Some(ViCommand::Move(Motion::DocumentEnd(Some(1))))
+    );
+
+    // 100G -> DocumentEnd(Some(100))
+    assert_eq!(parser.feed_char('1', ViMode::Normal), None);
+    assert_eq!(parser.feed_char('0', ViMode::Normal), None);
+    assert_eq!(parser.feed_char('0', ViMode::Normal), None);
+    assert_eq!(
+        parser.feed_char('G', ViMode::Normal),
+        Some(ViCommand::Move(Motion::DocumentEnd(Some(100))))
+    );
+
+    // gg -> DocumentStart
+    assert_eq!(parser.feed_char('g', ViMode::Normal), None);
+    assert_eq!(
+        parser.feed_char('g', ViMode::Normal),
+        Some(ViCommand::Move(Motion::DocumentStart))
+    );
+
+    // 100gg -> DocumentEnd(Some(100))
+    assert_eq!(parser.feed_char('1', ViMode::Normal), None);
+    assert_eq!(parser.feed_char('0', ViMode::Normal), None);
+    assert_eq!(parser.feed_char('0', ViMode::Normal), None);
+    assert_eq!(parser.feed_char('g', ViMode::Normal), None);
+    assert_eq!(
+        parser.feed_char('g', ViMode::Normal),
+        Some(ViCommand::Move(Motion::DocumentEnd(Some(100))))
+    );
+}

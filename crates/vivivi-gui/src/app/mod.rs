@@ -87,6 +87,10 @@ pub struct ViviviGuiApp {
     pub last_active_text_origin: Pos2,
     /// 直近フレームにおける等幅半角1文字のピクセル幅
     pub last_char_width: f32,
+    /// ミニマップ構造キャッシュ（インデント幅, 長さ）のリスト
+    pub minimap_cache: Vec<(f32, f32)>,
+    /// ミニマップキャッシュ作成時のバッファ状態キー (文字数, 行数)
+    pub minimap_cache_key: (usize, usize),
 }
 
 impl ViviviGuiApp {
@@ -145,6 +149,8 @@ impl ViviviGuiApp {
             particles: ParticleManager::new(),
             last_active_text_origin: Pos2::new(56.0, 56.0),
             last_char_width: 9.0,
+            minimap_cache: Vec::new(),
+            minimap_cache_key: (usize::MAX, usize::MAX),
         }
     }
 

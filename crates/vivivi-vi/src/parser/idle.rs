@@ -145,6 +145,7 @@ impl CommandParser {
             return None;
         }
 
+        let has_count = self.count_buffer.is_some();
         let count = self.count_buffer.take().unwrap_or(1);
         let register = self.selected_register.take();
 
@@ -239,7 +240,7 @@ impl CommandParser {
 
         // `g` プレフィックス (`gg`, `g*`, `g#`, `g<`, `g=`)
         if ch == 'g' {
-            self.state = ParserState::WaitingForG { count };
+            self.state = ParserState::WaitingForG { count, has_count };
             return None;
         }
 
@@ -322,7 +323,7 @@ impl CommandParser {
         }
 
         // 単独モーション
-        if let Some(motion) = self.parse_motion(ch, count) {
+        if let Some(motion) = self.parse_motion(ch, count, has_count) {
             return Some(ViCommand::Move(motion));
         }
 
@@ -330,7 +331,7 @@ impl CommandParser {
     }
 
     /// 1文字キー入力を [`Motion`] へ変換します。
-    pub(super) fn parse_motion(&self, ch: char, count: usize) -> Option<Motion> {
+    pub(super) fn parse_motion(&self, ch: char, count: usize, has_count: bool) -> Option<Motion> {
         match ch {
             'h' | '\x08' => Some(Motion::Left(count)),
             'l' | ' ' => Some(Motion::Right(count)),
@@ -354,9 +355,7 @@ impl CommandParser {
                 count,
             }),
             'G' => {
-                let target_line = self
-                    .count_buffer
-                    .or(if count > 1 { Some(count) } else { None });
+                let target_line = if has_count { Some(count) } else { None };
                 Some(Motion::DocumentEnd(target_line))
             }
             '%' => Some(Motion::MatchingParen),
