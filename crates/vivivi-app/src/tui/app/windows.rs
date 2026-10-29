@@ -229,6 +229,11 @@ impl App {
             self.cursor = self.windows[self.active_window].cursor.clone();
             self.scroll = self.windows[self.active_window].scroll;
             self.status_message = Some(format!("ウィンドウ閉鎖 (残り: {})", self.windows.len()));
+        } else if self.tabs.len() > 1 {
+            // タブが複数存在する場合はエディタ全体を終了せずカレントタブを閉じる
+            if let Err(e) = self.close_tab() {
+                self.status_message = Some(e.to_string());
+            }
         } else if self.buffer.is_modified() {
             self.status_message = Some("未保存の変更があります (:q! で強制終了)".to_string());
         } else {

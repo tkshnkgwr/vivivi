@@ -303,7 +303,7 @@ fn test_multi_tab_workflow() {
     assert_eq!(app.active_tab, 1);
     assert_eq!(app.buffer.to_string(), "tab2 content");
 
-    // 4. :tabclose でタブ2を閉じる
+    // 4. :tabclose でタブ2を閉じる（未保存変更があるためE37警告で拒否されることを検証）
     crate::tui::event::handle_key_event(
         &mut app,
         crossterm::event::KeyEvent::new(
@@ -312,6 +312,39 @@ fn test_multi_tab_workflow() {
         ),
     );
     for c in "tabclose".chars() {
+        crate::tui::event::handle_key_event(
+            &mut app,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Char(c),
+                crossterm::event::KeyModifiers::empty(),
+            ),
+        );
+    }
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    // 未保存のためタブは閉じられない
+    assert_eq!(app.tabs.len(), 2);
+    assert!(
+        app.status_message
+            .as_ref()
+            .unwrap()
+            .contains("前回の変更が保存されていません")
+    );
+
+    // :tabclose! で強制的にタブ2を閉じる
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char(':'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    for c in "tabclose!".chars() {
         crate::tui::event::handle_key_event(
             &mut app,
             crossterm::event::KeyEvent::new(

@@ -239,6 +239,13 @@ pub(crate) fn handle_tools_command(app: &mut App, trimmed: &str) -> bool {
                     .map(|p| *p != m.file_path)
                     .unwrap_or(true);
                 if need_open {
+                    if app.buffer.is_modified() {
+                        app.status_message = Some(
+                            "E37: 前回の変更が保存されていません (:w で保存するか :tabnew で開いてください)"
+                                .to_string(),
+                        );
+                        return true;
+                    }
                     let _ = app.open_file(m.file_path.clone());
                 }
                 app.cursor.pos.line = m.lineno.saturating_sub(1);
@@ -272,6 +279,13 @@ pub(crate) fn handle_tools_command(app: &mut App, trimmed: &str) -> bool {
                     .map(|p| *p != m.file_path)
                     .unwrap_or(true);
                 if need_open {
+                    if app.buffer.is_modified() {
+                        app.status_message = Some(
+                            "E37: 前回の変更が保存されていません (:w で保存するか :tabnew で開いてください)"
+                                .to_string(),
+                        );
+                        return true;
+                    }
                     let _ = app.open_file(m.file_path.clone());
                 }
                 app.cursor.pos.line = m.lineno.saturating_sub(1);

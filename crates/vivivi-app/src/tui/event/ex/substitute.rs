@@ -20,16 +20,16 @@ pub(crate) fn execute_substitute_command(app: &mut App, cmd: &str) {
         }
     };
     let body = &spec[delim.len_utf8()..];
-    let parts: Vec<&str> = body.split(delim).collect();
+    let parts = split_substitute_parts(body, delim);
 
     if parts.len() < 2 {
         app.status_message = Some(format!("置換構文エラー (例: :%s/old/new/g): {cmd}"));
         return;
     }
 
-    let before = parts[0];
-    let after = parts[1];
-    let flags = parts.get(2).copied().unwrap_or("");
+    let before = &parts[0];
+    let after = &parts[1];
+    let flags = parts.get(2).map(|s| s.as_str()).unwrap_or("");
     let replace_all = flags.contains('g');
     let is_expr = flags.contains('e');
     let ignore_case = flags.contains('i');
@@ -175,4 +175,29 @@ pub(crate) fn execute_substitute_command(app: &mut App, cmd: &str) {
             app.status_message = Some("行の取得に失敗しました".to_string());
         }
     }
+}
+
+/// デリミタ文字（エスケープされた `\delim` を考慮）で置換ボディを分割します。
+fn split_substitute_parts(body: &str, delim: char) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut chars = body.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            if let Some(&next) = chars.peek()
+                && next == delim
+            {
+                chars.next();
+                current.push(delim);
+                continue;
+            }
+            current.push('\\');
+        } else if c == delim {
+            parts.push(std::mem::take(&mut current));
+        } else {
+            current.push(c);
+        }
+    }
+    parts.push(current);
+    parts
 }

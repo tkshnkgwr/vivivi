@@ -121,13 +121,18 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
         return;
     }
 
+    // Esc または Ctrl+[ (Vim互換Escキー) の判定
+    let is_esc = key.code == KeyCode::Esc
+        || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('['));
+
     // ヘルプ表示中のキーハンドリング
     if app.show_help {
+        if is_esc || key.code == KeyCode::Char('q') {
+            app.show_help = false;
+            app.status_message = Some("ヘルプを閉じました".to_string());
+            return;
+        }
         match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => {
-                app.show_help = false;
-                app.status_message = Some("ヘルプを閉じました".to_string());
-            }
             KeyCode::Down | KeyCode::Char('j') => {
                 app.help_scroll += 1;
             }
@@ -153,11 +158,12 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
 
     // 印刷プレビュー表示中のキーハンドリング
     if app.show_preview {
+        if is_esc || key.code == KeyCode::Char('q') {
+            app.show_preview = false;
+            app.status_message = Some("印刷プレビューを閉じました".to_string());
+            return;
+        }
         match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => {
-                app.show_preview = false;
-                app.status_message = Some("印刷プレビューを閉じました".to_string());
-            }
             KeyCode::Char('p') | KeyCode::Char('P') => {
                 if let Err(e) = app.export_pdf(None) {
                     app.status_message = Some(format!("PDF出力エラー: {e}"));
@@ -182,14 +188,14 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
 
     // 2ペインファイラー表示中のキーハンドリング
     if app.show_filer {
+        if is_esc || key.code == KeyCode::Char('q') {
+            app.close_filer();
+            app.status_message = Some("ファイラーを閉じました".to_string());
+            return;
+        }
         let mut to_open = None;
         if let Some(ref mut filer) = app.filer {
             match key.code {
-                KeyCode::Esc | KeyCode::Char('q') => {
-                    app.close_filer();
-                    app.status_message = Some("ファイラーを閉じました".to_string());
-                    return;
-                }
                 KeyCode::Tab => {
                     filer.switch_pane();
                 }
@@ -293,6 +299,13 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
         }
 
         if let Some(path) = to_open {
+            if app.buffer.is_modified() {
+                app.status_message = Some(
+                    "E37: 前回の変更が保存されていません。先に保存するか新しいタブ (:tabnew) で開いてください"
+                        .to_string(),
+                );
+                return;
+            }
             app.close_filer();
             if let Err(e) = app.open_file(path.clone()) {
                 app.status_message = Some(format!("ファイル読込エラー: {e}"));
@@ -344,11 +357,13 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
         }
         let total_count = all_entries.len();
 
+        if is_esc || key.code == KeyCode::Char('q') {
+            app.show_recent_modal = false;
+            app.status_message = Some("履歴モーダルを閉じました".to_string());
+            return;
+        }
+
         match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => {
-                app.show_recent_modal = false;
-                app.status_message = Some("履歴モーダルを閉じました".to_string());
-            }
             KeyCode::Up | KeyCode::Char('k') => {
                 app.selected_recent_idx = app.selected_recent_idx.saturating_sub(1);
             }
@@ -357,6 +372,13 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
             }
             KeyCode::Enter if total_count > 0 => {
                 if let Some(target_path) = all_entries.get(app.selected_recent_idx).cloned() {
+                    if app.buffer.is_modified() {
+                        app.status_message = Some(
+                            "E37: 前回の変更が保存されていません。先に保存するか新しいタブ (:tabnew) で開いてください"
+                                .to_string(),
+                        );
+                        return;
+                    }
                     app.show_recent_modal = false;
                     if let Err(e) = app.open_file(target_path) {
                         app.status_message = Some(format!("ファイル読込エラー: {e}"));
@@ -393,11 +415,12 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
 
     // クリップボード履歴ダイアログ表示中のキーハンドリング
     if app.show_clipboard_hist {
+        if is_esc || key.code == KeyCode::Char('q') {
+            app.show_clipboard_hist = false;
+            return;
+        }
         let history_len = app.vi.registers().history().len();
         match key.code {
-            KeyCode::Esc => {
-                app.show_clipboard_hist = false;
-            }
             KeyCode::Up | KeyCode::Char('k') => {
                 app.selected_cb_idx = app.selected_cb_idx.saturating_sub(1);
             }
@@ -414,12 +437,13 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
 
     // Migemoローマ字検索プロンプト入力中
     if app.is_migemo_search {
+        if is_esc {
+            app.is_migemo_search = false;
+            app.migemo_query.clear();
+            app.status_message = Some("Migemo検索をキャンセルしました".to_string());
+            return;
+        }
         match key.code {
-            KeyCode::Esc => {
-                app.is_migemo_search = false;
-                app.migemo_query.clear();
-                app.status_message = Some("Migemo検索をキャンセルしました".to_string());
-            }
             KeyCode::Enter => {
                 app.is_migemo_search = false;
                 let query = std::mem::take(&mut app.migemo_query);
@@ -444,12 +468,13 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
 
     // アウトラインペインにフォーカスがある場合のキーハンドリング
     if app.show_outline && app.outline_focus {
+        if is_esc || key.code == KeyCode::Tab {
+            app.outline_focus = false;
+            app.status_message =
+                Some("エディタフォーカス中 (Tab / Ctrl-O: アウトライン選択)".to_string());
+            return;
+        }
         match key.code {
-            KeyCode::Esc | KeyCode::Tab => {
-                app.outline_focus = false;
-                app.status_message =
-                    Some("エディタフォーカス中 (Tab / Ctrl-O: アウトライン選択)".to_string());
-            }
             KeyCode::Char('q') => {
                 app.toggle_outline();
             }

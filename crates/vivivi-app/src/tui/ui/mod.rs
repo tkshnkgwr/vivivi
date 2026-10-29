@@ -145,9 +145,8 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     };
 
     // アクティブウィンドウに合わせてスクロール調整
-    let line_number_width = 6; // " 123 ▌ " の幅
-    let text_view_width =
-        (inner_active_editor_area.width as usize).saturating_sub(line_number_width);
+    let prefix_width = editor_prefix_width(app);
+    let text_view_width = (inner_active_editor_area.width as usize).saturating_sub(prefix_width);
     let text_view_height = inner_active_editor_area.height as usize;
     app.adjust_scroll(text_view_height, text_view_width);
 
@@ -197,8 +196,17 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         app,
         inner_active_editor_area,
         status_area,
-        line_number_width,
+        prefix_width,
     );
+}
+
+/// エディタ本文描画の左プレフィックス（行番号＋ガター＋余白）幅を計算
+pub fn editor_prefix_width(app: &App) -> usize {
+    if app.show_line_numbers {
+        7 // " 123 ▌ " (行番号5 + ガター1 + 空白1)
+    } else {
+        2 // "▌ " (ガター1 + 空白1)
+    }
 }
 
 /// ターミナルカーソルの座標設定
@@ -207,11 +215,12 @@ fn set_terminal_cursor(
     app: &App,
     editor_area: Rect,
     status_area: Rect,
-    line_number_width: usize,
+    prefix_width: usize,
 ) {
     if app.is_migemo_search {
-        // Migemo 検索入力プロンプト (g/<query>)
-        let prompt_len = 2 + app.migemo_query.chars().count(); // "g/" + query
+        // Migemo 検索入力プロンプト (g/<query>) 全角文字幅を考慮して計算
+        let query_w = unicode_width::UnicodeWidthStr::width(app.migemo_query.as_str());
+        let prompt_len = 2 + query_w; // "g/" + query幅
         let cursor_x = (status_area.x as usize + prompt_len).min(status_area.width as usize - 1);
         frame.set_cursor_position(Position::new(cursor_x as u16, status_area.y));
         return;
@@ -242,14 +251,14 @@ fn set_terminal_cursor(
 
     if app.wrap {
         let content_width = (editor_area.width as usize)
-            .saturating_sub(line_number_width + 1)
+            .saturating_sub(prefix_width)
             .max(1);
         let wrapped_row = cur_visual_col / content_width;
         let col_in_wrapped_row = cur_visual_col % content_width;
         let target_screen_row = screen_row + wrapped_row;
 
         if target_screen_row < editor_area.height as usize {
-            let cursor_x = editor_area.x as usize + line_number_width + 1 + col_in_wrapped_row;
+            let cursor_x = editor_area.x as usize + prefix_width + col_in_wrapped_row;
             let cursor_y = editor_area.y as usize + target_screen_row;
 
             if cursor_x < (editor_area.x + editor_area.width) as usize {
@@ -260,7 +269,7 @@ fn set_terminal_cursor(
         let scroll_x = app.scroll.1;
         if screen_row < editor_area.height as usize && cur_visual_col >= scroll_x {
             let relative_col = cur_visual_col - scroll_x;
-            let cursor_x = editor_area.x as usize + line_number_width + 1 + relative_col;
+            let cursor_x = editor_area.x as usize + prefix_width + relative_col;
             let cursor_y = editor_area.y as usize + screen_row;
 
             if cursor_x < (editor_area.x + editor_area.width) as usize {

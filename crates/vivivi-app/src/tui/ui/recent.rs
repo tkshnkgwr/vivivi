@@ -45,6 +45,13 @@ pub fn render_recent_modal(frame: &mut Frame, app: &App, area: Rect) {
     let total_count = all_entries.len();
     let selected_idx = app.selected_recent_idx.min(total_count.saturating_sub(1));
 
+    let inner_height = (popup_area.height as usize).saturating_sub(2);
+    let scroll_offset = if inner_height > 0 && selected_idx >= inner_height {
+        selected_idx - inner_height + 1
+    } else {
+        0
+    };
+
     let items: Vec<ListItem> = if all_entries.is_empty() {
         vec![ListItem::new(Line::from(Span::styled(
             "  履歴・お気に入りファイルはありません",
@@ -54,6 +61,8 @@ pub fn render_recent_modal(frame: &mut Frame, app: &App, area: Rect) {
         all_entries
             .iter()
             .enumerate()
+            .skip(scroll_offset)
+            .take(inner_height)
             .map(|(i, (path, is_fav))| {
                 let is_selected = i == selected_idx;
                 let sel_marker = if is_selected { "▶ " } else { "  " };

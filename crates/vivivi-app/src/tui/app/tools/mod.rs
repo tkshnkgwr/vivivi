@@ -78,6 +78,12 @@ impl App {
                 .min(self.buffer.line_count().saturating_sub(1));
             self.cursor.pos.line = target_line;
             self.cursor.pos.col = 0;
+            // ターゲット行が画面中央付近に配置されるようスクロールを同期
+            self.scroll.0 = target_line.saturating_sub(12);
+            if let Some(win) = self.windows.get_mut(self.active_window) {
+                win.cursor = self.cursor.clone();
+                win.scroll = self.scroll;
+            }
             self.outline_focus = false;
             self.status_message =
                 Some(format!("ジャンプ: 行 {} - {}", target_line + 1, item.title));
@@ -244,6 +250,7 @@ impl App {
                 if let Some(m) = found_match {
                     let char_idx = full_text[..m.start()].chars().count();
                     self.cursor.pos = self.buffer.position_to_cursor(char_idx);
+                    self.scroll.0 = self.cursor.pos.line.saturating_sub(12);
                     if let Some(win) = self.windows.get_mut(self.active_window) {
                         win.cursor = self.cursor.clone();
                         win.scroll = self.scroll;
@@ -295,6 +302,7 @@ impl App {
             {
                 let char_idx = full_text[..m.start()].chars().count();
                 self.cursor.pos = self.buffer.position_to_cursor(char_idx);
+                self.scroll.0 = self.cursor.pos.line.saturating_sub(12);
                 if let Some(win) = self.windows.get_mut(self.active_window) {
                     win.cursor = self.cursor.clone();
                     win.scroll = self.scroll;
@@ -318,6 +326,7 @@ impl App {
             {
                 let char_idx = full_text[..m.start()].chars().count();
                 self.cursor.pos = self.buffer.position_to_cursor(char_idx);
+                self.scroll.0 = self.cursor.pos.line.saturating_sub(12);
                 if let Some(win) = self.windows.get_mut(self.active_window) {
                     win.cursor = self.cursor.clone();
                     win.scroll = self.scroll;

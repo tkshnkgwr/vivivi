@@ -133,12 +133,33 @@ pub fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     };
 
     let width = area.width as usize;
-    let left_w = unicode_width::UnicodeWidthStr::width(display_left.as_str());
     let right_w = unicode_width::UnicodeWidthStr::width(right_info.as_str());
+
+    // 狭幅端末や分割画面でステータスラインが複数行に折り返されないよう左側テキストを自動クリップ
+    let max_left_w = width.saturating_sub(right_w + 1);
+    let display_left_clipped =
+        if unicode_width::UnicodeWidthStr::width(display_left.as_str()) > max_left_w {
+            let mut s = String::new();
+            let mut w = 0;
+            for ch in display_left.chars() {
+                let ch_w = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
+                if w + ch_w + 3 > max_left_w {
+                    s.push_str("...");
+                    break;
+                }
+                s.push(ch);
+                w += ch_w;
+            }
+            s
+        } else {
+            display_left
+        };
+
+    let left_w = unicode_width::UnicodeWidthStr::width(display_left_clipped.as_str());
     let spaces_needed = width.saturating_sub(left_w).saturating_sub(right_w);
     let status_line_content = format!(
         "{}{}{}",
-        display_left,
+        display_left_clipped,
         " ".repeat(spaces_needed),
         right_info
     );

@@ -29,12 +29,24 @@ pub fn render_clipboard_history(frame: &mut Frame, app: &App, area: Rect) {
     clear_modal_area(frame, popup_area);
 
     let history = app.vi.registers().history();
+    let total_count = history.len();
+    let selected_idx = app.selected_cb_idx.min(total_count.saturating_sub(1));
+
+    let inner_height = (popup_area.height as usize).saturating_sub(2);
+    let scroll_offset = if inner_height > 0 && selected_idx >= inner_height {
+        selected_idx - inner_height + 1
+    } else {
+        0
+    };
+
     let items: Vec<ListItem> = history
         .items()
         .iter()
         .enumerate()
+        .skip(scroll_offset)
+        .take(inner_height)
         .map(|(i, item)| {
-            let is_selected = i == app.selected_cb_idx;
+            let is_selected = i == selected_idx;
             let prefix = if is_selected { "▶ " } else { "  " };
 
             let content_span = format!("#{:<2} [{}行] {}", item.id, item.line_count, item.preview);

@@ -31,9 +31,13 @@ pub fn execute_ex_command(app: &mut App, cmd: &str) {
             }
         }
         "q" | "qa" | "qall" => {
-            if app.buffer.is_modified() {
+            // カレントバッファおよび他タブのいずれかに未保存変更があれば終了を中断
+            let has_modified_tab =
+                app.buffer.is_modified() || app.tabs.iter().any(|t| t.buffer.is_modified());
+            if has_modified_tab {
                 app.status_message = Some(
-                    "E37: 前回の変更が保存されていません (! を追加して :q! で強制終了)".to_string(),
+                    "E37: 前回の変更が保存されていません (! を追加して :q! または :qa! で強制終了)"
+                        .to_string(),
                 );
             } else {
                 app.remove_swap_file();
@@ -93,7 +97,12 @@ pub fn execute_ex_command(app: &mut App, cmd: &str) {
             app.new_tab(Some(path));
         }
         "tabclose" | "tabc" => {
-            if let Err(e) = app.close_tab() {
+            if let Err(e) = app.close_tab_forced(false) {
+                app.status_message = Some(e.to_string());
+            }
+        }
+        "tabclose!" | "tabc!" => {
+            if let Err(e) = app.close_tab_forced(true) {
                 app.status_message = Some(e.to_string());
             }
         }
@@ -104,7 +113,14 @@ pub fn execute_ex_command(app: &mut App, cmd: &str) {
             app.prev_tab();
         }
         "tabonly" | "tabo" => {
-            app.close_other_tabs();
+            if let Err(e) = app.close_other_tabs_forced(false) {
+                app.status_message = Some(e.to_string());
+            }
+        }
+        "tabonly!" | "tabo!" => {
+            if let Err(e) = app.close_other_tabs_forced(true) {
+                app.status_message = Some(e.to_string());
+            }
         }
         _ if trimmed.starts_with("w ") => {
             let path_str = trimmed[2..].trim();
@@ -134,7 +150,12 @@ pub fn execute_ex_command(app: &mut App, cmd: &str) {
                 app.cursor.pos.line = target_line;
                 app.cursor.pos.col = 0;
                 app.clamp_cursor();
-                app.adjust_scroll(24, 80);
+                // ターゲット行が画面中央に来るようスクロールを同期
+                app.scroll.0 = target_line.saturating_sub(12);
+                if let Some(win) = app.windows.get_mut(app.active_window) {
+                    win.cursor = app.cursor.clone();
+                    win.scroll = app.scroll;
+                }
                 app.status_message = Some(format!("{} 行目へ移動しました", target_line + 1));
             }
         }
@@ -193,18 +214,43 @@ pub fn execute_ex_command(app: &mut App, cmd: &str) {
             app.toggle_favorite_current_file();
         }
         _ if trimmed.starts_with("e ")
+            || trimmed.starts_with("e! ")
             || trimmed.starts_with("edit ")
+            || trimmed.starts_with("edit! ")
             || trimmed == "e"
-            || trimmed == "edit" =>
+            || trimmed == "e!"
+            || trimmed == "edit"
+            || trimmed == "edit!" =>
         {
-            let rest = trimmed
-                .strip_prefix("edit")
-                .or_else(|| trimmed.strip_prefix("e"))
-                .unwrap_or("")
-                .trim();
+            let is_forced = trimmed.starts_with("e! ")
+                || trimmed.starts_with("edit! ")
+                || trimmed == "e!"
+                || trimmed == "edit!";
+
+            if !is_forced && app.buffer.is_modified() {
+                app.status_message = Some(
+                    "E37: 前回の変更が保存されていません (! を追加して :e! で強制オープン)"
+                        .to_string(),
+                );
+                return;
+            }
+
+            let rest = if is_forced {
+                trimmed
+                    .strip_prefix("edit!")
+                    .or_else(|| trimmed.strip_prefix("e!"))
+                    .unwrap_or("")
+                    .trim()
+            } else {
+                trimmed
+                    .strip_prefix("edit")
+                    .or_else(|| trimmed.strip_prefix("e"))
+                    .unwrap_or("")
+                    .trim()
+            };
 
             let mut forced_enc = None;
-            let mut file_target = None;
+            let mut file_parts = Vec::new();
 
             for part in rest.split_whitespace() {
                 if let Some(enc_name) = part.strip_prefix("++enc=") {
@@ -216,12 +262,19 @@ pub fn execute_ex_command(app: &mut App, cmd: &str) {
                         return;
                     }
                 } else if !part.is_empty() {
-                    file_target = Some(part);
+                    file_parts.push(part);
                 }
             }
 
+            let file_target = if file_parts.is_empty() {
+                None
+            } else {
+                Some(file_parts.join(" "))
+            };
+
             if let Some(file_path_str) = file_target {
-                let path = std::path::PathBuf::from(file_path_str);
+                let clean_path = file_path_str.trim_matches('"').trim_matches('\'');
+                let path = std::path::PathBuf::from(clean_path);
                 if let Err(e) = app.open_file_with_encoding(path, forced_enc) {
                     app.status_message = Some(format!("ファイル読込エラー: {e}"));
                 }

@@ -111,10 +111,21 @@ impl App {
     }
 
     /// 現在のタブを閉じます (`:tabclose`)。
+    ///
+    /// 未保存の変更がある場合はエラーを返し、安全のためタブを破棄しません。
     pub fn close_tab(&mut self) -> Result<(), &'static str> {
+        self.close_tab_forced(false)
+    }
+
+    /// 現在のタブを閉じます（強制オプション指定可能）。
+    pub fn close_tab_forced(&mut self, force: bool) -> Result<(), &'static str> {
         if self.tabs.len() <= 1 {
             return Err("最後のタブは閉じられません (:q で終了してください)");
         }
+        if !force && self.buffer.is_modified() {
+            return Err("E37: 前回の変更が保存されていません (! を追加して強制終了)");
+        }
+
         self.tabs.remove(self.active_tab);
         let new_idx = if self.active_tab >= self.tabs.len() {
             self.tabs.len() - 1
@@ -131,14 +142,33 @@ impl App {
     }
 
     /// 現在のタブ以外のすべてのタブを閉じます (`:tabonly`)。
-    pub fn close_other_tabs(&mut self) {
+    ///
+    /// 他のタブに未保存の変更がある場合は安全のため処理を中止します。
+    pub fn close_other_tabs(&mut self) -> Result<(), &'static str> {
+        self.close_other_tabs_forced(false)
+    }
+
+    /// 現在のタブ以外のすべてのタブを閉じます（強制オプション指定可能）。
+    pub fn close_other_tabs_forced(&mut self, force: bool) -> Result<(), &'static str> {
         if self.tabs.len() <= 1 {
-            return;
+            return Ok(());
         }
         self.sync_active_tab_state();
+
+        if !force {
+            for (i, tab) in self.tabs.iter().enumerate() {
+                if i != self.active_tab && tab.buffer.is_modified() {
+                    return Err(
+                        "E37: 他のタブに未保存の変更があります (! を追加して :tabonly! で強制実行)",
+                    );
+                }
+            }
+        }
+
         let current = self.tabs.remove(self.active_tab);
         self.tabs = vec![current];
         self.active_tab = 0;
         self.status_message = Some("他のタブをすべて閉じました".to_string());
+        Ok(())
     }
 }

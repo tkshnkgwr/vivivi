@@ -380,6 +380,9 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
 
             if ch == '\t' {
                 cur_chunk.push_str(&" ".repeat(render_w));
+            } else if visual_x < scroll_x {
+                // スクロール境界を跨ぐ全角文字の左半分（欠けた部分）を半角スペースで補填
+                cur_chunk.push_str(&" ".repeat(render_w));
             } else {
                 cur_chunk.push(ch);
             }

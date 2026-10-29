@@ -40,15 +40,20 @@ pub(crate) fn handle_insert_mode(app: &mut App, key: KeyEvent) {
     // 補完キー以外の操作時は補完セッションをリセット
     app.dabbrev.reset();
 
-    match key.code {
-        KeyCode::Esc => {
-            app.feed_vi_char('\x1b');
-            // ノーマルモード復帰時はカーソルが文字境界を超えないよう左へ1文字補正
-            if app.cursor.pos.col > 0 {
-                app.cursor.pos.col -= 1;
-            }
-            app.clamp_cursor();
+    // Ctrl-[ または Esc: ノーマルモードへ脱出
+    let is_esc = key.code == KeyCode::Esc
+        || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('['));
+    if is_esc {
+        app.feed_vi_char('\x1b');
+        // ノーマルモード復帰時はカーソルが文字境界を超えないよう左へ1文字補正
+        if app.cursor.pos.col > 0 {
+            app.cursor.pos.col -= 1;
         }
+        app.clamp_cursor();
+        return;
+    }
+
+    match key.code {
         KeyCode::Insert => {
             // Vim互換: 挿入モード中に Insert キーを押すとリプレース（上書き）モードへトグル切り替え
             app.vi.set_mode(vivivi_vi::ViMode::Replace);
@@ -191,15 +196,19 @@ pub(crate) fn handle_insert_mode(app: &mut App, key: KeyEvent) {
 
 /// 置換（リプレース）モードのキーハンドリング (R)
 pub(crate) fn handle_replace_mode(app: &mut App, key: KeyEvent) {
-    match key.code {
-        KeyCode::Esc => {
-            app.feed_vi_char('\x1b');
-            // ノーマルモード復帰時はカーソルが文字境界を超えないよう左へ1文字補正
-            if app.cursor.pos.col > 0 {
-                app.cursor.pos.col -= 1;
-            }
-            app.clamp_cursor();
+    let is_esc = key.code == KeyCode::Esc
+        || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('['));
+    if is_esc {
+        app.feed_vi_char('\x1b');
+        // ノーマルモード復帰時はカーソルが文字境界を超えないよう左へ1文字補正
+        if app.cursor.pos.col > 0 {
+            app.cursor.pos.col -= 1;
         }
+        app.clamp_cursor();
+        return;
+    }
+
+    match key.code {
         KeyCode::Insert => {
             // Vim互換: リプレースモード中に Insert キーを押すと挿入モードへトグル復帰
             app.vi.set_mode(vivivi_vi::ViMode::Insert);
@@ -305,10 +314,58 @@ pub(crate) fn handle_replace_mode(app: &mut App, key: KeyEvent) {
 
 /// コマンドラインモードのキーハンドリング
 pub(crate) fn handle_command_line_mode(app: &mut App, key: KeyEvent) {
-    match key.code {
-        KeyCode::Esc => {
-            app.feed_vi_char('\x1b');
+    let is_esc = key.code == KeyCode::Esc
+        || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('['));
+    if is_esc {
+        app.feed_vi_char('\x1b');
+        return;
+    }
+
+    // Ctrl+u (行クリア)
+    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('u') {
+        let len = app
+            .vi
+            .parser()
+            .command_line_buffer()
+            .map(|(_, s)| s.chars().count())
+            .unwrap_or(0);
+        for _ in 0..len {
+            app.feed_vi_char('\x08');
         }
+        return;
+    }
+
+    // Ctrl+w (単語削除)
+    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('w') {
+        let buf = app
+            .vi
+            .parser()
+            .command_line_buffer()
+            .map(|(_, s)| s.to_string())
+            .unwrap_or_default();
+        let trimmed_end = buf.trim_end();
+        let spaces_len = buf.len() - trimmed_end.len();
+        let last_word_len = trimmed_end
+            .split_whitespace()
+            .last()
+            .map(|w| w.chars().count())
+            .unwrap_or(0);
+        let del_count = spaces_len + last_word_len;
+        for _ in 0..del_count {
+            app.feed_vi_char('\x08');
+        }
+        return;
+    }
+
+    // Ctrl+h / Backspace
+    if (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('h'))
+        || key.code == KeyCode::Backspace
+    {
+        app.feed_vi_char('\x08');
+        return;
+    }
+
+    match key.code {
         KeyCode::Enter => {
             let cmd_text = app
                 .vi
@@ -336,9 +393,6 @@ pub(crate) fn handle_command_line_mode(app: &mut App, key: KeyEvent) {
                 execute_ex_command(app, &cmd_text);
             }
         }
-        KeyCode::Backspace => {
-            app.feed_vi_char('\x08');
-        }
         KeyCode::Char(c) => {
             app.feed_vi_char(c);
         }
@@ -348,6 +402,31 @@ pub(crate) fn handle_command_line_mode(app: &mut App, key: KeyEvent) {
 
 /// ノーマルモードのキーハンドリング
 pub(crate) fn handle_normal_mode(app: &mut App, key: KeyEvent) {
+    let is_esc = key.code == KeyCode::Esc
+        || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('['));
+    if is_esc {
+        app.g_pending = false;
+        let now = std::time::Instant::now();
+        let is_double_esc = if let Some(last_time) = app.last_esc_time {
+            now.duration_since(last_time).as_millis() <= 500
+        } else {
+            false
+        };
+
+        if is_double_esc {
+            app.clear_search_highlight();
+            app.status_message = Some("検索ハイライトを消去しました (:nohlsearch)".to_string());
+            app.last_esc_time = None;
+        } else {
+            app.last_esc_time = Some(now);
+        }
+
+        app.feed_vi_char('\x1b');
+        return;
+    }
+
+    app.last_esc_time = None;
+
     // Ctrl キー組み合わせの処理
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         match key.code {
@@ -409,30 +488,7 @@ pub(crate) fn handle_normal_mode(app: &mut App, key: KeyEvent) {
         }
     }
 
-    if key.code != KeyCode::Esc {
-        app.last_esc_time = None;
-    }
-
     match key.code {
-        KeyCode::Esc => {
-            app.g_pending = false;
-            let now = std::time::Instant::now();
-            let is_double_esc = if let Some(last_time) = app.last_esc_time {
-                now.duration_since(last_time).as_millis() <= 500
-            } else {
-                false
-            };
-
-            if is_double_esc {
-                app.clear_search_highlight();
-                app.status_message = Some("検索ハイライトを消去しました (:nohlsearch)".to_string());
-                app.last_esc_time = None;
-            } else {
-                app.last_esc_time = Some(now);
-            }
-
-            app.feed_vi_char('\x1b');
-        }
         KeyCode::Insert => {
             // Vim互換: ノーマルモードで Insert キーを押すと挿入モードへ遷移
             app.g_pending = false;
