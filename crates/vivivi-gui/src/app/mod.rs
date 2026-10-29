@@ -13,6 +13,7 @@ pub use input::egui_key_to_app_key;
 
 use eframe::egui;
 use egui::{Color32, Pos2, Rect};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use vivivi_app::App;
 use vivivi_modes::TokenType;
@@ -91,6 +92,8 @@ pub struct ViviviGuiApp {
     pub minimap_cache: Vec<(f32, f32)>,
     /// ミニマップキャッシュ作成時のバッファ状態キー (文字数, 行数)
     pub minimap_cache_key: (usize, usize),
+    /// 構文ハイライト用行トークンキャッシュ（行テキストハッシュ + 言語 -> トークン列）
+    pub syntax_cache: HashMap<u64, Vec<vivivi_modes::SyntaxToken>>,
 }
 
 impl ViviviGuiApp {
@@ -151,6 +154,7 @@ impl ViviviGuiApp {
             last_char_width: 9.0,
             minimap_cache: Vec::new(),
             minimap_cache_key: (usize::MAX, usize::MAX),
+            syntax_cache: HashMap::new(),
         }
     }
 
@@ -211,7 +215,22 @@ impl eframe::App for ViviviGuiApp {
         // 5. モーダルウィンドウ（ヘルプ、印刷プレビュー、履歴、ファイラー等）
         self.render_modals(ctx);
 
-        // 6. :q 等で終了フラグが立った場合は OS ウィンドウを閉じる
+        // 6. OS ウィンドウの「×」閉じる要求の検知と未保存データ保護
+        if ctx.input(|i| i.viewport().close_requested()) {
+            let is_any_modified = self.core.buffer.is_modified()
+                || self.core.tabs.iter().any(|t| t.buffer.is_modified());
+            if is_any_modified && !self.core.should_quit {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                self.core.status_message = Some(
+                    "E37: 未保存の変更があります (:w で保存、または :q! で強制終了)".to_string(),
+                );
+            } else {
+                self.core.remove_swap_file();
+                self.core.should_quit = true;
+            }
+        }
+
+        // 7. :q 等で終了フラグが立った場合は OS ウィンドウを閉じる
         if self.core.should_quit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }

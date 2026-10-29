@@ -331,3 +331,18 @@ Implement a particle manager for falling character deletion animations:
 2. While particles exist, update physics each frame, render with ui.painter().text(), and request ctx.request_repaint().
 3. Once particles terminate, cease repaint requests, preserving egui's reactive idle mode (0% CPU).
 ```
+
+### Step 5: Performance Optimization & Immediate-Mode Pitfalls [Phase 5 Knowledge]
+
+> [!IMPORTANT]
+> While egui is capable of sub-millisecond real-time rendering, immediate-mode GUI dynamics combined with unoptimized Rust Debug profile defaults can cause severe frame drops and high CPU spikes without the following architecture countermeasures.
+
+| Bottleneck Category                      | Observed Symptom                       | Permanent Solution                                                                                |
+| :--------------------------------------- | :------------------------------------- | :------------------------------------------------------------------------------------------------ |
+| **Cargo Debug Profile Defaults**         | Severe lag & high CPU in `cargo run`   | Added `[profile.dev.package."*"] opt-level = 3` in root `Cargo.toml` to fully optimize GUI crates.|
+| **Per-Frame Lexer Parsing on All Lines** | CPU spikes on cursor movements/inputs  | Introduced `syntax_cache` with line content hashing to skip lexer re-parsing on unchanged lines.  |
+| **Per-Row Heap Allocations in Render**   | Frequent malloc/free of char/flag vecs | Positioned scratch buffers (`chars_buf`, `search_matched_buf`) outside loop for zero allocations. |
+| **String Allocation on CJK Glyphs**      | Heap allocations when rendering CJK    | Replaced `ch.to_string()` with `ch.encode_utf8(&mut [0u8; 4])` for stack-based glyph rendering.   |
+| **Mass Windows Font Bulk Loading**       | Slow startup & large glyph cache miss  | Streamlined font loader to prioritize PlemolJP and fall back to at most 1 system font.           |
+
+```

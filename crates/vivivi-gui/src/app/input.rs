@@ -96,6 +96,8 @@ impl ViviviGuiApp {
     /// assert_eq!(gui.core.mode(), ViMode::Insert);
     /// ```
     pub fn process_egui_events(&mut self, events: &[Event], current_modifiers: Modifiers) {
+        let is_modal_active = self.is_any_modal_open();
+
         for event in events {
             match event {
                 // 1. 日本語 IME イベントの処理
@@ -134,6 +136,17 @@ impl ViviviGuiApp {
                         continue;
                     }
 
+                    // モーダル表示中はモーダル操作キーのみを転送し本文への入力をブロック
+                    if is_modal_active {
+                        for ch in text.chars() {
+                            if matches!(ch, 'q' | 'j' | 'k' | 'f' | 'd' | ' ' | 'g' | 'G') {
+                                self.core.handle_key(AppKeyEvent::char(ch));
+                            }
+                        }
+
+                        continue;
+                    }
+
                     let shift_mod = if current_modifiers.shift {
                         KeyModifiers::SHIFT
                     } else {
@@ -157,6 +170,10 @@ impl ViviviGuiApp {
 
                 // 3. ペースト（Ctrl+V 等）イベント
                 Event::Paste(text) => {
+                    if is_modal_active {
+                        continue;
+                    }
+
                     if self.core.mode() == ViMode::Normal && !self.core.is_migemo_search {
                         // Vi ノーマルモードでの Ctrl+V は矩形ビジュアル選択（VisualBlock）を起動
                         self.dispatch_key_with_particles(AppKeyEvent::new(
@@ -202,7 +219,24 @@ impl ViviviGuiApp {
                     }
 
                     if let Some(app_key) = egui_key_to_app_key(*key, *modifiers) {
-                        self.dispatch_key_with_particles(app_key);
+                        if is_modal_active {
+                            if app_key.code == KeyCode::Esc {
+                                self.close_all_modals();
+                            } else if matches!(
+                                app_key.code,
+                                KeyCode::Enter
+                                    | KeyCode::Up
+                                    | KeyCode::Down
+                                    | KeyCode::PageUp
+                                    | KeyCode::PageDown
+                                    | KeyCode::Tab
+                                    | KeyCode::Char('q')
+                            ) {
+                                self.core.handle_key(app_key);
+                            }
+                        } else {
+                            self.dispatch_key_with_particles(app_key);
+                        }
                     }
                 }
 
@@ -322,7 +356,12 @@ pub fn egui_key_to_app_key(key: Key, modifiers: Modifiers) -> Option<AppKeyEvent
         return Some(AppKeyEvent::new(code, mods));
     }
 
-    // 2. Ctrl または Alt が押されている場合のみ、文字キーをショートカットとして変換
+    // 2. 特殊 Vim ショートカット: Ctrl+[ は Escape として最優先マッピング
+    if mods.contains(KeyModifiers::CONTROL) && key == Key::OpenBracket {
+        return Some(AppKeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    }
+
+    // 3. Ctrl または Alt が押されている場合のみ、文字キーをショートカットとして変換
     if !mods.contains(KeyModifiers::CONTROL) && !mods.contains(KeyModifiers::ALT) {
         return None;
     }
@@ -354,6 +393,23 @@ pub fn egui_key_to_app_key(key: Key, modifiers: Modifiers) -> Option<AppKeyEvent
         Key::X => 'x',
         Key::Y => 'y',
         Key::Z => 'z',
+        Key::Num0 => '0',
+        Key::Num1 => '1',
+        Key::Num2 => '2',
+        Key::Num3 => '3',
+        Key::Num4 => '4',
+        Key::Num5 => '5',
+        Key::Num6 => {
+            if mods.contains(KeyModifiers::CONTROL) || mods.contains(KeyModifiers::SHIFT) {
+                '^'
+            } else {
+                '6'
+            }
+        }
+        Key::Num7 => '7',
+        Key::Num8 => '8',
+        Key::Num9 => '9',
+        Key::Space => ' ',
         Key::Semicolon => ';',
         Key::Comma => ',',
         Key::Period => '.',

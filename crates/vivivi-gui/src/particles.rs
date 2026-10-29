@@ -270,7 +270,7 @@ impl ParticleManager {
             painter.text(
                 p.pos,
                 Align2::LEFT_TOP,
-                p.ch.to_string(),
+                p.ch.encode_utf8(&mut [0u8; 4]),
                 font_id.clone(),
                 faded_color,
             );

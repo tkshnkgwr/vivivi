@@ -125,14 +125,45 @@ pub fn setup_fonts(ctx: &egui::Context) {
     let candidates = collect_candidate_paths();
 
     let mut loaded_font_names = Vec::new();
+    let mut has_japanese_font = false;
 
-    for (name, path) in candidates {
-        if let Ok(bytes) = std::fs::read(&path) {
+    // 1. まず PlemolJP を優先探索（見つかれば最優先の1つを登録して重複ロードを回避）
+    for (name, path) in &candidates {
+        if name.contains("PlemolJP")
+            && let Ok(bytes) = std::fs::read(path)
+        {
             fonts
                 .font_data
                 .insert(name.clone(), Arc::new(FontData::from_owned(bytes)));
-            loaded_font_names.push(name);
+            loaded_font_names.push(name.clone());
+            has_japanese_font = true;
+            break;
         }
+    }
+
+    // 2. PlemolJP が存在しない場合のみ、BIZ UDゴシック -> MS Gothic -> Meiryo の順で 1 つだけフォールバック
+    if !has_japanese_font {
+        for fallback_target in &["BIZ-UDGothicR", "MS-Gothic", "Meiryo"] {
+            if let Some((name, path)) = candidates.iter().find(|(n, _)| n == fallback_target)
+                && let Ok(bytes) = std::fs::read(path)
+            {
+                fonts
+                    .font_data
+                    .insert(name.clone(), Arc::new(FontData::from_owned(bytes)));
+                loaded_font_names.push(name.clone());
+                break;
+            }
+        }
+    }
+
+    // 3. 等幅英数用として Consolas が存在すれば補助追加
+    if let Some((name, path)) = candidates.iter().find(|(n, _)| n == "Consolas")
+        && let Ok(bytes) = std::fs::read(path)
+    {
+        fonts
+            .font_data
+            .insert(name.clone(), Arc::new(FontData::from_owned(bytes)));
+        loaded_font_names.push(name.clone());
     }
 
     // Monospace ファミリーの先頭にロード順（優先度順）で挿入

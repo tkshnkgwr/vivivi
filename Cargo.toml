@@ -31,3 +31,20 @@ crossterm = "0.28"
 arboard = "3.4"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
+
+# --- ビルドプロファイル最適化設定 ---
+# 開発・デバッグ実行時（cargo run）でも、GUI描画・グラフィックス・フォント等の外部依存クレートをフル最適化
+# これにより、Debugビルド時のフレームレート低下と過剰CPU負荷を解消する
+[profile.dev.package."*"]
+opt-level = 3
+
+# 自前クレートの開発ビルドも最低限の最適化（opt-level = 1）を適用して快適な動作を確保
+[profile.dev]
+opt-level = 1
+
+# リリースビルドの最高速化設定
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true

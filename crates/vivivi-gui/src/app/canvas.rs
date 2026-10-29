@@ -10,6 +10,15 @@ use vivivi_vi::ViMode;
 use super::ViviviGuiApp;
 use crate::theme::colors;
 
+#[inline]
+fn compute_line_syntax_key(text: &str, lang: vivivi_modes::SyntaxLang) -> u64 {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    text.hash(&mut hasher);
+    (lang as u8).hash(&mut hasher);
+    hasher.finish()
+}
+
 impl ViviviGuiApp {
     /// 4. 中央エディタ分割ビュー ＆ ミニマップ領域の描画（`ui.painter()` によるカスタム等幅レンダリング）
     pub(crate) fn render_central_panel(&mut self, ctx: &egui::Context) {
@@ -132,8 +141,35 @@ impl ViviviGuiApp {
 
                         let target_line = (self.core.scroll.0 + clicked_vis_row)
                             .min(self.core.buffer.line_count().saturating_sub(1));
+
+                        // 水平スクロールと全角/タブ文字幅を考慮して正確な文字インデックス（Char Index）へ解決
+                        let scroll_col = self.core.scroll.1;
+                        let target_vis_col = scroll_col + clicked_vis_col;
+                        let resolved_col =
+                            if let Some(line_str) = self.core.buffer.get_line(target_line) {
+                                let tab_w = self.core.tab_width.max(1);
+                                let mut cur_vcol = 0;
+                                let mut found_idx = 0;
+                                for (c_idx, ch) in line_str.chars().enumerate() {
+                                    let w = if ch == '\t' {
+                                        tab_w - (cur_vcol % tab_w)
+                                    } else {
+                                        UnicodeWidthChar::width(ch).unwrap_or(1).max(1)
+                                    };
+                                    if cur_vcol + w > target_vis_col {
+                                        found_idx = c_idx;
+                                        break;
+                                    }
+                                    cur_vcol += w;
+                                    found_idx = c_idx + 1;
+                                }
+                                found_idx
+                            } else {
+                                0
+                            };
+
                         self.core.cursor.pos.line = target_line;
-                        self.core.cursor.pos.col = clicked_vis_col;
+                        self.core.cursor.pos.col = resolved_col;
                         self.core.clamp_cursor();
                     }
 
@@ -170,6 +206,12 @@ impl ViviviGuiApp {
                         .floor()
                         .max(1.0) as usize;
                     let tab_width = self.core.tab_width.max(1);
+
+                    // 描画ループ用スクラッチバッファ（毎フレーム・各行でのヒープアロケーションをゼロ化）
+                    let mut chars_buf: Vec<char> = Vec::with_capacity(256);
+                    let mut char_colors_buf: Vec<Color32> = Vec::with_capacity(256);
+                    let mut search_matched_buf: Vec<bool> = Vec::with_capacity(256);
+                    let mut visual_selected_buf: Vec<bool> = Vec::with_capacity(256);
 
                     let mut line_idx = scroll.0;
                     let mut vis_row = 0;
@@ -276,7 +318,9 @@ impl ViviviGuiApp {
                             (display_line.clone(), None)
                         };
 
-                        let chars: Vec<char> = processed_line.chars().collect();
+                        chars_buf.clear();
+                        chars_buf.extend(processed_line.chars());
+                        let chars = &chars_buf;
                         let tokens = if is_fold_start {
                             vec![vivivi_modes::SyntaxToken {
                                 text: processed_line.clone(),
@@ -288,10 +332,24 @@ impl ViviviGuiApp {
                                 token_type: TokenType::Text,
                             }]
                         } else {
-                            vivivi_modes::tokenize_line(&display_line, self.core.syntax_lang)
+                            let key = compute_line_syntax_key(&display_line, self.core.syntax_lang);
+                            if let Some(cached) = self.syntax_cache.get(&key) {
+                                cached.clone()
+                            } else {
+                                let t = vivivi_modes::tokenize_line(
+                                    &display_line,
+                                    self.core.syntax_lang,
+                                );
+                                if self.syntax_cache.len() > 1024 {
+                                    self.syntax_cache.clear();
+                                }
+                                self.syntax_cache.insert(key, t.clone());
+                                t
+                            }
                         };
 
-                        let mut char_colors: Vec<Color32> = Vec::with_capacity(chars.len());
+                        char_colors_buf.clear();
+                        let char_colors = &mut char_colors_buf;
                         for token in tokens {
                             let c = Self::syntax_token_color(token.token_type);
                             for _ in token.text.chars() {
@@ -309,7 +367,9 @@ impl ViviviGuiApp {
                         }
 
                         // 検索一致箇所のハイライト判定
-                        let mut search_matched = vec![false; chars.len()];
+                        search_matched_buf.clear();
+                        search_matched_buf.resize(chars.len(), false);
+                        let search_matched = &mut search_matched_buf;
                         if let Some(ref re) = active_search_re {
                             for m in re.find_iter(&display_line) {
                                 let start_c = display_line[..m.start()].chars().count();
@@ -325,7 +385,9 @@ impl ViviviGuiApp {
                         }
 
                         // ビジュアル選択範囲のハイライト判定
-                        let mut visual_selected = vec![false; chars.len().max(1)];
+                        visual_selected_buf.clear();
+                        visual_selected_buf.resize(chars.len().max(1), false);
+                        let visual_selected = &mut visual_selected_buf;
                         if is_active_window && let Some(anchor) = self.core.cursor.anchor {
                             let min_l = anchor.line.min(cur.line);
                             let max_l = anchor.line.max(cur.line);
@@ -530,7 +592,7 @@ impl ViviviGuiApp {
                                             painter.text(
                                                 Pos2::new(char_x, row_y),
                                                 Align2::LEFT_TOP,
-                                                ch.to_string(),
+                                                ch.encode_utf8(&mut [0u8; 4]),
                                                 font_id.clone(),
                                                 fg,
                                             );
@@ -640,7 +702,7 @@ impl ViviviGuiApp {
                                             painter.text(
                                                 Pos2::new(cursor_x, row_y),
                                                 Align2::LEFT_TOP,
-                                                ch.to_string(),
+                                                ch.encode_utf8(&mut [0u8; 4]),
                                                 font_id.clone(),
                                                 colors::BG_EDITOR,
                                             );
@@ -688,7 +750,7 @@ impl ViviviGuiApp {
 
                 if should_enable_ime {
                     let fallback_rect = Rect::from_min_size(
-                        Pos2::new(editor_rect.min.x + 40.0, editor_rect.min.y + 20.0),
+                        self.last_active_text_origin,
                         Vec2::new(2.0, line_height),
                     );
                     let cursor_rect = active_cursor_screen_rect.unwrap_or(fallback_rect);
@@ -711,16 +773,18 @@ impl ViviviGuiApp {
                         Vec2::new(minimap_width, available_rect.height()),
                     );
 
-                    // ミニマップクリックでスクロールジャンプ
+                    // ミニマップクリックで画面中央へスクロールジャンプ
                     if let Some(click_pos) = pointer_click_pos
                         && minimap_rect.contains(click_pos)
                     {
                         let ratio = ((click_pos.y - minimap_rect.top()) / minimap_rect.height())
                             .clamp(0.0, 1.0);
-                        let target_line = (ratio
-                            * self.core.buffer.line_count().saturating_sub(1) as f32)
-                            as usize;
-                        self.core.scroll.0 = target_line;
+                        let total_cnt = self.core.buffer.line_count().max(1);
+                        let target_line =
+                            (ratio * (total_cnt.saturating_sub(1)) as f32).round() as usize;
+                        let visible_rows = (editor_rect.height() / line_height).max(1.0) as usize;
+                        let half_screen = visible_rows / 2;
+                        self.core.scroll.0 = target_line.saturating_sub(half_screen);
                         self.core.cursor.pos.line = target_line;
                         self.core.clamp_cursor();
                     }

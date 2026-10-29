@@ -7,6 +7,26 @@ use super::ViviviGuiApp;
 use crate::theme::colors;
 
 impl ViviviGuiApp {
+    /// いずれかのモーダルウィンドウが開いているかどうかを返します。
+    pub fn is_any_modal_open(&self) -> bool {
+        self.core.show_help
+            || self.core.show_preview
+            || self.core.show_clipboard_hist
+            || self.core.show_recent_modal
+            || self.core.show_filer
+    }
+
+    /// 開いているすべてのモーダルウィンドウを閉じます。
+    pub fn close_all_modals(&mut self) {
+        self.core.show_help = false;
+        self.core.show_preview = false;
+        self.core.show_clipboard_hist = false;
+        self.core.show_recent_modal = false;
+        if self.core.show_filer {
+            self.core.close_filer();
+        }
+    }
+
     /// 共通 `App` コアのモーダル状態（ヘルプ・印刷プレビュー・履歴・クリップボード・ファイラー）を
     /// フローティングウィンドウとして描画します。
     pub(crate) fn render_modals(&mut self, ctx: &egui::Context) {
@@ -144,8 +164,9 @@ impl ViviviGuiApp {
                 });
             if let Some(target) = file_to_open {
                 open = false;
-                self.core
-                    .execute_ex(&format!("e {}", target.to_string_lossy()));
+                if let Err(e) = self.core.open_file(target) {
+                    self.core.status_message = Some(format!("ファイル読込エラー: {e}"));
+                }
             }
             self.core.show_recent_modal = open;
         }

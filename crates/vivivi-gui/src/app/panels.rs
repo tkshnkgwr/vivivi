@@ -254,10 +254,18 @@ impl ViviviGuiApp {
                     if let Some(idx) = tab_to_close {
                         if idx == self.core.active_tab {
                             let _ = self.core.close_tab();
-                        } else if tab_count > 1 {
-                            self.core.tabs.remove(idx);
-                            if self.core.active_tab > idx {
-                                self.core.active_tab -= 1;
+                        } else if tab_count > 1 && idx < self.core.tabs.len() {
+                            if self.core.tabs[idx].buffer.is_modified() {
+                                self.core.status_message = Some(format!(
+                                    "E37: 未保存の変更があります (タブ {})。先に保存してください",
+                                    idx + 1
+                                ));
+                            } else {
+                                self.core.tabs.remove(idx);
+                                if self.core.active_tab > idx {
+                                    self.core.active_tab -= 1;
+                                }
+                                self.core.sync_active_tab_state();
                             }
                         }
                     }
@@ -310,7 +318,7 @@ impl ViviviGuiApp {
                         );
 
                         let mut dir_to_navigate: Option<PathBuf> = None;
-                        let mut file_to_open: Option<String> = None;
+                        let mut file_to_open: Option<PathBuf> = None;
 
                         // 親ディレクトリ (..) への移動リンク
                         if let Some(parent) = self.current_dir.parent() {
@@ -343,7 +351,7 @@ impl ViviviGuiApp {
                                 if is_dir {
                                     dir_to_navigate = Some(path.clone());
                                 } else {
-                                    file_to_open = Some(path.to_string_lossy().to_string());
+                                    file_to_open = Some(path.clone());
                                 }
                             }
                         }
@@ -351,8 +359,10 @@ impl ViviviGuiApp {
                         if let Some(target_dir) = dir_to_navigate {
                             self.navigate_sidebar_dir(target_dir);
                         }
-                        if let Some(path_str) = file_to_open {
-                            self.core.execute_ex(&format!("e {}", path_str));
+                        if let Some(target_path) = file_to_open
+                            && let Err(e) = self.core.open_file(target_path)
+                        {
+                            self.core.status_message = Some(format!("ファイル読込エラー: {e}"));
                         }
                     }
                     SidebarTab::Outline => {
@@ -388,6 +398,8 @@ impl ViviviGuiApp {
                                 self.core.cursor.pos.line = line;
                                 self.core.cursor.pos.col = 0;
                                 self.core.clamp_cursor();
+                                // 画面中央付近にジャンプ行が配置されるようスクロールを同期
+                                self.core.scroll.0 = line.saturating_sub(12);
                             }
                         }
                     }
