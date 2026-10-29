@@ -178,7 +178,19 @@ impl TemplateManager {
             .or_else(|_| std::env::var("USER"))
             .unwrap_or_else(|_| "user".to_string());
 
-        let guard = format!("{}_{}_H_", file_base.to_uppercase(), ext.to_uppercase());
+        let sanitized_base: String = file_base
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+            .collect();
+        let sanitized_ext: String = ext
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+            .collect();
+        let guard = format!(
+            "{}_{}_H_",
+            sanitized_base.to_uppercase(),
+            sanitized_ext.to_uppercase()
+        );
 
         let mut expanded = template_raw.to_string();
         expanded = expanded.replace("%FileName%", file_name);
@@ -190,15 +202,14 @@ impl TemplateManager {
         expanded = expanded.replace("%Author%", &user_name);
         expanded = expanded.replace("%Guard%", &guard);
 
-        // %Cursor% の位置を特定して削除
+        // %Cursor% の位置を特定し、全出現箇所を削除
         let cursor_marker = "%Cursor%";
         let cursor_pos = if let Some(idx) = expanded.find(cursor_marker) {
-            let pos = expanded[..idx].chars().count();
-            expanded.replace_range(idx..idx + cursor_marker.len(), "");
-            pos
+            expanded[..idx].chars().count()
         } else {
             expanded.chars().count()
         };
+        expanded = expanded.replace(cursor_marker, "");
 
         TemplateResult {
             text: expanded,
@@ -269,5 +280,19 @@ mod tests {
         assert!(result.text.contains("// Date: 2026-10-14"));
         assert!(!result.text.contains("%Cursor%"));
         assert!(result.cursor_pos > 0);
+    }
+
+    #[test]
+    fn test_template_guard_sanitization_and_multiple_cursors() {
+        let mut mgr = TemplateManager::new();
+        let raw = "#ifndef %Guard%\n#define %Guard%\n// %Cursor%\n// %Cursor%\n#endif\n";
+        mgr.register_template("h", raw);
+
+        let result = mgr
+            .load_and_expand("my-header.h", "2026-10-14", "12:00:00")
+            .unwrap();
+
+        assert!(result.text.contains("MY_HEADER_H_H_"));
+        assert!(!result.text.contains("%Cursor%"));
     }
 }

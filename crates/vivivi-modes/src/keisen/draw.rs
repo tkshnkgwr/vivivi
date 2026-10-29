@@ -44,6 +44,10 @@ impl KeisenMode {
 
         // 1. 移動先の位置を確保・計算
         let next_pos = Self::ensure_target_position(buffer, *cursor, dir);
+        if *cursor == next_pos {
+            buffer.close_undo_block();
+            return;
+        }
 
         if is_erase {
             // 消去の場合: 現在セルから進行方向、移動先セルから逆方向の接続を除去

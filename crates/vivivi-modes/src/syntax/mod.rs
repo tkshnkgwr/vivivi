@@ -411,10 +411,21 @@ pub fn tokenize_line(line: &str, lang: SyntaxLang) -> Vec<SyntaxToken> {
         // 4. 数値リテラル
         if ch.is_ascii_digit() {
             let start = i;
-            while i < len
-                && (chars[i].is_ascii_alphanumeric() || chars[i] == '.' || chars[i] == '_')
-            {
-                i += 1;
+            let mut has_dot = false;
+            while i < len {
+                let c = chars[i];
+                if c == '.' {
+                    // 範囲演算子 (..) または次が数字でない場合は小数点とみなさない
+                    if has_dot || i + 1 >= len || !chars[i + 1].is_ascii_digit() {
+                        break;
+                    }
+                    has_dot = true;
+                    i += 1;
+                } else if c.is_ascii_alphanumeric() || c == '_' {
+                    i += 1;
+                } else {
+                    break;
+                }
             }
             tokens.push(SyntaxToken {
                 text: chars[start..i].iter().collect(),

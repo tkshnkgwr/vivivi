@@ -164,3 +164,18 @@ fn test_edge_cases() {
     let mixed_newlines = b"line1\r\nline2\r\nline3\r\nline4\nline5\r\n";
     assert_eq!(detect_newline(mixed_newlines), NewlineType::Crlf);
 }
+
+#[test]
+fn test_utf16_no_bom_first_char_preserved_and_newline() {
+    // "Hello\r\nWorld" を UTF-16LE（BOMなし）で作成
+    let utf16le_bytes: Vec<u8> = "Hello\r\nWorld"
+        .encode_utf16()
+        .flat_map(|u| u.to_le_bytes())
+        .collect();
+    let (text, enc, nl) = decode_bytes(&utf16le_bytes);
+
+    assert_eq!(enc, CharEncoding::Utf16Le);
+    assert_eq!(nl, NewlineType::Crlf);
+    assert_eq!(text, "Hello\nWorld");
+    assert!(text.starts_with('H')); // 先頭文字が削られていないことを確認
+}

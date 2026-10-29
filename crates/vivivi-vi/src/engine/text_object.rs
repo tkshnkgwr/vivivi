@@ -144,36 +144,45 @@ impl ViEngine {
         let chars: Vec<char> = line_text.chars().collect();
         let col = cursor.pos.col;
 
-        // 行内の全 quote 位置を収集
+        // 行内の全 quote 位置を収集（エスケープされた quote は除外）
         let mut quote_indices = Vec::new();
+        let mut escaped = false;
         for (i, &c) in chars.iter().enumerate() {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            if c == '\\' {
+                escaped = true;
+                continue;
+            }
             if c == quote {
                 quote_indices.push(i);
             }
         }
 
-        if quote_indices.len() < 2 {
+        // 偶数個のペア (q0, q1), (q2, q3)... のみ有効な引用符ペアとして抽出
+        let mut valid_pairs = Vec::new();
+        for chunk in quote_indices.chunks_exact(2) {
+            valid_pairs.push((chunk[0], chunk[1]));
+        }
+
+        if valid_pairs.is_empty() {
             return None;
         }
 
-        // カーソル位置を挟むペア、またはカーソルより右にある最初のペアを探す
+        // 1. カーソル位置を内包するペアを探す
         let mut target_pair = None;
-        for i in 0..quote_indices.len() - 1 {
-            let q1 = quote_indices[i];
-            let q2 = quote_indices[i + 1];
-
-            // 1. カーソルがペアの内側（または quote 文字上）にある
+        for &(q1, q2) in &valid_pairs {
             if col >= q1 && col <= q2 {
                 target_pair = Some((q1, q2));
                 break;
             }
         }
 
-        // カーソルより右にある最初のペア
+        // 2. カーソルより右にある最初のペアを探す
         if target_pair.is_none() {
-            for i in 0..quote_indices.len() - 1 {
-                let q1 = quote_indices[i];
-                let q2 = quote_indices[i + 1];
+            for &(q1, q2) in &valid_pairs {
                 if q1 > col {
                     target_pair = Some((q1, q2));
                     break;

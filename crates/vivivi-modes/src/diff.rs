@@ -112,54 +112,121 @@ pub fn diff_lines(old_text: &str, new_text: &str) -> Vec<DiffLine> {
     let n = old_lines.len();
     let m = new_lines.len();
 
-    // DPテーブル（行数が多い場合の安全ガード: 行数が極端に多い場合はフォールバック）
-    let mut dp = vec![vec![0usize; m + 1]; n + 1];
-    for i in 0..n {
-        for j in 0..m {
-            if old_lines[i] == new_lines[j] {
-                dp[i + 1][j + 1] = dp[i][j] + 1;
-            } else {
-                dp[i + 1][j + 1] = dp[i + 1][j].max(dp[i][j + 1]);
+    // 共通プレフィックスの検出
+    let mut prefix_len = 0;
+    while prefix_len < n && prefix_len < m && old_lines[prefix_len] == new_lines[prefix_len] {
+        prefix_len += 1;
+    }
+
+    // 共通サフィックスの検出
+    let mut suffix_len = 0;
+    while suffix_len < (n - prefix_len)
+        && suffix_len < (m - prefix_len)
+        && old_lines[n - 1 - suffix_len] == new_lines[m - 1 - suffix_len]
+    {
+        suffix_len += 1;
+    }
+
+    let mut result = Vec::new();
+
+    // 1. プレフィックス
+    for (idx, &line) in old_lines.iter().enumerate().take(prefix_len) {
+        result.push(DiffLine {
+            diff_type: DiffType::Equal,
+            old_lineno: Some(idx + 1),
+            new_lineno: Some(idx + 1),
+            text: line.to_string(),
+        });
+    }
+
+    let mid_old = &old_lines[prefix_len..n - suffix_len];
+    let mid_new = &new_lines[prefix_len..m - suffix_len];
+    let n_mid = mid_old.len();
+    let m_mid = mid_new.len();
+
+    if n_mid > 0 || m_mid > 0 {
+        // 安全ガード（DPテーブルのセル数が10,000,000を超える場合は全削除＋全追加フォールバック）
+        if (n_mid + 1).saturating_mul(m_mid + 1) > 10_000_000 {
+            for (idx, &line) in mid_old.iter().enumerate() {
+                result.push(DiffLine {
+                    diff_type: DiffType::Delete,
+                    old_lineno: Some(prefix_len + idx + 1),
+                    new_lineno: None,
+                    text: line.to_string(),
+                });
             }
+            for (idx, &line) in mid_new.iter().enumerate() {
+                result.push(DiffLine {
+                    diff_type: DiffType::Insert,
+                    old_lineno: None,
+                    new_lineno: Some(prefix_len + idx + 1),
+                    text: line.to_string(),
+                });
+            }
+        } else {
+            // 中間部分のDP計算
+            let mut dp = vec![vec![0usize; m_mid + 1]; n_mid + 1];
+            for i in 0..n_mid {
+                for j in 0..m_mid {
+                    if mid_old[i] == mid_new[j] {
+                        dp[i + 1][j + 1] = dp[i][j] + 1;
+                    } else {
+                        dp[i + 1][j + 1] = dp[i + 1][j].max(dp[i][j + 1]);
+                    }
+                }
+            }
+
+            let mut i = n_mid;
+            let mut j = m_mid;
+            let mut mid_diff = Vec::new();
+
+            while i > 0 || j > 0 {
+                if i > 0 && j > 0 && mid_old[i - 1] == mid_new[j - 1] {
+                    mid_diff.push(DiffLine {
+                        diff_type: DiffType::Equal,
+                        old_lineno: Some(prefix_len + i),
+                        new_lineno: Some(prefix_len + j),
+                        text: mid_old[i - 1].to_string(),
+                    });
+                    i -= 1;
+                    j -= 1;
+                } else if j > 0 && (i == 0 || dp[i][j - 1] >= dp[i - 1][j]) {
+                    mid_diff.push(DiffLine {
+                        diff_type: DiffType::Insert,
+                        old_lineno: None,
+                        new_lineno: Some(prefix_len + j),
+                        text: mid_new[j - 1].to_string(),
+                    });
+                    j -= 1;
+                } else if i > 0 && (j == 0 || dp[i][j - 1] < dp[i - 1][j]) {
+                    mid_diff.push(DiffLine {
+                        diff_type: DiffType::Delete,
+                        old_lineno: Some(prefix_len + i),
+                        new_lineno: None,
+                        text: mid_old[i - 1].to_string(),
+                    });
+                    i -= 1;
+                }
+            }
+
+            mid_diff.reverse();
+            result.extend(mid_diff);
         }
     }
 
-    // バックトラック
-    let mut i = n;
-    let mut j = m;
-    let mut raw_diff = Vec::new();
-
-    while i > 0 || j > 0 {
-        if i > 0 && j > 0 && old_lines[i - 1] == new_lines[j - 1] {
-            raw_diff.push(DiffLine {
-                diff_type: DiffType::Equal,
-                old_lineno: Some(i),
-                new_lineno: Some(j),
-                text: old_lines[i - 1].to_string(),
-            });
-            i -= 1;
-            j -= 1;
-        } else if j > 0 && (i == 0 || dp[i][j - 1] >= dp[i - 1][j]) {
-            raw_diff.push(DiffLine {
-                diff_type: DiffType::Insert,
-                old_lineno: None,
-                new_lineno: Some(j),
-                text: new_lines[j - 1].to_string(),
-            });
-            j -= 1;
-        } else if i > 0 && (j == 0 || dp[i][j - 1] < dp[i - 1][j]) {
-            raw_diff.push(DiffLine {
-                diff_type: DiffType::Delete,
-                old_lineno: Some(i),
-                new_lineno: None,
-                text: old_lines[i - 1].to_string(),
-            });
-            i -= 1;
-        }
+    // 3. サフィックス
+    for (idx, &line) in old_lines[n - suffix_len..].iter().enumerate() {
+        let old_idx = n - suffix_len + idx;
+        let new_idx = m - suffix_len + idx;
+        result.push(DiffLine {
+            diff_type: DiffType::Equal,
+            old_lineno: Some(old_idx + 1),
+            new_lineno: Some(new_idx + 1),
+            text: line.to_string(),
+        });
     }
 
-    raw_diff.reverse();
-    raw_diff
+    result
 }
 
 /// 2つのテキストから Unified Diff 形式（`---` / `+++` / `@@`）のパッチ文字列を生成します。

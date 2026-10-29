@@ -207,7 +207,10 @@ impl DabbrevSession {
 pub fn is_word_char(ch: char) -> bool {
     ch.is_alphanumeric()
         || ch == '_'
-        || (!ch.is_ascii() && !ch.is_whitespace() && !is_ascii_punctuation(ch))
+        || (!ch.is_ascii()
+            && !ch.is_whitespace()
+            && !is_ascii_punctuation(ch)
+            && !is_cjk_punctuation(ch))
 }
 
 fn is_ascii_punctuation(ch: char) -> bool {
@@ -243,6 +246,46 @@ fn is_ascii_punctuation(ch: char) -> bool {
             | '|'
             | '}'
             | '~'
+    )
+}
+
+fn is_cjk_punctuation(ch: char) -> bool {
+    matches!(
+        ch,
+        '「' | '」'
+            | '『'
+            | '』'
+            | '（'
+            | '）'
+            | '〔'
+            | '〕'
+            | '【'
+            | '】'
+            | '〈'
+            | '〉'
+            | '《'
+            | '》'
+            | '［'
+            | '］'
+            | '｛'
+            | '｝'
+            | '、'
+            | '。'
+            | '・'
+            | '：'
+            | '；'
+            | '？'
+            | '！'
+            | '〜'
+            | '～'
+            | '―'
+            | '‐'
+            | '…'
+            | '‥'
+            | '“'
+            | '”'
+            | '‘'
+            | '’'
     )
 }
 
@@ -397,6 +440,13 @@ mod tests {
         let buffer = TextBuffer::from_text("let my_variable_name = 100;\nlet my_");
         let prefix = extract_word_prefix(&buffer, 1, 7).expect("should extract prefix");
         assert_eq!(prefix, "my_");
+
+        // 全角括弧内の単語切り分け
+        assert!(!is_word_char('「'));
+        assert!(!is_word_char('」'));
+        assert!(!is_word_char('、'));
+        assert!(!is_word_char('。'));
+        assert!(is_word_char('日'));
     }
 
     #[test]

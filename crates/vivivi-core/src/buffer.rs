@@ -170,7 +170,13 @@ impl TextBuffer {
         let file_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("untitled");
         let undofile_name = format!(".{}.un~", file_name);
         match p.parent() {
-            Some(parent) => parent.join(undofile_name),
+            Some(parent) => {
+                if parent.as_os_str().is_empty() {
+                    std::path::PathBuf::from(undofile_name)
+                } else {
+                    parent.join(undofile_name)
+                }
+            }
             None => std::path::PathBuf::from(undofile_name),
         }
     }

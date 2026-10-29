@@ -190,12 +190,17 @@ pub fn find_matching_paren(buffer: &TextBuffer, pos: usize) -> Option<usize> {
             // ブロックコメント /* ... */ のスキップ
             if ch == '/' && buffer.char_at(idx + 1) == Some('*') {
                 idx += 2;
+                let mut closed = false;
                 while idx < pos {
                     if buffer.char_at(idx) == Some('*') && buffer.char_at(idx + 1) == Some('/') {
                         idx += 2;
+                        closed = true;
                         break;
                     }
                     idx += 1;
+                }
+                if !closed {
+                    break;
                 }
                 continue;
             }
@@ -269,14 +274,42 @@ pub fn find_matching_paren_in_line(
     let chars: Vec<char> = line_text.chars().collect();
     let col = cursor.col.min(chars.len());
 
-    // cursor.col 以降の文字から最初に見つかる括弧を探索
-    for (offset, &ch) in chars[col..].iter().enumerate() {
+    // cursor.col 以降の文字から最初に見つかる括弧を探索（行コメントや文字列リテラルをスキップ）
+    let mut i = col;
+    let mut in_str = None;
+
+    while i < chars.len() {
+        let ch = chars[i];
+
+        // 文字列リテラルの追跡
+        if let Some(quote) = in_str {
+            if ch == '\\' {
+                i += 2;
+                continue;
+            }
+            if ch == quote {
+                in_str = None;
+            }
+            i += 1;
+            continue;
+        } else if ch == '"' || ch == '\'' {
+            in_str = Some(ch);
+            i += 1;
+            continue;
+        }
+
+        // 行コメント // の開始で探索終了
+        if ch == '/' && i + 1 < chars.len() && chars[i + 1] == '/' {
+            break;
+        }
+
         if paren_pair(ch).is_some() {
-            let target_col = col + offset;
-            let target_pos = buffer
-                .cursor_to_position(crate::cursor::CursorPosition::new(cursor.line, target_col));
+            let target_pos =
+                buffer.cursor_to_position(crate::cursor::CursorPosition::new(cursor.line, i));
             return find_matching_paren(buffer, target_pos);
         }
+
+        i += 1;
     }
 
     None

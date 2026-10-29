@@ -270,20 +270,34 @@ impl ViEngine {
         let start_type = Self::char_class(start_ch, is_big);
 
         // 1. 現在の単語・記号グループを抜ける
-        while pos < total_len {
-            if buffer
-                .char_at(pos)
-                .is_some_and(|ch| ch == '\n' || Self::char_class(ch, is_big) != start_type)
-            {
-                break;
-            }
+        if start_ch == '\n' {
             pos += 1;
+        } else {
+            while pos < total_len {
+                if buffer
+                    .char_at(pos)
+                    .is_some_and(|ch| ch == '\n' || Self::char_class(ch, is_big) != start_type)
+                {
+                    break;
+                }
+                pos += 1;
+            }
         }
 
         // 2. 空白文字をスキップする
+        //    行末の空白と、その行の終了を示す改行 \n はスキップして次行へ進む。
+        //    ただし、次行の先頭がさらに \n（空行）であればそこで停止する。
+        let mut passed_newline = false;
         while pos < total_len {
-            if buffer.char_at(pos).is_some_and(|ch| !ch.is_whitespace()) {
-                break;
+            if let Some(ch) = buffer.char_at(pos) {
+                if ch == '\n' {
+                    if passed_newline {
+                        break;
+                    }
+                    passed_newline = true;
+                } else if !ch.is_whitespace() {
+                    break;
+                }
             }
             pos += 1;
         }
@@ -304,26 +318,34 @@ impl ViEngine {
         }
         pos -= 1;
 
-        // 1. 直前の空白をスキップ
+        // 1. 直前の空白をスキップ（空行 \n は単独単語扱い）
         while pos > 0 {
-            if buffer.char_at(pos).is_some_and(|ch| !ch.is_whitespace()) {
-                break;
+            if let Some(ch) = buffer.char_at(pos) {
+                if ch == '\n' {
+                    // もし現在位置が空行（手前も \n）なら、空行で停止
+                    if pos > 0 && buffer.char_at(pos - 1) == Some('\n') {
+                        break;
+                    }
+                } else if !ch.is_whitespace() {
+                    break;
+                }
             }
             pos -= 1;
         }
 
         let target_ch = buffer.char_at(pos).unwrap_or(' ');
-        let target_type = Self::char_class(target_ch, is_big);
+        if target_ch != '\n' {
+            let target_type = Self::char_class(target_ch, is_big);
 
-        // 2. 同一単語クラスの先頭まで巻き戻す
-        while pos > 0 {
-            if buffer
-                .char_at(pos - 1)
-                .is_some_and(|ch| ch.is_whitespace() || Self::char_class(ch, is_big) != target_type)
-            {
-                break;
+            // 2. 同一単語クラスの先頭まで巻き戻す
+            while pos > 0 {
+                if buffer.char_at(pos - 1).is_some_and(|ch| {
+                    ch.is_whitespace() || Self::char_class(ch, is_big) != target_type
+                }) {
+                    break;
+                }
+                pos -= 1;
             }
-            pos -= 1;
         }
 
         cursor.pos = buffer.position_to_cursor(pos);

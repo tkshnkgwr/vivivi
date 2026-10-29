@@ -161,34 +161,25 @@ impl ProjectManager {
 
                         for (lineno, line) in content.lines().enumerate() {
                             let trimmed = line.trim();
-                            if trimmed.starts_with("fn ")
-                                || trimmed.starts_with("pub fn ")
-                                || trimmed.starts_with("struct ")
-                                || trimmed.starts_with("pub struct ")
-                                || trimmed.starts_with("def ")
-                                || trimmed.starts_with("class ")
-                            {
-                                // 識別子の抽出
-                                let words: Vec<&str> = trimmed.split_whitespace().collect();
-                                let mut tag_name = "";
-                                for (w_idx, &w) in words.iter().enumerate() {
-                                    if (w == "fn" || w == "struct" || w == "def" || w == "class")
-                                        && w_idx + 1 < words.len()
-                                    {
-                                        tag_name = words[w_idx + 1]
-                                            .split(&['(', '<', ':', '{'][..])
-                                            .next()
-                                            .unwrap_or("");
-                                        break;
-                                    }
+                            let words: Vec<&str> = trimmed.split_whitespace().collect();
+                            let mut tag_name = "";
+                            for (w_idx, &w) in words.iter().enumerate() {
+                                if matches!(w, "fn" | "struct" | "def" | "class" | "enum" | "trait")
+                                    && w_idx + 1 < words.len()
+                                {
+                                    tag_name = words[w_idx + 1]
+                                        .split(&['(', '<', ':', '{', ';'][..])
+                                        .next()
+                                        .unwrap_or("");
+                                    break;
                                 }
+                            }
 
-                                if !tag_name.is_empty() {
-                                    let tag_entry =
-                                        format!("{}\t{}\t{}", tag_name, rel_path, lineno + 1);
-                                    tag_lines.push(tag_entry);
-                                    count += 1;
-                                }
+                            if !tag_name.is_empty() {
+                                let tag_entry =
+                                    format!("{}\t{}\t{}", tag_name, rel_path, lineno + 1);
+                                tag_lines.push(tag_entry);
+                                count += 1;
                             }
                         }
                     }

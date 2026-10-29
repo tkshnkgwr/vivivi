@@ -130,6 +130,7 @@ impl FoldManager {
     /// assert_eq!(fm.folds[0].start_line, 1);
     /// ```
     pub fn compute_indent_folds(&mut self, text: &str, tab_width: usize) {
+        let tab_width = tab_width.max(1);
         self.folds.clear();
         let lines: Vec<&str> = text.lines().collect();
         if lines.len() < 2 {
@@ -224,7 +225,12 @@ impl FoldManager {
     /// assert!(!fm.folds[0].is_open);
     /// ```
     pub fn toggle_fold(&mut self, line: usize) -> bool {
-        if let Some(fold) = self.folds.iter_mut().rev().find(|f| f.contains(line)) {
+        if let Some(fold) = self
+            .folds
+            .iter_mut()
+            .filter(|f| f.contains(line))
+            .max_by_key(|f| f.level)
+        {
             fold.is_open = !fold.is_open;
             true
         } else {
@@ -245,7 +251,12 @@ impl FoldManager {
     /// assert!(!fm.folds[0].is_open);
     /// ```
     pub fn close_fold(&mut self, line: usize) -> bool {
-        if let Some(fold) = self.folds.iter_mut().rev().find(|f| f.contains(line)) {
+        if let Some(fold) = self
+            .folds
+            .iter_mut()
+            .filter(|f| f.contains(line))
+            .max_by_key(|f| f.level)
+        {
             fold.is_open = false;
             true
         } else {
@@ -267,7 +278,12 @@ impl FoldManager {
     /// assert!(fm.folds[0].is_open);
     /// ```
     pub fn open_fold(&mut self, line: usize) -> bool {
-        if let Some(fold) = self.folds.iter_mut().rev().find(|f| f.contains(line)) {
+        if let Some(fold) = self
+            .folds
+            .iter_mut()
+            .filter(|f| f.contains(line))
+            .max_by_key(|f| f.level)
+        {
             fold.is_open = true;
             true
         } else {
@@ -395,5 +411,14 @@ mod tests {
         assert!(fm.is_line_hidden(2));
         assert!(fm.is_line_hidden(3));
         assert!(!fm.is_line_hidden(1)); // 開始行は隠れない
+    }
+
+    #[test]
+    fn test_compute_indent_folds_zero_tab_width() {
+        let code = "fn main() {\n    let a = 1;\n}\n";
+        let mut fm = FoldManager::new();
+        // tab_width == 0 でもパニックしない
+        fm.compute_indent_folds(code, 0);
+        assert!(!fm.folds.is_empty());
     }
 }

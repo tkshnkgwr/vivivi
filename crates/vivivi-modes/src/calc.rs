@@ -93,9 +93,8 @@ use vivivi_core::TextBuffer;
 pub fn calculate_box_lines(lines: &[String]) -> Option<BoxCalculationResult> {
     let mut numbers = Vec::new();
     for line in lines {
-        // カンマ（3桁区切り）を除去してトリム
-        let cleaned = line.replace(',', "").trim().to_string();
-        if cleaned.is_empty() {
+        let cleaned = normalize_calc_line(line);
+        if cleaned.trim().is_empty() {
             continue;
         }
 
@@ -183,6 +182,39 @@ pub fn calculate_box_selection(
     calculate_box_lines(&block_lines)
 }
 
+fn normalize_calc_line(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let chars: Vec<char> = line.chars().collect();
+    let len = chars.len();
+
+    let mut i = 0;
+    while i < len {
+        let ch = chars[i];
+        if ch == ',' {
+            let prev_is_digit = i > 0 && chars[i - 1].is_ascii_digit();
+            let next_3_digits = i + 3 < len
+                && chars[i + 1].is_ascii_digit()
+                && chars[i + 2].is_ascii_digit()
+                && chars[i + 3].is_ascii_digit();
+            let next_4_is_not_digit = i + 4 >= len
+                || !chars[i + 4].is_ascii_digit()
+                || chars[i + 4] == ','
+                || chars[i + 4] == '.';
+
+            if prev_is_digit && next_3_digits && next_4_is_not_digit {
+                // 3桁区切りのカンマは除去
+            } else {
+                // セパレータカンマは空白に置換
+                out.push(' ');
+            }
+        } else {
+            out.push(ch);
+        }
+        i += 1;
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -227,5 +259,14 @@ mod tests {
         assert_eq!(result.count, 3);
         assert_eq!(result.sum, 500.0);
         assert_eq!(result.average, 166.66666666666666);
+    }
+
+    #[test]
+    fn test_box_calculation_comma_separated_numbers() {
+        // カンマ区切りの数値リストが結合されず別々の数値として集計されること
+        let lines = vec!["10,20,30".to_string()];
+        let result = calculate_box_lines(&lines).expect("should calculate");
+        assert_eq!(result.count, 3);
+        assert_eq!(result.sum, 60.0);
     }
 }

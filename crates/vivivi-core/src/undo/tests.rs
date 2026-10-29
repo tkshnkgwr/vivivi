@@ -79,3 +79,34 @@ fn test_undo_serialize_deserialize() {
     assert_eq!(undo_mgr.save_point, restored.save_point);
     assert_eq!(undo_mgr.undo_stack[0], restored.undo_stack[0]);
 }
+
+#[test]
+fn test_post_save_typing_modified_state() {
+    let mut undo_mgr = UndoMgr::new();
+    undo_mgr.push_insert(0, "hello");
+    assert!(undo_mgr.is_modified());
+
+    undo_mgr.on_saved();
+    assert!(!undo_mgr.is_modified());
+
+    // 保存直後に連続して文字を入力
+    undo_mgr.push_insert(5, "!");
+    // マージが禁止され、新しいブロックとして追加されるため Modified が true になる
+    assert!(undo_mgr.is_modified());
+    assert_eq!(undo_mgr.undo_stack.len(), 2);
+}
+
+#[test]
+fn test_undo_serialize_complex_escaped_quotes() {
+    let mut undo_mgr = UndoMgr::new();
+    undo_mgr.open_block();
+    // バックスラッシュ直後にダブルクォートを含む文字列
+    undo_mgr.push_insert(0, r#"let s = "hello \"world\"\\";"#);
+    undo_mgr.push_replace(10, r#"\"old\""#, r#"\"new\""#);
+    undo_mgr.close_block();
+
+    let serialized = undo_mgr.serialize();
+    let restored = UndoMgr::deserialize(&serialized).expect("deserialize complex escape failed");
+
+    assert_eq!(undo_mgr.undo_stack, restored.undo_stack);
+}

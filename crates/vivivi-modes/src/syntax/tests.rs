@@ -202,3 +202,17 @@ fn test_new_languages_tokenization() {
     );
     assert_eq!(bat_tokens.last().unwrap().token_type, TokenType::Comment);
 }
+
+#[test]
+fn test_number_method_call_and_range() {
+    let line = "let s = 123.to_string(); let r = 0..10;";
+    let tokens = tokenize_line(line, SyntaxLang::Rust);
+    let num_123 = tokens.iter().find(|t| t.text == "123").unwrap();
+    assert_eq!(num_123.token_type, TokenType::Number);
+
+    let dot = tokens.iter().find(|t| t.text == ".").unwrap();
+    assert_eq!(dot.token_type, TokenType::Punctuation);
+
+    let to_str = tokens.iter().find(|t| t.text == "to_string").unwrap();
+    assert_eq!(to_str.token_type, TokenType::Text);
+}

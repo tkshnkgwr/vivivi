@@ -5,7 +5,7 @@
 //! ディスク消費を抑えながら任意世代への復元、世代一覧、
 //! および各行の最終更新世代（簡易blame）を提供します。
 
-use crate::diff::{DiffType, apply_unified_patch, create_unified_diff, diff_lines};
+use crate::diff::{apply_unified_patch, create_unified_diff};
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -149,7 +149,11 @@ impl DiffLog {
 
         let log_path = Self::difflog_path(&file_path);
         let mut difflog = Self::load_from_file(&log_path).unwrap_or_default();
-        let next_gen = difflog.entries.len() + 1;
+        let next_gen = difflog
+            .entries
+            .last()
+            .map(|e| e.generation + 1)
+            .unwrap_or(1);
 
         let entry = DiffLogEntry {
             generation: next_gen,
@@ -359,10 +363,10 @@ impl DiffLog {
     /// ```
     pub fn compute_blame(&self, current_text: &str) -> Vec<BlameInfo> {
         let lines: Vec<&str> = current_text.lines().collect();
-        let latest_gen = self.entries.last().map(|e| e.generation).unwrap_or(1);
-        let latest_ts = self
+        let first_gen = self.entries.first().map(|e| e.generation).unwrap_or(1);
+        let first_ts = self
             .entries
-            .last()
+            .first()
             .map(|e| e.timestamp.clone())
             .unwrap_or_else(|| "initial".to_string());
 
@@ -370,22 +374,23 @@ impl DiffLog {
         for (i, line) in lines.iter().enumerate() {
             blames.push(BlameInfo {
                 lineno: i + 1,
-                generation: latest_gen,
-                timestamp: latest_ts.clone(),
+                generation: first_gen,
+                timestamp: first_ts.clone(),
                 text: line.to_string(),
             });
         }
 
-        // 過去の各世代エントリの差分を逆向きに追跡して、行の生成世代を特定
-        for entry in self.entries.iter().rev() {
-            let hunk_lines = diff_lines(&entry.patch, current_text);
-            for dl in hunk_lines {
-                if dl.diff_type == DiffType::Equal
-                    && let Some(nline) = dl.new_lineno
-                    && nline <= blames.len()
-                {
-                    blames[nline - 1].generation = entry.generation;
-                    blames[nline - 1].timestamp = entry.timestamp.clone();
+        // 各世代のパッチで導入された行 (+ で始まる行) をその世代としてマーク
+        for entry in &self.entries {
+            for pline in entry.patch.lines() {
+                if pline.starts_with('+') && !pline.starts_with("+++") {
+                    let added_text = &pline[1..];
+                    for blame in &mut blames {
+                        if blame.text == added_text {
+                            blame.generation = entry.generation;
+                            blame.timestamp = entry.timestamp.clone();
+                        }
+                    }
                 }
             }
         }
@@ -434,5 +439,13 @@ mod tests {
         // 世代2の復元検証
         let restored_v3 = log.restore_from_initial(v1, 2).expect("restore v3");
         assert_eq!(restored_v3.trim(), v3.trim());
+
+        // blame 計算の検証
+        let blames = log.compute_blame(v3);
+        assert_eq!(blames.len(), 4);
+        assert_eq!(blames[1].text, "Line 2 (edited)");
+        assert_eq!(blames[1].generation, 1);
+        assert_eq!(blames[3].text, "Line 4 (new)");
+        assert_eq!(blames[3].generation, 2);
     }
 }

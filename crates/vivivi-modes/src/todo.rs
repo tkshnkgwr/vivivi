@@ -131,12 +131,16 @@ pub fn scan_buffer_todos(text: &str, file_name: Option<&str>) -> Vec<TodoItem> {
                 .get(1)
                 .map(|m| m.as_str().to_uppercase())
                 .unwrap_or_default();
-            let message = caps
-                .get(2)
-                .map(|m| m.as_str().trim())
-                .unwrap_or("")
+            let raw_msg = caps.get(2).map(|m| m.as_str().trim()).unwrap_or("");
+            let message = raw_msg
+                .trim_end_matches("*/")
+                .trim_end_matches("-->")
+                .trim()
                 .to_string();
-            let col = caps.get(1).map(|m| m.start() + 1).unwrap_or(1);
+            let col = caps
+                .get(1)
+                .map(|m| line[..m.start()].chars().count() + 1)
+                .unwrap_or(1);
 
             let tag = match matched_tag.as_str() {
                 "FIXME" => TodoTag::Fixme,
@@ -262,5 +266,13 @@ fn add(a: i32, b: i32) -> i32 {
 
         assert_eq!(items[2].tag, TodoTag::Undone);
         assert_eq!(items[2].message, "add validation");
+
+        // 日本語コメントでの列番号テスト
+        let jp_code = "// 日本語テスト TODO: レビュー";
+        let jp_items = scan_buffer_todos(jp_code, None);
+        assert_eq!(jp_items.len(), 1);
+        // "// 日本語テスト " は10文字。TODOは11文字目から始まる
+        assert_eq!(jp_items[0].col, 11);
+        assert_eq!(jp_items[0].message, "レビュー");
     }
 }

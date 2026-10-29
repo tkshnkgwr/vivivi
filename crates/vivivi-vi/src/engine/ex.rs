@@ -396,32 +396,32 @@ impl ViEngine {
             buffer.open_undo_block();
             let mut replace_count = 0;
 
-            if is_global {
-                let full_text = buffer.to_string();
-                let new_text = if replace_all {
-                    full_text.replace(before, after)
-                } else {
-                    full_text.replacen(before, after, 1)
-                };
+            let line_range = if is_global {
+                0..buffer.line_count()
+            } else {
+                cursor.pos.line..(cursor.pos.line + 1).min(buffer.line_count())
+            };
 
-                if new_text != full_text {
-                    let len = buffer.len();
-                    buffer.delete_text(0, len, false);
-                    buffer.insert_text(0, &new_text);
-                    replace_count += 1;
-                }
-            } else if let Some(line_str) = buffer.line_text(cursor.pos.line) {
-                let new_line = if replace_all {
-                    line_str.replace(before, after)
-                } else {
-                    line_str.replacen(before, after, 1)
-                };
+            for line_idx in line_range {
+                if let Some(line_str) = buffer.line_text(line_idx) {
+                    let matches_in_line = line_str.matches(before).count();
+                    if matches_in_line == 0 {
+                        continue;
+                    }
 
-                if new_line != line_str {
-                    let start_pos = buffer.line_start_position(cursor.pos.line);
-                    buffer.delete_text(start_pos, line_str.chars().count(), false);
-                    buffer.insert_text(start_pos, &new_line);
-                    replace_count += 1;
+                    let (new_line, replaced) = if replace_all {
+                        (line_str.replace(before, after), matches_in_line)
+                    } else {
+                        // 行内で最初の1箇所のみ置換
+                        (line_str.replacen(before, after, 1), 1)
+                    };
+
+                    if new_line != line_str {
+                        let start_pos = buffer.line_start_position(line_idx);
+                        buffer.delete_text(start_pos, line_str.chars().count(), false);
+                        buffer.insert_text(start_pos, &new_line);
+                        replace_count += replaced;
+                    }
                 }
             }
 

@@ -58,3 +58,16 @@ fn test_find_matching_paren_in_line() {
     let match3 = find_matching_paren_in_line(&buffer, CursorPosition::new(1, 20));
     assert_eq!(match3, Some(26));
 }
+
+#[test]
+fn test_find_matching_paren_skips_comments_in_line() {
+    // 行頭にコメントがある場合、コメント内の括弧を無視する
+    let buffer = TextBuffer::from_text("// (comment)\nfn test() {}");
+    // 0行目: コメント内の括弧は探索されないため None
+    let match_comment = find_matching_paren_in_line(&buffer, CursorPosition::new(0, 0));
+    assert_eq!(match_comment, None);
+
+    // 1行目: コード括弧 '(' が正しくマッチ
+    let match_code = find_matching_paren_in_line(&buffer, CursorPosition::new(1, 0));
+    assert!(match_code.is_some());
+}

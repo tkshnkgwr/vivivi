@@ -56,14 +56,14 @@ impl KeisenMode {
 
             let segment: String = chars[left_v + 1..right_v].iter().collect();
             let trimmed = segment.trim();
-            let total_width = right_v - left_v - 1;
+            let total_cell_width = UnicodeWidthStr::width(segment.as_str());
             let text_width = UnicodeWidthStr::width(trimmed);
 
-            if text_width > total_width {
+            if text_width > total_cell_width {
                 continue;
             }
 
-            let space_diff = total_width.saturating_sub(text_width);
+            let space_diff = total_cell_width.saturating_sub(text_width);
             let (left_pad, right_pad) = match alignment {
                 BoxAlignment::Left => (0, space_diff),
                 BoxAlignment::Right => (space_diff, 0),
@@ -78,8 +78,8 @@ impl KeisenMode {
             );
             let aligned_chars: Vec<char> = aligned_content.chars().collect();
 
-            // 長さが一致する場合に置換
-            if aligned_chars.len() == total_width {
+            // 表示幅がセルの表示幅と一致する場合に置換
+            if UnicodeWidthStr::width(aligned_content.as_str()) == total_cell_width {
                 new_chars.splice(left_v + 1..right_v, aligned_chars);
             }
         }

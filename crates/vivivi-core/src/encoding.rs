@@ -325,7 +325,12 @@ pub fn detect_newline(bytes: &[u8]) -> NewlineType {
     let mut i = 0;
     while i < sample.len() {
         if sample[i] == b'\r' {
-            if i + 1 < sample.len() && sample[i + 1] == b'\n' {
+            let is_crlf = if i + 1 < sample.len() {
+                sample[i + 1] == b'\n'
+            } else {
+                bytes.get(i + 1) == Some(&b'\n')
+            };
+            if is_crlf {
                 crlf_count += 1;
                 if crlf_count >= 3 && lf_count == 0 && cr_count == 0 {
                     return NewlineType::Crlf;
@@ -375,16 +380,40 @@ pub fn detect_newline(bytes: &[u8]) -> NewlineType {
 /// ```
 pub fn decode_bytes(bytes: &[u8]) -> (String, CharEncoding, NewlineType) {
     let (encoding, enc_type) = detect_encoding(bytes);
-    let newline = detect_newline(bytes);
+    let mut newline = detect_newline(bytes);
 
-    // BOM を除去したスライスを用意
+    // BOM を除去したスライスを用意（BOMが存在する場合のみスキップ）
     let body = match encoding {
-        CharEncoding::Utf8Bom => &bytes[3..],
-        CharEncoding::Utf16Le | CharEncoding::Utf16Be => &bytes[2..],
+        CharEncoding::Utf8Bom => {
+            if bytes.starts_with(b"\xEF\xBB\xBF") {
+                &bytes[3..]
+            } else {
+                bytes
+            }
+        }
+        CharEncoding::Utf16Le => {
+            if bytes.starts_with(b"\xFF\xFE") {
+                &bytes[2..]
+            } else {
+                bytes
+            }
+        }
+        CharEncoding::Utf16Be => {
+            if bytes.starts_with(b"\xFE\xFF") {
+                &bytes[2..]
+            } else {
+                bytes
+            }
+        }
         _ => bytes,
     };
 
     let (decoded, _, _) = enc_type.decode(body);
+
+    // UTF-16 はバイト走査で改行判定が誤るため、デコード後のテキストから再検出
+    if matches!(encoding, CharEncoding::Utf16Le | CharEncoding::Utf16Be) {
+        newline = detect_newline(decoded.as_bytes());
+    }
 
     // 改行を \n に正規化
     let normalized = decoded.replace("\r\n", "\n").replace('\r', "\n");
@@ -414,7 +443,7 @@ pub fn decode_bytes_with_encoding(
         CharEncoding::Utf16Le => encoding_rs::UTF_16LE,
         CharEncoding::Utf16Be => encoding_rs::UTF_16BE,
     };
-    let newline = detect_newline(bytes);
+    let mut newline = detect_newline(bytes);
 
     let body = match encoding {
         CharEncoding::Utf8Bom => {
@@ -442,6 +471,12 @@ pub fn decode_bytes_with_encoding(
     };
 
     let (decoded, _, _) = enc_type.decode(body);
+
+    // UTF-16 はバイト走査で改行判定が誤るため、デコード後のテキストから再検出
+    if matches!(encoding, CharEncoding::Utf16Le | CharEncoding::Utf16Be) {
+        newline = detect_newline(decoded.as_bytes());
+    }
+
     let normalized = decoded.replace("\r\n", "\n").replace('\r', "\n");
     (normalized, encoding, newline)
 }

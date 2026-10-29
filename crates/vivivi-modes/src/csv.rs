@@ -185,18 +185,32 @@ impl CsvMode {
     /// ```
     pub fn parse_csv_cells<'a>(line: &'a str, delim: char) -> Vec<CsvCell<'a>> {
         let mut cells = Vec::new();
-        let mut in_quotes = false;
+        let mut quote_char: Option<char> = None;
         let mut start = 0;
         let chars: Vec<(usize, char)> = line.char_indices().collect();
+        let len = chars.len();
+        let mut i = 0;
 
-        for &(idx, ch) in &chars {
-            if ch == '"' || ch == '\'' {
-                in_quotes = !in_quotes;
-            } else if ch == delim && !in_quotes {
+        while i < len {
+            let (idx, ch) = chars[i];
+            if let Some(q) = quote_char {
+                if ch == q {
+                    // 二重クォートエスケープ ("" または '') の判定
+                    if i + 1 < len && chars[i + 1].1 == q {
+                        i += 2;
+                        continue;
+                    } else {
+                        quote_char = None;
+                    }
+                }
+            } else if ch == '"' {
+                quote_char = Some('"');
+            } else if ch == delim {
                 let raw_cell = &line[start..idx];
                 cells.push(CsvCell::from_raw(raw_cell));
                 start = idx + ch.len_utf8();
             }
+            i += 1;
         }
 
         if start <= line.len() {
@@ -399,5 +413,15 @@ mod tests {
         assert_eq!(csv.cell_range_in_raw_line(line, 2), Some((18, 20)));
         // 範囲外列
         assert_eq!(csv.cell_range_in_raw_line(line, 3), None);
+    }
+
+    #[test]
+    fn test_csv_apostrophe_and_escaped_quotes() {
+        let line = "it's fine,\"hello \"\"world\"\", ok\",end";
+        let cells = CsvMode::parse_csv_cells(line, ',');
+        assert_eq!(cells.len(), 3);
+        assert_eq!(cells[0].raw, "it's fine");
+        assert_eq!(cells[1].raw, "\"hello \"\"world\"\", ok\"");
+        assert_eq!(cells[2].raw, "end");
     }
 }

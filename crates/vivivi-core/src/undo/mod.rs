@@ -520,6 +520,7 @@ impl UndoMgr {
     /// assert!(!mgr.is_modified());
     /// ```
     pub fn on_saved(&mut self) {
+        self.prohibit_merge();
         self.save_point = Some(self.undo_stack.len());
     }
 

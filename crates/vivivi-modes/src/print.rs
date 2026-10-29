@@ -104,7 +104,7 @@ pub fn paginate_text(
     settings: &PrintSettings,
 ) -> Vec<PrintPage> {
     let mut raw_pages: Vec<Vec<String>> = Vec::new();
-    let body_capacity = settings.lines_per_page.saturating_sub(4); // ヘッダー2行＋フッター2行
+    let body_capacity = settings.lines_per_page.saturating_sub(4).max(1); // ヘッダー2行＋フッター2行（最低1行）
 
     let mut current_page: Vec<String> = Vec::new();
     let mut current_lineno = 1;
@@ -112,9 +112,9 @@ pub fn paginate_text(
     for line in text.lines() {
         // 折り返し処理（文字表示幅を考慮した分割）
         let max_content_width = if settings.show_line_numbers {
-            settings.columns_per_line.saturating_sub(8) // " 123 | "
+            settings.columns_per_line.saturating_sub(8).max(1) // " 123 | "
         } else {
-            settings.columns_per_line
+            settings.columns_per_line.max(1)
         };
 
         if line.is_empty() {
@@ -484,5 +484,19 @@ mod tests {
         assert!(pdf_str.contains("/Encoding /UniJIS-UTF16-H"));
 
         let _ = std::fs::remove_file(&pdf_path);
+    }
+
+    #[test]
+    fn test_paginate_small_dimensions() {
+        let settings = PrintSettings {
+            lines_per_page: 3,
+            columns_per_line: 4,
+            show_line_numbers: true,
+            header_format: "".into(),
+            footer_format: "".into(),
+        };
+        // 無限ループやOOMを起こさず正常に分割できること
+        let pages = paginate_text("line 1\nline 2", "test.txt", "2026-10-15", &settings);
+        assert!(!pages.is_empty());
     }
 }

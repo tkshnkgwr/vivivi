@@ -960,3 +960,56 @@ fn test_visual_text_objects() {
     let yanked = vi.registers.get_unnamed().unwrap();
     assert_eq!(yanked.as_str(), "inner content");
 }
+
+#[test]
+fn test_multiple_quotes_in_line_between_quotes() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text(r#"let a = "hello"; let b = "world";"#);
+    // カーソルを 2つの文字列の間（"; let b = " のスペース、col = 18）に置く
+    let mut cur = TextCursor::new(0, 18);
+
+    // 'ci"' を実行（change inner quote）
+    vi.feed_char('c');
+    vi.feed_char('i');
+    let cmd = vi.feed_char('"');
+    assert!(cmd.is_some());
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+
+    // コード部分（; let b = ）は削除されず、右側の "world" の内側がクリアされること
+    assert_eq!(buf.to_string(), r#"let a = "hello"; let b = "";"#);
+}
+
+#[test]
+fn test_ex_substitute_count_and_line_based() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("apple apple\nbanana apple\ncherry");
+    let mut cur = TextCursor::new(0, 0);
+
+    // :%s/apple/orange/g
+    let mut res = ViExecutionResult::default();
+    vi.execute_ex("%s/apple/orange/g", &mut buf, &mut cur, &mut res);
+    assert_eq!(res.message, Some("3 箇所の置換を行いました".to_string()));
+    assert_eq!(buf.to_string(), "orange orange\nbanana orange\ncherry");
+}
+
+#[test]
+fn test_motion_words_stop_on_empty_lines() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("first\n\nsecond");
+    let mut cur = TextCursor::new(0, 0);
+
+    // 1. 'w' で次の単語へ移動 -> 空行 (line 1, col 0) で止まる
+    let cmd = vi.feed_char('w');
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(cur.pos, CursorPosition::new(1, 0));
+
+    // 2. もう一度 'w' で移動 -> "second" (line 2, col 0) へ
+    let cmd = vi.feed_char('w');
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(cur.pos, CursorPosition::new(2, 0));
+
+    // 3. 'b' で前の単語へ移動 -> 空行 (line 1, col 0) へ
+    let cmd = vi.feed_char('b');
+    vi.execute(&cmd.unwrap(), &mut buf, &mut cur);
+    assert_eq!(cur.pos, CursorPosition::new(1, 0));
+}

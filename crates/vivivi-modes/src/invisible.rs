@@ -98,6 +98,7 @@ pub fn format_line_invisibles(
     tab_width: usize,
     config: &ListCharsConfig,
 ) -> Vec<InvisibleChar> {
+    let tab_width = tab_width.max(1);
     if !config.enabled {
         return line
             .chars()
@@ -175,12 +176,13 @@ pub fn format_line_invisibles(
                 col += 1;
             }
             _ => {
+                let char_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
                 result.push(InvisibleChar {
                     ch,
                     is_invisible: false,
                     is_zenkaku_space: false,
                 });
-                col += 1;
+                col += char_width;
             }
         }
     }
@@ -245,5 +247,20 @@ mod tests {
         let s: String = chars.iter().map(|c| c.ch).collect();
         // タブ(4幅: ▸---) + x + 末尾スペース(··) + $
         assert_eq!(s, "▸---x··$");
+    }
+
+    #[test]
+    fn test_format_zero_tab_width_and_zenkaku_tab() {
+        let config = ListCharsConfig {
+            enabled: true,
+            ..Default::default()
+        };
+        // tab_width == 0 でもパニックしない
+        let _ = format_line_invisibles("a\tb", 0, &config);
+
+        // "あ" (幅2) + タブ (タブ幅4なら残り2桁で "▸-")
+        let chars = format_line_invisibles("あ\t", 4, &config);
+        let s: String = chars.iter().map(|c| c.ch).collect();
+        assert_eq!(s, "あ▸-$");
     }
 }

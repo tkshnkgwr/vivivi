@@ -40,8 +40,12 @@ pub fn insert_beg_end_lines(
         }
 
         if keep_indent {
-            let indent_len = line.chars().take_while(|c| c.is_whitespace()).count();
-            let (indent, content) = line.split_at(indent_len);
+            let indent_byte_len: usize = line
+                .chars()
+                .take_while(|c| c.is_whitespace())
+                .map(|c| c.len_utf8())
+                .sum();
+            let (indent, content) = line.split_at(indent_byte_len);
             result.push(format!("{indent}{beg_str}{content}{end_str}"));
         } else {
             result.push(format!("{beg_str}{line}{end_str}"));
@@ -75,5 +79,12 @@ mod tests {
             edited,
             vec!["<li>Apple</li>", "<li>Banana</li>", "", "<li>Cherry</li>",]
         );
+    }
+
+    #[test]
+    fn test_insert_beg_end_zenkaku_space_indent() {
+        let lines = vec!["　　全角インデント", "　テスト"];
+        let edited = insert_beg_end_lines(&lines, "/* ", " */", true, false);
+        assert_eq!(edited, vec!["　　/* 全角インデント */", "　/* テスト */"]);
     }
 }

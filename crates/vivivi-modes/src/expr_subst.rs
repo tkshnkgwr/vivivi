@@ -4,7 +4,7 @@
 //! 正規表現キャプチャグループ（`$0`〜`$9`）、連番カウンタ（`$i`, `$n`）、
 //! 行番号（`$line`）、四則演算（`+`, `-`, `*`, `/`, `%`）、および文字列結合をサポートします。
 
-use regex::{Captures, RegexBuilder};
+use regex::RegexBuilder;
 use std::collections::HashMap;
 
 /// 式評価時の値の型（数値または文字列）。
@@ -564,7 +564,11 @@ pub fn execute_expr_substitute(
     let mut current_line = start_line;
     let mut line_byte_offset = 0;
 
-    for mat in re.find_iter(text) {
+    for caps in re.captures_iter(text) {
+        let mat = match caps.get(0) {
+            Some(m) => m,
+            None => continue,
+        };
         match_count += 1;
         if !is_all && match_count > 1 {
             break;
@@ -580,15 +584,10 @@ pub fn execute_expr_substitute(
         result_text.push_str(&text[last_end..match_start]);
 
         // キャプチャグループの収集
-        let caps: Option<Captures> = re.captures(&text[match_start..mat.end()]);
-        if let Some(c) = caps {
-            for (idx, cap_match) in c.iter().enumerate() {
-                if let Some(m) = cap_match {
-                    context.set_var(&format!("{idx}"), ExprValue::String(m.as_str().to_string()));
-                }
+        for (idx, cap_match) in caps.iter().enumerate() {
+            if let Some(m) = cap_match {
+                context.set_var(&format!("{idx}"), ExprValue::String(m.as_str().to_string()));
             }
-        } else {
-            context.set_var("0", ExprValue::String(mat.as_str().to_string()));
         }
 
         // 組み込み変数設定

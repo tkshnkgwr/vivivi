@@ -168,7 +168,9 @@ impl UndoMgr {
     /// ```
     pub fn save_to_file<P: AsRef<std::path::Path>>(&self, path: P) -> std::io::Result<()> {
         let serialized = self.serialize();
-        if let Some(parent) = path.as_ref().parent() {
+        if let Some(parent) = path.as_ref().parent()
+            && !parent.as_os_str().is_empty()
+        {
             std::fs::create_dir_all(parent)?;
         }
         std::fs::write(path, serialized)
@@ -234,35 +236,39 @@ fn unescape_str(s: &str) -> Result<String, String> {
 fn extract_quotes(line: &str) -> Vec<String> {
     let mut results = Vec::new();
     let mut in_quote = false;
-    let mut escape = false;
+    let mut in_escape = false;
     let mut current = String::new();
 
     for c in line.chars() {
-        if escape {
-            current.push('\\');
-            current.push(c);
-            escape = false;
-            continue;
-        }
-        if c == '\\' {
-            escape = true;
-            continue;
-        }
-        if c == '"' {
-            if in_quote {
-                in_quote = false;
-                results.push(current.clone());
-                current.clear();
-            } else {
+        if !in_quote {
+            if c == '"' {
                 in_quote = true;
+                in_escape = false;
                 current.clear();
             }
             continue;
         }
-        if in_quote {
+
+        // クォート内部の処理
+        if in_escape {
+            current.push('\\');
+            current.push(c);
+            in_escape = false;
+        } else if c == '\\' {
+            in_escape = true;
+        } else if c == '"' {
+            in_quote = false;
+            results.push(current.clone());
+            current.clear();
+        } else {
             current.push(c);
         }
     }
+
+    if in_escape {
+        current.push('\\');
+    }
+
     results
 }
 

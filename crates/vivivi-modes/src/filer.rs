@@ -502,6 +502,9 @@ impl TwoPaneFiler {
 
         for item in targets {
             let dest_file = dest_dir.join(&item.name);
+            if item.path == dest_file {
+                return Err("コピー元とコピー先のパスが同一です".to_string());
+            }
             if item.is_dir {
                 // ディレクトリの再帰コピー
                 copy_dir_recursive(&item.path, &dest_file).map_err(|e| e.to_string())?;
@@ -537,7 +540,19 @@ impl TwoPaneFiler {
 
         for item in targets {
             let dest_file = dest_dir.join(&item.name);
-            fs::rename(&item.path, &dest_file).map_err(|e| e.to_string())?;
+            if item.path == dest_file {
+                continue;
+            }
+            if fs::rename(&item.path, &dest_file).is_err() {
+                // 異なるデバイス/ドライブ間の移動に対するフォールバック（コピー後に元を削除）
+                if item.is_dir {
+                    copy_dir_recursive(&item.path, &dest_file).map_err(|e| e.to_string())?;
+                    fs::remove_dir_all(&item.path).map_err(|e| e.to_string())?;
+                } else {
+                    fs::copy(&item.path, &dest_file).map_err(|e| e.to_string())?;
+                    fs::remove_file(&item.path).map_err(|e| e.to_string())?;
+                }
+            }
             count += 1;
         }
 

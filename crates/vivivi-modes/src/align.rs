@@ -38,7 +38,7 @@ pub fn align_lines(lines: &[&str], target: &str) -> Vec<String> {
     let mut max_left_width = 0;
 
     for &line in lines {
-        if let Some(idx) = line.find(target) {
+        if let Some(idx) = find_isolated_target(line, target) {
             let left = line[..idx].trim_end();
             let right = line[idx + target.len()..].trim_start();
             let width = UnicodeWidthStr::width(left);
@@ -73,6 +73,43 @@ pub fn align_lines(lines: &[&str], target: &str) -> Vec<String> {
     }
 
     result
+}
+
+fn find_isolated_target(line: &str, target: &str) -> Option<usize> {
+    for (idx, _) in line.match_indices(target) {
+        if target == "=" {
+            let prev_char = line[..idx].chars().last();
+            if let Some(pc) = prev_char
+                && matches!(
+                    pc,
+                    '=' | '!' | '<' | '>' | '+' | '-' | '*' | '/' | '%' | '&' | '|' | '^'
+                )
+            {
+                continue;
+            }
+            let next_char = line[idx + target.len()..].chars().next();
+            if let Some(nc) = next_char
+                && matches!(nc, '=' | '>')
+            {
+                continue;
+            }
+        } else if target == ":" {
+            let prev_char = line[..idx].chars().last();
+            if let Some(pc) = prev_char
+                && pc == ':'
+            {
+                continue;
+            }
+            let next_char = line[idx + target.len()..].chars().next();
+            if let Some(nc) = next_char
+                && nc == ':'
+            {
+                continue;
+            }
+        }
+        return Some(idx);
+    }
+    None
 }
 
 #[cfg(test)]
@@ -118,6 +155,27 @@ mod tests {
         assert_eq!(
             aligned,
             vec!["// コメント行", "val x     = 10", "", "val yyyyy = 20",]
+        );
+    }
+
+    #[test]
+    fn test_align_equal_preserves_operators() {
+        let lines = vec![
+            "if a == b { return; }",
+            "let a = 1;",
+            "let long = 2;",
+            "match x => { }",
+        ];
+        let aligned = align_lines(&lines, "=");
+        // == や => は整列対象から除外され、let の = のみが整列される
+        assert_eq!(
+            aligned,
+            vec![
+                "if a == b { return; }",
+                "let a    = 1;",
+                "let long = 2;",
+                "match x => { }",
+            ]
         );
     }
 }

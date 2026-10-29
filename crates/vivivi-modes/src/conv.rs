@@ -90,6 +90,7 @@ fn to_hankaku_alphanumeric(input: &str) -> String {
         .map(|c| match c {
             '　' => ' ',
             '！'..='～' => char::from_u32(c as u32 - 0xFEE0).unwrap_or(c),
+            '〜' => '~',
             _ => c,
         })
         .collect()
@@ -430,6 +431,15 @@ mod tests {
         assert_eq!(
             convert_text(text, ConversionType::SwapCase),
             "vIvI eDITOR 2026"
+        );
+    }
+
+    #[test]
+    fn test_wave_dash_conversion() {
+        let text = "東京〜大阪";
+        assert_eq!(
+            convert_text(text, ConversionType::ToHankakuAlphanumeric),
+            "東京~大阪"
         );
     }
 }
