@@ -74,6 +74,7 @@ Each operation generates its inverse action upon undo:
 #### Save Point & Modified Tracking
 - Tracks stack depth via `undo_mgr.on_saved()`.
 - Automatically restores `is_modified == false` when undone back to the save point.
+- **Post-Save Modification Safeguard**: Guarantees that typing or deletion immediately after saving reliably transitions `is_modified` to `true`. Edits crossing the save point boundary are accurately marked dirty even across continuous insert merges.
 
 ---
 
@@ -108,6 +109,9 @@ Each operation generates its inverse action upon undo:
   - **Active Line**: Cursor line shows raw text with quotes for accurate editing.
   - **Header Lines**: Recognizes custom header indicator (e.g. `#`) to format table headers.
   - **Multiple Tables**: Supports multiple independent tables within a single document.
+- **RFC 4180 Compliance & Apostrophe Robustness**:
+  - Fully supports RFC 4180 standard escaped double-quotes (`""`), transparently preserving escaped quotes as single characters within cell data.
+  - Robustly distinguishes between quotation delimiters and English word contractions/apostrophes (e.g., `don't`, `it's`) without breaking column parsing.
 - **Editing Specifications**:
   - Full editing support inside CSV mode (character insert, line deletion, vi commands).
 
@@ -309,6 +313,8 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
 ### 11.2 Text Difference & Revision History (DIFF & DiffLog / `diff.rs`, `difflog.rs`)
 - **Diff Engine (`diff.rs`)**:
   - High-accuracy line diff based on Longest Common Subsequence (LCS) algorithm.
+  - **Prefix / Suffix Pre-Stripping Optimization**: Pre-strips common leading and trailing identical lines in $O(N)$ time, isolating the LCS dynamic programming matrix strictly to modified blocks and dramatically accelerating large-file comparisons.
+  - **Cell Count Safety Guard**: Guards against out-of-memory (OOM) by imposing a 1,000,000-cell ceiling on the LCS matrix (`lines1 * lines2`).
   - Unified Diff generation (`create_unified_diff`) and patch application (`apply_unified_patch`).
   - Synchronized side-by-side line correspondence mapping (`create_side_by_side`).
 - **Revision Backup (`difflog.rs`)**:
@@ -317,7 +323,7 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
   - **Commands**:
     - `:difflog`: List all backup revisions with timestamps and line delta counts.
     - `:difflog restore <generation>`: Sequentially apply patches from initial revision to completely restore past file state.
-    - `:blame`: Trace per-line last-modified revisions and timestamps (lightweight blame).
+    - `:blame`: Trace per-line last-modified revisions and timestamps (lightweight blame). Overhauled unified diff patch-added line (`+`) tracking logic to compensate for line offset shifts accurately.
 
 ### 11.3 Template Auto-Loading (`template.rs`)
 - **Specification**:
@@ -360,6 +366,7 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
 - **Commands**: `:filer [path]`
 - **Specification**:
   - Dual independent directory navigation panes.
+  - **Identical Path Safeguard & Cross-Device Move Fallback**: Prevents file destruction when attempting to copy to identical paths. Safely falls back to copy-and-delete when moving across different volumes/mounts encountering `EXDEV` errors.
   - **Key Controls**:
     - `Tab`: Switch focus between left and right panes.
     - `j` / `k`: Move selection cursor.
@@ -373,13 +380,13 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
 - **Commands**: `:maketags [dir]`
 - **Specification**:
   - Traverses workspace files, performs AST symbol parsing (functions, structs, traits, modules), and outputs ctags-compatible `tags` files.
+  - Accurately captures visibility and async modifiers such as `async fn`, `pub(crate) fn`, and `pub(super) fn`.
 
 ### 11.9 Print Preview & Standalone PDF Export (`print.rs`)
 - **Commands**: `:preview` / `:print`, `:pdf [path]`
 - **Specification**:
-  - **Print Preview**: Standard A4 pagination (60 lines/page, line numbers, header with filename, footer with page numbers). Rendered in a full-screen modal UI with scroll navigation (`j`/`k`, `d`/`u`).
+  - **Print Preview**: Standard A4 pagination (60 lines/page, line numbers, header with filename, footer with page numbers). Rendered in a full-screen modal UI with scroll navigation (`j`/`k`, `d`/`u`). Includes safety guards against infinite pagination loops and OOM when `lines_per_page <= 4`.
   - **Direct PDF Export**: Zero-dependency standalone PDF 1.4 binary generator (Courier Type 1 font, page stream operators, xref table) written in pure Rust.
-  - *(Note: Desktop GUI frontend (egui) and GUI-dependent features were migrated to Phase 5 per user instruction, focusing current capabilities on TUI and core tooling engines)*.
 
 ---
 
@@ -543,5 +550,12 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
 - **0% CPU Reactive Idle Loop**:
   - Calls `ctx.request_repaint()` strictly while `particles.is_active()` is `true`. Once all particles fade out after 0.5 seconds, repaint requests cease and `egui` returns to reactive event-waiting mode (`0% CPU` usage while idle).
 
-
-
+### 15.5 Rendering Performance Optimizations, Caching & GUI Robustness
+- **Syntax Token Line Cache (`token_cache`)**:
+  - Eliminates redundant syntax tokenization per frame by introducing a per-line cache indexed by line number and text hash, minimizing rendering latency during typing.
+- **Zero-Allocation Painter Buffer Reuse**:
+  - Reuses vertex and highlight glyph vectors across render passes with `clear()` rather than deallocating and reallocating heap memory every frame.
+- **Input & Interaction Robustness**:
+  - **Full-Width, Tab & Horizontal Scroll-Aware Char Indexing**: Employs hit-testing that precisely maps mouse click columns to buffer character indices accounting for CJK full-width glyphs (width 2), tab expansions (`\t`), and horizontal scroll offsets.
+  - **Unsaved Changes Safeguard (E37)**: Intercepts close button events on inactive tabs as well as OS window close requests with unsaved prompts.
+  - **Modal Navigation Priority**: Blocks underlying editor key pass-through during modal dialog presentations, strictly prioritizing modal navigation (selection, scrolling, Escape).

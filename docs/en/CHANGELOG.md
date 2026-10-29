@@ -4,6 +4,52 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [0.9.9-beta] - 2026-10-29
+
+### Fixed / Improved
+- **Comprehensive Workspace Bug Fixes, Robustness & Edge-Case Safeguards (34+ issues resolved)**:
+  - **Core & Vi Engine Hardening**:
+    - `vivivi-core`: Prevented buffer modified-flag freezing when editing immediately after saving, guaranteeing correct `is_modified` state transitions.
+    - `undo`: Overhauled undofile path serialization with safe hex-encoding, fully supporting complex Windows/Unix paths and drive letters.
+    - `encoding`: Fixed UTF-16 first-character truncation and improved line-ending detection for mixed CRLF/LF files.
+    - `paren`: Strengthened nested parenthesis scan bounds checking.
+    - `vi/text_object`: Enhanced boundary detection for quote text-objects (e.g. `ci"`) when multiple quotes reside on the same line.
+    - `vi/ex`: Hardened Ex substitute command (`:s`) with atomic line-by-line application and accurate replacement counts across multi-line ranges.
+    - `vi/motion`: Corrected word motions (`w`, `b`, `e`) boundary clamping on blank lines and line extremities.
+  - **Modes Extended Editing Suite Hardening (22 fixes)**:
+    - **CJK & Full-Width Handling**:
+      - `line_edit`: Eliminated `split_at` UTF-8 byte boundary panic during auto-indent with full-width spaces.
+      - `invisible`: Corrected tab-stop column calculation in invisible character rendering to respect full-width character display width (2 columns).
+      - `keisen`: Resolved column alignment drift when boxed text contains full-width characters and prevented improper endpoint straightening.
+      - `todo`: Fixed column calculation in full-width comment lines to count UTF-8 characters accurately.
+      - `conv`: Added bidirectional conversion between Japanese wave dash (`〜` U+301C) and half-width tilde (`~`).
+      - `dabbrev`: Excluded CJK punctuation marks (「」、。) from dynamic abbreviation word tokens.
+    - **Safety, Zero-Division & OOM Safeguards**:
+      - `diff`: Implemented common prefix/suffix pre-stripping for near-instant diff calculation and imposed a 1,000,000-cell safety limit against OOM.
+      - `folding` / `invisible`: Added zero-division guards when `tab_width == 0`.
+      - `print`: Prevented infinite page pagination loops and memory exhaustion when `lines_per_page <= 4`.
+      - `filer`: Safeguarded against overwriting files when attempting to copy to identical paths, and added `EXDEV` copy-and-delete fallback for cross-device file moves.
+    - **Formatting & Syntax Precision**:
+      - `align`: Prevented split of comparison operators (`==`, `!=`, `<=`, `>=`, `=>`) and scope operators (`::`) with interior alignment spaces.
+      - `csv`: Supported RFC 4180 standard `""` quote escapes and prevented cell mis-tokenization caused by English apostrophes (`'`).
+      - `calc`: Prevented erroneous digit concatenation for spaceless comma-separated numbers in BOX calculations.
+      - `renumber`: Preserved nested sub-list hierarchy when renumbering lists.
+      - `difflog`: Overhauled patch-added line tracking in mini-blame for accurate commit generation tracking.
+      - `expr_subst`: Retained `$0`, `$1` capture variable replacement via `re.captures_iter`.
+      - `syntax`: Fixed numeric literal detection to avoid capturing method chains (e.g. `123.to_string()`).
+      - `project`: Enhanced tags generation to recognize modifiers such as `async fn` and `pub(crate) fn`.
+      - `template`: Removed multiple `%Cursor%` placeholders cleanly and sanitized macro identifiers.
+  - **TUI Frontend Usability & Bug Fixes (12 fixes)**:
+    - **Unsaved Changes Protection**: Enforced unsaved modifications guard across `:e`, filer, history, grep, `:tabclose`, `:tabonly`, `:q`, and `:qa`.
+    - **Tab Management**: Prevented inadvertent editor termination when closing windows in multi-tab sessions via `:close`.
+    - **Keybindings**: Fully supported `Ctrl+[` as an Esc replacement across all modes and modals; enabled `Ctrl+u`, `Ctrl+w`, and `Ctrl+h` in command-line input.
+    - **Display & Scrolling**: Fixed cursor positioning when `:set nonumber` is active, adjusted Migemo search cursor width, prevented full-width character clipping on horizontal scroll, added scroll tracking to history/clipboard modals, synchronized jump navigation to center view, supported escaped slashes (`\/`) in substitution, and prevented statusline wrapping glitch on narrow terminals.
+  - **GUI Frontend Optimization & Bug Fixes (11 fixes)**:
+    - **Rendering Performance**: Integrated syntax token line cache, reused zero-allocation draw buffers, optimized smart font loading for PlemolJP, and enabled `opt-level=3` for external crates.
+    - **UX & Robustness**: Accurate mouse-click character index resolution handling full-width characters and horizontal scrolling, added `Ctrl+[` to Esc mapping, protected inactive tabs and OS window close events with unsaved prompt (E37), blocked keyboard pass-through during modal dialogs, sanitized blank file paths, synchronized minimap/outline click viewports, clamped out-of-screen IME candidate rects, restored number keys (0-9) and `Ctrl+6` shortcuts, and reduced particle heap allocations.
+
+---
+
 ## [0.9.7-beta] - 2026-10-27
 
 ### Changed

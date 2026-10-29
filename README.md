@@ -6,7 +6,7 @@
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024%20Edition-orange.svg)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/version-v0.9.7--beta-brightgreen.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/version-v0.9.9--beta-brightgreen.svg)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/tkshnkgwr/vivivi)
 
 [English](./README.md) | [日本語](./README_JA.md)
@@ -27,7 +27,7 @@ It would be a privilege if former ViVi or OpenViVi users find a home here, thoug
 * **Development Approach**:  
   The Rust implementation is developed in active collaboration with AI (Gemini). As I am relatively new to GitHub and open-source workflows, I appreciate your patience and understanding.
 * **Current Status**:  
-  Currently in Beta (`v0.9.7-beta`). Both the full-featured terminal TUI (`vivivi`) and the native desktop GUI (`vivivi-gui`) powered by `egui` / `eframe` are implemented and share a unified headless core.
+  Currently in Beta (`v0.9.9-beta`). Both the full-featured terminal TUI (`vivivi`) and the native desktop GUI (`vivivi-gui`) powered by `egui` / `eframe` are implemented and share a unified headless core.
 * **GUI & TUI Dual Architecture**:  
   Use `vivivi` for ultra-fast terminal/SSH workflows, or launch `vivivi-gui` for a modern Tokyo Night desktop experience with PlemolJP typography, inline Japanese IME, minimap, and gravity-drop deletion animations.
 
@@ -70,8 +70,9 @@ It faithfully ports the core Vi editing mechanics and data structures while inte
   - Toggle with `F8` / `:outline`, navigate with `Ctrl-o` + `j`/`k`, and jump immediately with `Enter`.
 - 🔤 **Rich Character Conversions**:
   - Batch whole-buffer conversion via ex commands: `:%zenkaku`, `:%hankaku`, `:%hiragana`, `:%katakana` (with automatic voiced mark synthesis).
-- 📊 **Inline CSV/TSV Alignment & Editing**:
-  - Formats separated values into clean columnar tables with full CJK wide-character support.
+- 📊 **Inline CSV/TSV Alignment & Editing (RFC 4180 Compliant)**:
+  - Formats separated values into clean columnar tables with full CJK wide-character width calculation.
+  - Complies with RFC 4180 escaped quotes (`""`) and robustly handles English apostrophes without cell corruption.
   - Transparently hides quote marks while reading, exposing raw text on the cursor line for precision editing.
 - 📐 **Unicode Box-Drawing (Keisen) Auto-Joining**:
   - Seamlessly draws and connects Unicode box characters (U+2500 - U+254B) using `Ctrl + Arrow keys`, automatically resolving corners, T-junctions, and cross intersections.
