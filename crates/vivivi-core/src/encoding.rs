@@ -232,7 +232,41 @@ pub fn detect_encoding(bytes: &[u8]) -> (CharEncoding, &'static encoding_rs::Enc
     while i < sample.len() {
         let b1 = sample[i];
 
-        // --- A. Shift_JIS 特有確定パターン ---
+        // --- A. EUC-JP 特有確定パターン（Shift_JISより先に判定） ---
+        // EUC-JP ひらがな領域: 0xA4 + 0xA1..=0xF3 (ぁ〜ん)
+        // EUC-JP カタカナ領域: 0xA5 + 0xA1..=0xF6 (ァ〜ヶ)
+        // Shift_JIS では半角カナ（0xA1..=0xDF）の連続になり、通常文章ではあり得ないため即確定
+        if (b1 == 0xa4 || b1 == 0xa5) && i + 1 < sample.len() {
+            let b2 = sample[i + 1];
+            if (b1 == 0xa4 && matches!(b2, 0xa1..=0xf3))
+                || (b1 == 0xa5 && matches!(b2, 0xa1..=0xf6))
+            {
+                return (CharEncoding::EucJp, EUC_JP);
+            }
+        }
+
+        // EUC-JP 3バイト文字 (補助漢字 0x8F + 0xA1..=0xFE + 0xA1..=0xFE)
+        if b1 == 0x8f && i + 2 < sample.len() {
+            let b2 = sample[i + 1];
+            let b3 = sample[i + 2];
+            if matches!(b2, 0xa1..=0xfe) && matches!(b3, 0xa1..=0xfe) {
+                euc_score += 3;
+                i += 3;
+                continue;
+            }
+        }
+
+        // EUC-JP 半角カナ (0x8E + 0xA1..=0xDF)
+        if b1 == 0x8e && i + 1 < sample.len() {
+            let b2 = sample[i + 1];
+            if matches!(b2, 0xa1..=0xdf) {
+                euc_score += 2;
+                i += 2;
+                continue;
+            }
+        }
+
+        // --- B. Shift_JIS 特有確定パターン ---
         if (matches!(b1, 0x81..=0x9f | 0xe0..=0xfc)) && i + 1 < sample.len() {
             let b2 = sample[i + 1];
 
@@ -257,27 +291,25 @@ pub fn detect_encoding(bytes: &[u8]) -> (CharEncoding, &'static encoding_rs::Enc
                 return (CharEncoding::ShiftJis, SHIFT_JIS);
             }
 
-            if matches!(b2, 0x40..=0x7e | 0x80..=0xfc) && b2 != 0x7f {
+            // 注意: b1 が 0xE0..=0xFC かつ b2 が 0xA1..=0xFE の場合、
+            // EUC-JP（第2水準漢字等: 0xD0..=0xF4 + 0xA1..=0xFE）と Shift_JIS でバイト範囲が重複する！
+            // そのため、ここで即座に Shift_JIS スコアに加算して continue してしまうと
+            // EUC-JP の判定がスキップされてしまう。
+            // したがって重複領域では双方にスコアを付けるか、重複しない場合のみ SJIS スコアを加算する。
+            if matches!(b2, 0x40..=0x7e | 0x80..=0xa0) && b2 != 0x7f {
                 sjis_score += 2;
+                i += 2;
+                continue;
+            } else if matches!(b2, 0xa1..=0xfc) {
+                // 重複領域: SJIS (0xE0..=0xFC + 0xA1..=0xFC) かつ EUC-JP (0xE0..=0xFC + 0xA1..=0xFE)
+                sjis_score += 1;
+                euc_score += 1;
                 i += 2;
                 continue;
             }
         }
 
-        // --- B. EUC-JP 特有確定パターン ---
-        // EUC-JP ひらがな領域: 0xA4 + 0xA1..=0xF3 (ぁ〜ん)
-        // EUC-JP カタカナ領域: 0xA5 + 0xA1..=0xF6 (ァ〜ヶ)
-        // Shift_JIS では半角カナ（0xA1..=0xDF）の連続になり、通常文章ではあり得ないため即確定
-        if (b1 == 0xa4 || b1 == 0xa5) && i + 1 < sample.len() {
-            let b2 = sample[i + 1];
-            if (b1 == 0xa4 && matches!(b2, 0xa1..=0xf3))
-                || (b1 == 0xa5 && matches!(b2, 0xa1..=0xf6))
-            {
-                return (CharEncoding::EucJp, EUC_JP);
-            }
-        }
-
-        // 一般的な EUC-JP 2バイト文字
+        // 一般的な EUC-JP 2バイト文字 (0xA1..=0xFE + 0xA1..=0xFE)
         if matches!(b1, 0xa1..=0xfe) && i + 1 < sample.len() {
             let b2 = sample[i + 1];
             if matches!(b2, 0xa1..=0xfe) {
@@ -290,8 +322,31 @@ pub fn detect_encoding(bytes: &[u8]) -> (CharEncoding, &'static encoding_rs::Enc
         i += 1;
     }
 
-    // 4. 特有文字で早期確定しなかった場合のスコア判定
+    // 4. 特有文字で早期確定しなかった場合の判定
+    // 確証が持てない場合は encoding_rs によるデコード妥当性（エラーの有無）を検証
     if euc_score > sjis_score && euc_score > 0 {
+        let (_, _, euc_err) = EUC_JP.decode(sample);
+        if !euc_err {
+            return (CharEncoding::EucJp, EUC_JP);
+        }
+    }
+
+    if sjis_score > euc_score && sjis_score > 0 {
+        let (_, _, sjis_err) = SHIFT_JIS.decode(sample);
+        if !sjis_err {
+            return (CharEncoding::ShiftJis, SHIFT_JIS);
+        }
+    }
+
+    // スコア同点または一方がエラーだった場合: エラーのない方を優先
+    let (_, _, euc_err) = EUC_JP.decode(sample);
+    let (_, _, sjis_err) = SHIFT_JIS.decode(sample);
+
+    if !euc_err && sjis_err {
+        (CharEncoding::EucJp, EUC_JP)
+    } else if !sjis_err && euc_err {
+        (CharEncoding::ShiftJis, SHIFT_JIS)
+    } else if euc_score > sjis_score && euc_score > 0 {
         (CharEncoding::EucJp, EUC_JP)
     } else if sjis_score > 0 {
         (CharEncoding::ShiftJis, SHIFT_JIS)

@@ -230,9 +230,7 @@ impl App {
         }
 
         // 変更行ガター追跡の初期化
-        let lines: Vec<String> = (0..buffer.line_count())
-            .filter_map(|i| buffer.get_line(i))
-            .collect();
+        let lines: Vec<String> = buffer.all_lines();
         let mut change_tracker = ChangeTracker::new(&lines);
         change_tracker.enabled = config.gutter.enabled;
 

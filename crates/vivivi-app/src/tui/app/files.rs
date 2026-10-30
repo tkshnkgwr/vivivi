@@ -88,9 +88,7 @@ impl App {
             self.buffer.on_saved();
 
             // 変更行ガター追跡の保存状態を更新
-            let current_lines: Vec<String> = (0..self.buffer.line_count())
-                .filter_map(|i| self.buffer.get_line(i))
-                .collect();
+            let current_lines: Vec<String> = self.buffer.all_lines();
             self.change_tracker.on_save(&current_lines);
 
             // 最近使ったファイルリストに追加・永続化
@@ -176,9 +174,7 @@ impl App {
         self.buffer = TextBuffer::from_text(&content);
         let _ = self.buffer.load_undofile(&path);
 
-        let lines: Vec<String> = (0..self.buffer.line_count())
-            .filter_map(|i| self.buffer.get_line(i))
-            .collect();
+        let lines: Vec<String> = self.buffer.all_lines();
         self.change_tracker = ChangeTracker::new(&lines);
 
         let is_csv = path

@@ -7,6 +7,30 @@ use crate::tui::app::App;
 /// コマンドを処理した場合は `true`、合致しなかった場合は `false` を返します。
 pub(crate) fn handle_tools_command(app: &mut App, trimmed: &str) -> bool {
     match trimmed {
+        // --- インラインCSV/TSVモードトグル (:csv, :tsv) ---
+        "csv" | "tsv" => {
+            app.is_csv_active = !app.is_csv_active;
+            let status = if app.is_csv_active {
+                "CSV モード: 有効 [CSV] (カンマ/タブ列自動整列)"
+            } else {
+                "CSV モード: 無効 (通常テキスト表示)"
+            };
+            app.status_message = Some(status.to_string());
+            true
+        }
+
+        // --- 罫線モードトグル (:keisen) ---
+        "keisen" => {
+            app.keisen_mode.toggle();
+            let status = if app.keisen_mode.is_active {
+                "罫線モード: 有効 [罫線] (Ctrl+矢印で描画・十字自動結合, F5で終了)"
+            } else {
+                "罫線モード: 無効"
+            };
+            app.status_message = Some(status.to_string());
+            true
+        }
+
         // --- ToDo抽出・一覧プレビュー (:todo, :undone) ---
         "todo" | "undone" => {
             let content = app.buffer.to_string();

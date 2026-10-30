@@ -65,6 +65,13 @@ fn test_early_detection_euc_jp() {
 
     let re_encoded = encode_text(&text, enc, nl);
     assert_eq!(re_encoded, euc_bytes.as_ref());
+
+    // ひらがなを含まず、漢字（JIS第1・第2水準）のみのEUC-JPテキスト
+    // 第2水準漢字「曖昧」「薔薇」等は第1バイトが 0xE0..=0xFC に入り、Shift_JISとコード領域が重複する
+    let (euc_kanji, _, _) = EUC_JP.encode("曖昧森林経済研究報告\n山林管理薔薇");
+    let (text_kanji, enc_kanji, _) = decode_bytes(&euc_kanji);
+    assert_eq!(enc_kanji, CharEncoding::EucJp);
+    assert_eq!(text_kanji, "曖昧森林経済研究報告\n山林管理薔薇");
 }
 
 #[test]

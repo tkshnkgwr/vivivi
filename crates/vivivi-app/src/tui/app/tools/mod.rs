@@ -43,9 +43,7 @@ impl App {
     /// app.refresh_outline();
     /// ```
     pub fn refresh_outline(&mut self) {
-        let lines: Vec<String> = (0..self.buffer.line_count())
-            .filter_map(|i| self.buffer.line_text(i))
-            .collect();
+        let lines: Vec<String> = self.buffer.all_lines();
         // 無名バッファ等でPlainTextの場合、内容から言語を自動検出してsyntax_langも同期
         if self.file_path.is_none()
             && self.syntax_lang == SyntaxLang::PlainText

@@ -28,9 +28,23 @@ use crate::undo::{UndoAction, UndoMgr};
 pub struct TextBuffer {
     data: GapBuffer<char>,
     undo_mgr: UndoMgr,
+    /// 各行の先頭文字オフセットキャッシュ（行 0 は常に 0）
+    line_starts: Vec<usize>,
 }
 
 impl TextBuffer {
+    /// 全文走査して各行の先頭文字オフセットキャッシュを再構築します。
+    fn rebuild_line_starts(&mut self) {
+        let mut starts = Vec::with_capacity(self.data.len() / 40 + 8);
+        starts.push(0);
+        for i in 0..self.data.len() {
+            if let Some(&'\n') = self.data.get(i) {
+                starts.push(i + 1);
+            }
+        }
+        self.line_starts = starts;
+    }
+
     /// 空の新しい [`TextBuffer`] を生成します。
     ///
     /// # Examples
@@ -45,6 +59,7 @@ impl TextBuffer {
         Self {
             data: GapBuffer::new(),
             undo_mgr: UndoMgr::new(),
+            line_starts: vec![0],
         }
     }
 
@@ -69,7 +84,13 @@ impl TextBuffer {
         let mut undo_mgr = UndoMgr::new();
         undo_mgr.on_saved();
 
-        Self { data, undo_mgr }
+        let mut buf = Self {
+            data,
+            undo_mgr,
+            line_starts: Vec::new(),
+        };
+        buf.rebuild_line_starts();
+        buf
     }
 
     /// バッファ内に格納されている文字数（Unicode スカラー値数）を返します。
@@ -286,7 +307,20 @@ impl TextBuffer {
     /// ```
     pub fn basic_insert_text(&mut self, pos: usize, text: &str) {
         let chars: Vec<char> = text.chars().collect();
+        let has_newline = chars.contains(&'\n');
+        let delta = chars.len();
         self.data.insert_slice(pos, &chars);
+
+        if has_newline {
+            // 改行を含む挿入は全体を再構築
+            self.rebuild_line_starts();
+        } else {
+            // 改行を含まない挿入: pos より後ろのすべての行開始位置を delta シフト ($O(L)$)
+            let line_idx = self.position_to_line(pos);
+            for start in self.line_starts.iter_mut().skip(line_idx + 1) {
+                *start += delta;
+            }
+        }
     }
 
     /// Undo 履歴を記録せずに直接テキストを削除し、削除された文字列を返します。
@@ -305,7 +339,19 @@ impl TextBuffer {
     /// ```
     pub fn basic_delete_text(&mut self, pos: usize, len: usize) -> String {
         let deleted = self.get_text(pos, len);
+        let has_newline = deleted.contains('\n');
         self.data.remove_range(pos, pos + len);
+
+        if has_newline {
+            // 改行を含む削除は行構造が変わるため再構築
+            self.rebuild_line_starts();
+        } else {
+            // 改行を含まない削除: pos より後ろのすべての行開始位置を len マイナス ($O(L)$)
+            let line_idx = self.position_to_line(pos);
+            for start in self.line_starts.iter_mut().skip(line_idx + 1) {
+                *start = start.saturating_sub(len);
+            }
+        }
         deleted
     }
 
@@ -551,13 +597,7 @@ impl TextBuffer {
     /// assert_eq!(buf.line_count(), 3);
     /// ```
     pub fn line_count(&self) -> usize {
-        let mut count = 1;
-        for i in 0..self.data.len() {
-            if let Some(&'\n') = self.data.get(i) {
-                count += 1;
-            }
-        }
-        count
+        self.line_starts.len().max(1)
     }
 
     /// 0始まりの行番号に対応する先頭文字オフセット位置を算出します。
@@ -574,22 +614,14 @@ impl TextBuffer {
     /// assert_eq!(buf.line_start_position(1), 4);
     /// ```
     pub fn line_start_position(&self, target_line: usize) -> usize {
-        if target_line == 0 {
-            return 0;
+        if target_line >= self.line_starts.len() {
+            self.data.len()
+        } else {
+            self.line_starts[target_line]
         }
-        let mut current_line = 0;
-        for i in 0..self.data.len() {
-            if let Some(&'\n') = self.data.get(i) {
-                current_line += 1;
-                if current_line == target_line {
-                    return i + 1;
-                }
-            }
-        }
-        self.data.len()
     }
 
-    /// 文字オフセット位置を 0 始まりの行番号へ変換します。
+    /// 文字オフセット位置を 0 始まりの行番号へ二分探索 ($O(\log L)$) で変換します。
     ///
     /// # Examples
     ///
@@ -601,14 +633,10 @@ impl TextBuffer {
     /// assert_eq!(buf.position_to_line(4), 1);
     /// ```
     pub fn position_to_line(&self, pos: usize) -> usize {
-        let limit = pos.min(self.data.len());
-        let mut line = 0;
-        for i in 0..limit {
-            if let Some(&'\n') = self.data.get(i) {
-                line += 1;
-            }
+        match self.line_starts.binary_search(&pos) {
+            Ok(idx) => idx,
+            Err(idx) => idx.saturating_sub(1),
         }
-        line
     }
 
     /// 文字オフセット位置を行・列座標（[`CursorPosition`]）へ変換します。
@@ -672,17 +700,37 @@ impl TextBuffer {
             return None;
         }
         let start = self.line_start_position(line);
-        let mut text = String::new();
-        let mut idx = start;
-        while idx < self.data.len() {
-            match self.data.get(idx) {
-                Some(&'\n') => break,
-                Some(&ch) => text.push(ch),
-                None => break,
+        let next_start = if line + 1 < self.line_count() {
+            self.line_start_position(line + 1)
+        } else {
+            self.data.len()
+        };
+
+        // 次の行開始位置の直前にある改行（\r\n または \n）を除外した長さ
+        let mut end = next_start;
+        if end > start && self.data.get(end - 1) == Some(&'\n') {
+            end -= 1;
+            if end > start && self.data.get(end - 1) == Some(&'\r') {
+                end -= 1;
             }
-            idx += 1;
         }
-        Some(text)
+
+        let len = end.saturating_sub(start);
+        Some(self.get_text(start, len))
+    }
+
+    /// バッファ内の全行の文字列（末尾の改行コードを除く）を一括取得します ($O(N)$)。
+    ///
+    /// 各行を個別に取得する場合に比べ、内部スライス走査を一度に行うため極めて高速です。
+    pub fn all_lines(&self) -> Vec<String> {
+        let total = self.line_count();
+        let mut lines = Vec::with_capacity(total);
+        for l in 0..total {
+            if let Some(s) = self.line_text(l) {
+                lines.push(s);
+            }
+        }
+        lines
     }
 
     /// [`TextBuffer::line_text`] の別名エイリアスです。

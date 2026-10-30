@@ -54,9 +54,7 @@ impl TabPage {
             .map(SyntaxLang::from_path)
             .unwrap_or(SyntaxLang::PlainText);
 
-        let lines: Vec<String> = (0..buffer.line_count())
-            .filter_map(|i| buffer.get_line(i))
-            .collect();
+        let lines: Vec<String> = buffer.all_lines();
         let change_tracker = ChangeTracker::new(&lines);
 
         Self {

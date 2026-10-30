@@ -167,6 +167,7 @@ impl ViviviGuiApp {
 
                 // 下段: マルチタブバー
                 ui.horizontal(|ui| {
+                    ui.style_mut().interaction.selectable_labels = false;
                     ui.spacing_mut().item_spacing = Vec2::new(4.0, 0.0);
 
                     let active_idx = self.core.active_tab;
@@ -216,8 +217,10 @@ impl ViviviGuiApp {
                                                 .color(text_color)
                                                 .strong(),
                                         )
+                                        .selectable(false)
                                         .sense(Sense::click()),
-                                    );
+                                    )
+                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
 
                                     if btn.clicked() {
                                         tab_to_switch = Some(idx);
@@ -230,8 +233,10 @@ impl ViviviGuiApp {
                                                     .color(colors::FG_DIMMED)
                                                     .size(12.0),
                                             )
+                                            .selectable(false)
                                             .sense(Sense::click()),
-                                        );
+                                        )
+                                        .on_hover_cursor(egui::CursorIcon::PointingHand);
                                         if close_btn.clicked() {
                                             tab_to_close = Some(idx);
                                         }
@@ -289,6 +294,7 @@ impl ViviviGuiApp {
             .width_range(160.0..=450.0)
             .resizable(true)
             .show(ctx, |ui| {
+                ui.style_mut().interaction.selectable_labels = false;
                 ui.horizontal(|ui| {
                     ui.selectable_value(&mut self.sidebar_tab, SidebarTab::Files, " 📁 Files ");
                     ui.selectable_value(&mut self.sidebar_tab, SidebarTab::Outline, " 🔖 Outline ");
@@ -327,8 +333,10 @@ impl ViviviGuiApp {
                                 egui::Label::new(
                                     egui::RichText::new("  ⬆ ..").color(colors::ACCENT_BLUE),
                                 )
+                                .selectable(false)
                                 .sense(Sense::click()),
-                            );
+                            )
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
                             if up_label.clicked() {
                                 dir_to_navigate = Some(parent_path);
                             }
@@ -344,8 +352,10 @@ impl ViviviGuiApp {
                                 egui::Label::new(
                                     egui::RichText::new(label_text).color(colors::FG_TEXT),
                                 )
+                                .selectable(false)
                                 .sense(Sense::click()),
-                            );
+                            )
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
 
                             if label.double_clicked() || (is_dir && label.clicked()) {
                                 if is_dir {
@@ -388,8 +398,10 @@ impl ViviviGuiApp {
                                     egui::Label::new(
                                         egui::RichText::new(symbol_label).color(colors::FG_TEXT),
                                     )
+                                    .selectable(false)
                                     .sense(Sense::click()),
-                                );
+                                )
+                                .on_hover_cursor(egui::CursorIcon::PointingHand);
                                 if label.clicked() {
                                     jump_line = Some(item.line_idx);
                                 }

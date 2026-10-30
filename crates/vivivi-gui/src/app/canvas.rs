@@ -23,8 +23,16 @@ impl ViviviGuiApp {
     /// 4. 中央エディタ分割ビュー ＆ ミニマップ領域の描画（`ui.painter()` によるカスタム等幅レンダリング）
     pub(crate) fn render_central_panel(&mut self, ctx: &egui::Context) {
         // 4.1 入力イベント (`Event::Key`, `Event::Text`, `Event::Ime`) の取得とディスパッチ
-        let (events, current_modifiers) = ctx.input(|i| (i.events.clone(), i.modifiers));
+        let (events, current_modifiers, dropped_files, hovered_files) = ctx.input(|i| {
+            (
+                i.events.clone(),
+                i.modifiers,
+                i.raw.dropped_files.clone(),
+                i.raw.hovered_files.clone(),
+            )
+        });
         self.process_egui_events(&events, current_modifiers);
+        self.handle_drag_and_drop_files(&dropped_files);
 
         egui::CentralPanel::default()
             .frame(Frame::NONE.fill(colors::BG_EDITOR))
@@ -866,6 +874,29 @@ impl ViviviGuiApp {
                         CornerRadius::same(2),
                         Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(122, 162, 247, 100)),
                         egui::StrokeKind::Inside,
+                    );
+                }
+
+                // 4.6 ファイルホバー中のオーバーレイガイダンス（ドラッグ＆ドロップ受け入れ視覚フィードバック）
+                if !hovered_files.is_empty() {
+                    let overlay_painter = ui.painter_at(available_rect);
+                    overlay_painter.rect_filled(
+                        available_rect,
+                        CornerRadius::ZERO,
+                        Color32::from_rgba_unmultiplied(26, 27, 38, 200),
+                    );
+                    overlay_painter.rect_stroke(
+                        available_rect.shrink(8.0),
+                        CornerRadius::same(8),
+                        Stroke::new(2.0, colors::ACCENT_BLUE),
+                        egui::StrokeKind::Inside,
+                    );
+                    overlay_painter.text(
+                        available_rect.center(),
+                        Align2::CENTER_CENTER,
+                        "ここにファイルをドロップして開く",
+                        FontId::proportional(20.0),
+                        colors::FG_TEXT,
                     );
                 }
             });

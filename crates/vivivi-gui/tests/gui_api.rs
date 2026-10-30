@@ -264,3 +264,49 @@ fn test_public_key_conversion_and_diff_extraction_api() {
     pm.clear();
     assert!(pm.is_empty());
 }
+
+/// シナリオ 7: OS からのドラッグ＆ドロップファイル処理の検証
+#[test]
+fn test_public_gui_drag_and_drop_scenario() {
+    let temp_dir = std::env::temp_dir();
+    let file1 = temp_dir.join("vivivi_dnd_test1.txt");
+    let file2 = temp_dir.join("vivivi_dnd_test2.txt");
+
+    std::fs::write(&file1, "Hello from D&D 1").unwrap();
+    std::fs::write(&file2, "Hello from D&D 2").unwrap();
+
+    // 1. 新規無名空バッファの場合: 最初のファイルは既存タブを置き換えて開く
+    let core = App::new("", None, CharEncoding::Utf8, NewlineType::Lf);
+    let mut gui = ViviviGuiApp::from_core(core);
+
+    let dropped1 = egui::DroppedFile {
+        path: Some(file1.clone()),
+        name: "vivivi_dnd_test1.txt".to_string(),
+        mime: String::new(),
+        last_modified: None,
+        bytes: None,
+    };
+
+    gui.handle_drag_and_drop_files(&[dropped1]);
+    assert_eq!(gui.core.tabs.len(), 1);
+    assert_eq!(gui.core.file_path, Some(file1.clone()));
+    assert_eq!(gui.core.buffer.to_string(), "Hello from D&D 1");
+
+    // 2. 既にファイルを開いている状態でさらにドロップ: 新規タブとして開く
+    let dropped2 = egui::DroppedFile {
+        path: Some(file2.clone()),
+        name: "vivivi_dnd_test2.txt".to_string(),
+        mime: String::new(),
+        last_modified: None,
+        bytes: None,
+    };
+
+    gui.handle_drag_and_drop_files(&[dropped2]);
+    assert_eq!(gui.core.tabs.len(), 2);
+    assert_eq!(gui.core.file_path, Some(file2.clone()));
+    assert_eq!(gui.core.buffer.to_string(), "Hello from D&D 2");
+
+    // クリーンアップ
+    let _ = std::fs::remove_file(file1);
+    let _ = std::fs::remove_file(file2);
+}

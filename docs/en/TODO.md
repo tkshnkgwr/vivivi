@@ -77,7 +77,7 @@
 | UI/UX Visual       | Desktop GUI (egui / eframe)                   |  OpenViVi (Qt rewrite)   | Modern GUI frontend with rich borders and custom fonts                  | Implemented (vivivi-gui) |
 | Future             | Tree-sitter Syntax Engine Integration         |     Modern Extension     | Accurate AST-based syntax highlighting and AST node selection           |        Planned (Phase 5) |
 | Future             | Binary / Hex Editor Mode                      |     ViVi 3 / ViVi 4      | Hex dump + ASCII parallel view and byte-level editing                   |        Planned (Phase 5) |
-| Future             | Scripting Engine (Modern ViViScript)          |     ViVi 3 / ViVi 4      | Editor automation via Rhai / Lua integration                            |        Planned (Phase 5) |
+| Future             | Scripting Engine (Modern ViViScript)          |     ViVi 3 / ViVi 4      | Editor automation via Rhai / Lua integration                            |        Planned (Phase 6) |
 | Future             | Project Visualizer Graph (Visualize)          |          ViVi 4          | 2D force-directed graph of file sizes, dependencies & freshness         |        Planned (Phase 5) |
 | Distribution       | Update Check, Notify & Auto-Update Prep       |     Modern Extension     | GitHub Releases integration, version notification UI & self-update      |        Planned (Phase 5) |
 
@@ -277,7 +277,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 
 ---
 
-## 3. Currently in Progress: Beta Testing & Practical Verification (v0.9.2-beta)
+## 3. Currently in Progress: Beta Testing & Practical Verification (v0.9.9-beta)
 - [ ] **[Verification & Dogfooding] Boss's Hands-on Manual Testing (`MANUAL_TEST_GUIDE.md`)**
   - Daily coding and production usage, discovering friction points, edge-cases, and bugs.
   - [x] **Dynamic Option Control**: Implemented `:se nu` / `:se nonu` / `:se wrap` / `:se nowrap` and status query commands (`:se nu?`, `:se wrap?`).
@@ -297,9 +297,13 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
     - Completely resolved line-wise paste corruption after multi-line visual yank.
   - [x] **Filer `d` Key Conflict Resolution**:
     - Resolved key event conflict between Filer delete prompt and Vi delete operator.
+  - [x] **Full Quality Audit & Hardening Fixes (34+ items across codebase)**:
+    - **Core & Vi Engine Hardening**: Fixed `is_modified` freeze after save, cross-platform path escaping for undofile, UTF-16/CRLF line break detection, nested parenthesis boundary checks, multi-quote detection accuracy, Ex substitute (`:s`) count accuracy, cursor clamp safety.
+    - **Modes Module Hardening (22 items)**: Fixed full-width space indent panic, tab stop alignment for full-width characters, Keisen corner alignment, ToDo full-width column calculation, wave dash (`〜`) conversion, dynamic abbreviation symbol filtering, LCS common prefix/suffix optimization & OOM cell cap, zero-division guards, small-page PDF protection, filer same-path & EXDEV fallback, operator alignment guards, CSV RFC 4180 escaping, calc comma-separated number handling, nested renumbering, DiffLog blame generation tracking, regex expression substitution capture groups, token separation for method calls, tags modifier extraction, template sanitization.
+    - **TUI Frontend Usability & Safety (12 items)**: Unsaved changes guard across `:e`, filer, history, grep, tabs, `:q`, `:qa`; prevent accidental app exit on window close when other tabs exist; `Ctrl+[` support across all modes; command-line `Ctrl+u/w/h` editing; `:set nonumber` cursor alignment; Migemo full-width cursor width fix; horizontal scroll split prevention; modal scroll sync; centered scroll jump; Ex escaped slash handling; narrow terminal statusline overflow prevention.
+    - **GUI Performance Optimization & Usability (11 items)**: Syntax token line cache, paint buffer reuse, PlemolJP font precedence loader, mouse click char index calculation, inactive tab & window close unsaved guard, modal key event capture, blank path safety, viewport scroll sync, IME candidate window coordinate clamp, shortcut additions, particle heap reduction.
 - [ ] **[Distribution & CI/CD] GitHub Actions Automated Release Pipeline (`.github/workflows/release.yml`)**
   - Windows x86_64 portable zip & SHA256 checksum generation triggered on `v*` tags.
-- [ ] **[Packaging] Scoop Bucket Maintenance (`vivivi.json`) & Winget Integration**
 - [ ] **[General Availability Criteria] TUI Edition Official GA Release Sign-off (v1.0.0)**
 
 ---
@@ -314,6 +318,29 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - **Step 4**: Gravity-drop character deletion physics animation (0.5s fade-out) & 0% CPU reactive idle hybrid loop (`particles.rs`).
   - *(※For detailed evaluation, framework comparison, theme styling, and prompt templates, see [GUI_DESIGN.md](file:///docs/en/GUI_DESIGN.md))*
 
+- [ ] **[egui GUI Roadmap] Aesthetic Maturation & ViVi-Native UX Evolution (Phase 5 Expansion)**
+  - *(※Design specs: see [SETTINGS_DESIGN.md](file:///docs/en/SETTINGS_DESIGN.md) & [GUI_DESIGN.md](file:///docs/en/GUI_DESIGN.md))*
+  - **Phase 1: Aesthetic & Thematic Foundations (External TOML Themes & High-Contrast Support)**:
+    - [ ] Standalone external theme TOML separation (`%USERPROFILE%\.vivivi\themes\<name>.toml`)
+    - [ ] 6 standard presets implementation & dynamic menu switching (`OpenViVi`, `ViViClassic`, `ViviviDark`, `ViviviLight`, `HighContrastDark`, `HighContrastLight`)
+    - [ ] Startup bootstrap pipeline (auto-deploy `%USERPROFILE%\.vivivi\` and bundled standard themes)
+    - [ ] Dynamic I-beam text input cursor switching on central editor canvas hover (`ctx.set_cursor_icon(CursorIcon::Text)`)
+    - [ ] Flat modern design tuning: line-height padding (1.3–1.5x), hairline borders (<=1px), unified widget rounding (2.0px)
+    - [ ] Reactive-only frame repaint on input/cursor/event to guarantee 0% idle CPU footprint
+  - **Phase 2: 6-Category Configuration Infrastructure & Ephemeral Mutation Rules**:
+    - [ ] 6-category `config.toml` persistence schema (`[general]`, `[appearance]`, `[invisibles]`, `[editing]`, `[tools]`, `[keymap]`)
+    - [ ] First-launch auto-generation of annotated Japanese template `config.toml`
+    - [ ] In-session ephemeral mutation rule for Ex commands (`:set` and `:colorscheme` only mutate memory)
+    - [ ] Implementation of **`:mkvivivirc`** (or `:wconfig`) command to dump active in-memory settings to `config.toml`
+    - [ ] Implementation of **`:source`** (or `:so`) command for live external reload
+    - [ ] egui flat 2-pane categorical settings GUI modal dialog
+    - [ ] TUI (Ratatui) centered floating settings modal with full Vi keyboard navigation
+    - [ ] Dedicated theme documentation (`doc/help/theme.md`)
+  - **Phase 3: ViVi Signature UX Restoration & TUI Parity**:
+    - [ ] Coexistence of Windows-style editing (Shift+Arrow selection, Ctrl+C/V) with modal vi commands
+    - [ ] Selected text partial execution & external process piping
+    - [ ] Port shared theme logic to terminal TUI (`ratatui`)
+
 - [x] **[OpenViVi] Minimap Overview (egui-backed)**
   - High-level bird's-eye code overview displaying viewport rectangle, click-to-scroll jump, and Viewport Culling (`vivivi-gui`).
 - [x] **[OpenViVi] Gravity Drop Character Deletion Animation (egui-backed)**
@@ -323,8 +350,6 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - Future enhancements: keyboard-driven tree navigation (`:tree` / `Ctrl-e`) and **async on-demand lazy loading with I/O timeouts** for network drives & cloud storage (Box/OneDrive).
 - [ ] **[ViVi 3 / ViVi 4] Binary / Hex Editor Mode**
   - Hex dump + ASCII parallel view and byte-level editing.
-- [ ] **[ViVi 3 / ViVi 4] Scripting Engine Integration (Modern ViViScript via Rhai / Lua)**
-  - Macro recording/playback and custom automation scripts.
 - [ ] **[ViVi 4] Project Visualizer Graph (Visualize / Force-Directed Graph)**
   - 2D force-directed layout graph visualizing file sizes, include dependencies, and edit freshness.
 - [ ] **[Original]** Gigabyte file (1GB+) handling via Piece Tree & Memory-Mapped Files (`memmap2`).
@@ -335,14 +360,6 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - Incremental parsing architecture guaranteeing zero input latency during typing.
 - [ ] **[Original]** LSP (Language Server Protocol) client integration.
 - [ ] **[Original]** Multi-cursor editing.
-- [ ] **[Platform Expansion] macOS Support (Low priority)**
-  - Validate and ensure compatibility for terminal TUI keybindings and future GUI under macOS.
-- [ ] **[Platform Expansion] Linux Support (Low priority)**
-  - Validate and ensure compatibility for terminal TUI and future GUI under Linux (X11/Wayland).
-- [ ] **[Packaging & Distribution] Windows Package Managers Support (Scoop / Winget) (Medium priority)**
-  - **Scoop**: Create custom bucket (`scoop-bucket`) and `vivivi.json` manifest for portable, non-admin CLI/TUI distribution.
-  - **Winget**: Submit package manifest to `microsoft/winget-pkgs` using `wingetcreate` for Windows 11 default package manager integration.
-  - Establish release automation workflow tied to GitHub Releases (portable zip).
 - [ ] **[Update Management & Operations] Update Check, Notification & Auto-Update Pipeline Preparation (Medium priority)**
   - **1. GitHub Actions CI/CD Release Pipeline (`.github/workflows/release.yml`)**:
     - Automated cross-compilation & release workflow triggered on `git push origin v*` (version tags).
@@ -368,4 +385,42 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 - [ ] **[Developer Ergonomics] Standalone Executable Examples (`examples/`) (Low priority)**
   - Minimal CLI demos verifying `vivivi-core` and `vivivi-modes` logic without launching the entire TUI.
   - Place `gap_buffer_demo.rs` (buffer locality visualization), `keisen_combine.rs` (Unicode box drawing intersection test), `inline_csv_align.rs` (instant table formatter).
+
+---
+
+## 5. Phase 6: Multi-Platform Expansion & Ecosystem Infrastructure
+- [ ] **[External Package Managers] Windows Package Managers Support (Scoop / Winget) (Medium priority)**
+  - **Scoop**: Create custom bucket (`scoop-bucket`) and `vivivi.json` manifest for portable, non-admin CLI/TUI distribution.
+  - **Winget**: Submit package manifest to `microsoft/winget-pkgs` using `wingetcreate` for Windows 11 default package manager integration.
+  - Establish release automation workflow tied to GitHub Releases (portable zip).
+- [ ] **[Platform Expansion] macOS Support (Low priority)**
+  - Validate and ensure compatibility for terminal TUI keybindings and future GUI under macOS.
+- [ ] **[Platform Expansion] Linux Support (Low priority)**
+  - Validate and ensure compatibility for terminal TUI and future GUI under Linux (X11/Wayland).
+- [ ] **[ViVi 3 / ViVi 4] Scripting Engine Integration (Modern ViViScript via Rhai / Lua) (Medium priority)**
+  - Macro recording/playback, custom automation scripts, and external plugin scripting foundation.
+
+---
+
+## 6. Phase 7: Candidate Features from ViVi 3 / ViVi 4 Help & Asset Analysis (Staging Pool)
+*(※Extracted from analysis of ViVi 3 & 4 distribution bundles, CHM help contents, and built-in symbol definitions. To be re-categorized into respective phases later.)*
+
+- [ ] **[ViVi 3 / ViVi 4] External Command Execution Dialog & Process Piping (`cmdExecDlg` / `:!`, `:r!`)**
+  - Execute external CLI commands, pipe selected text into standard input, and directly capture stdout back into the editor view.
+- [ ] **[ViVi 3 / ViVi 4] Document Encryption & Decryption (`cryptDlg` / Password-Protected Editing)**
+  - Symmetric password encryption/decryption of document buffers for secure storage of confidential notes and credentials.
+- [ ] **[ViVi 3 / ViVi 4] C/C++ Inactive `#ifdef` Block Dimming / Commenting (`defineDlg`)**
+  - Define macro symbol configurations to automatically dim or format inactive `#ifdef` / `#if 0` preprocessor code blocks.
+- [ ] **[ViVi 3 / ViVi 4] C/C++ Member Completion on Object/Pointer (`cpp.html` / `.` and `->` trigger)**
+  - Scope and type-aware dynamic member completion triggered immediately after `.` or `->`.
+- [ ] **[ViVi 3 / ViVi 4] Trailing Whitespace Trimming (`trimming.html` / `:trim`)**
+  - Automated or command-invoked removal of redundant trailing spaces and full-width whitespaces upon file saving or explicit call.
+- [ ] **[ViVi 3 / ViVi 4] Aggregate Crash Dump File (`crashFile.html` / `vivicrsh.out` format)**
+  - Save all open unsaved buffers into a structured fallback crash dump file (`■ <path>` + line indent) upon fatal termination.
+- [ ] **[ViVi 3 / ViVi 4] Automation Server & IPC External Process Control (`automation.html` / `ViVi.Application`)**
+  - Expose IPC/automation interface to allow external scripts (Python, PowerShell, etc.) to command editor buffers and actions.
+- [ ] **[ViVi 3 / ViVi 4] ViViScript Built-in API Compatibility Layer (`ViViScript.txt` / `vvsbltin.txt`)**
+  - Formalize object model specifications for `View` (cursor, selection, UndoBlock, visual column map), `Document`, `String`, `DateTime`, and `File` into the scripting engine binding.
+- [ ] **[ViVi 4] One-Point Tips & Help Dialog (`onePointTipsDlg`)**
+  - Startup or menu-triggered operational tips dialog introducing useful editor shortcuts and workflow tricks.
 

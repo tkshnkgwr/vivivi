@@ -3,6 +3,8 @@
 //! コマンドライン引数で指定されたファイルがあればエンコーディングと改行コードを自動判別して読み込み、
 //! `eframe` ネイティブウィンドウ（Tokyo Night テーマ ＆ PlemolJP 優先フォント設定）を起動します。
 
+#![windows_subsystem = "windows"]
+
 use eframe::NativeOptions;
 use std::path::PathBuf;
 use vivivi_app::App;
@@ -47,6 +49,7 @@ fn main() -> eframe::Result {
             .with_inner_size([1024.0, 768.0])
             .with_min_inner_size([640.0, 480.0])
             .with_active(true)
+            .with_drag_and_drop(true)
             .with_title("vivivi"),
         vsync: true,
         ..Default::default()

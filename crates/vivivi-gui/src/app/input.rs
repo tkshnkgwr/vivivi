@@ -11,6 +11,35 @@ use crate::particles::extract_deleted_line_segment;
 use crate::theme::colors;
 
 impl ViviviGuiApp {
+    /// OS からドラッグ＆ドロップされたファイルを処理します。
+    ///
+    /// 既存のバッファが無名かつ未編集で空の場合はそのタブで開き、
+    /// それ以外の場合は新しいタブ（`:tabnew`）として順次開きます。
+    pub fn handle_drag_and_drop_files(&mut self, dropped_files: &[egui::DroppedFile]) {
+        for file in dropped_files {
+            if let Some(path) = &file.path {
+                let is_single_empty_unmodified = self.core.tabs.len() <= 1
+                    && self.core.file_path.is_none()
+                    && !self.core.buffer.is_modified()
+                    && self.core.buffer.is_empty();
+
+                if is_single_empty_unmodified {
+                    if let Err(e) = self.core.open_file(path.clone()) {
+                        self.core.status_message =
+                            Some(format!("ファイルを開けませんでした: {e}"));
+                    }
+                } else {
+                    self.core.new_tab(Some(path.clone()));
+                }
+
+                // サイドバーのファイルツリーの現在地をドロップ先ファイルの親ディレクトリに自動追従
+                if let Some(parent) = path.parent() {
+                    self.navigate_sidebar_dir(parent.to_path_buf());
+                }
+            }
+        }
+    }
+
     /// キーイベントを共通 `App` コアへ転送し、文字削除が発生した場合は
     /// 該当グリフのスクリーン座標から落下アニメーション用パーティクルを生成します（ステップ 4）。
     pub(crate) fn dispatch_key_with_particles(&mut self, key: AppKeyEvent) {
