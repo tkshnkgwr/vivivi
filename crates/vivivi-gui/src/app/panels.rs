@@ -211,32 +211,34 @@ impl ViviviGuiApp {
                             .inner_margin(Margin::symmetric(8, 4))
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
-                                    let btn = ui.add(
-                                        egui::Label::new(
-                                            egui::RichText::new(tab_label)
-                                                .color(text_color)
-                                                .strong(),
+                                    let btn = ui
+                                        .add(
+                                            egui::Label::new(
+                                                egui::RichText::new(tab_label)
+                                                    .color(text_color)
+                                                    .strong(),
+                                            )
+                                            .selectable(false)
+                                            .sense(Sense::click()),
                                         )
-                                        .selectable(false)
-                                        .sense(Sense::click()),
-                                    )
-                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                        .on_hover_cursor(egui::CursorIcon::PointingHand);
 
                                     if btn.clicked() {
                                         tab_to_switch = Some(idx);
                                     }
 
                                     if tab_count > 1 {
-                                        let close_btn = ui.add(
-                                            egui::Label::new(
-                                                egui::RichText::new("×")
-                                                    .color(colors::FG_DIMMED)
-                                                    .size(12.0),
+                                        let close_btn = ui
+                                            .add(
+                                                egui::Label::new(
+                                                    egui::RichText::new("×")
+                                                        .color(colors::FG_DIMMED)
+                                                        .size(12.0),
+                                                )
+                                                .selectable(false)
+                                                .sense(Sense::click()),
                                             )
-                                            .selectable(false)
-                                            .sense(Sense::click()),
-                                        )
-                                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                            .on_hover_cursor(egui::CursorIcon::PointingHand);
                                         if close_btn.clicked() {
                                             tab_to_close = Some(idx);
                                         }
@@ -329,14 +331,15 @@ impl ViviviGuiApp {
                         // 親ディレクトリ (..) への移動リンク
                         if let Some(parent) = self.current_dir.parent() {
                             let parent_path = parent.to_path_buf();
-                            let up_label = ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new("  ⬆ ..").color(colors::ACCENT_BLUE),
+                            let up_label = ui
+                                .add(
+                                    egui::Label::new(
+                                        egui::RichText::new("  ⬆ ..").color(colors::ACCENT_BLUE),
+                                    )
+                                    .selectable(false)
+                                    .sense(Sense::click()),
                                 )
-                                .selectable(false)
-                                .sense(Sense::click()),
-                            )
-                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                .on_hover_cursor(egui::CursorIcon::PointingHand);
                             if up_label.clicked() {
                                 dir_to_navigate = Some(parent_path);
                             }
@@ -348,14 +351,15 @@ impl ViviviGuiApp {
                             let icon = if is_dir { "📁" } else { "📄" };
                             let label_text = format!("  {} {}", icon, name);
 
-                            let label = ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new(label_text).color(colors::FG_TEXT),
+                            let label = ui
+                                .add(
+                                    egui::Label::new(
+                                        egui::RichText::new(label_text).color(colors::FG_TEXT),
+                                    )
+                                    .selectable(false)
+                                    .sense(Sense::click()),
                                 )
-                                .selectable(false)
-                                .sense(Sense::click()),
-                            )
-                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                .on_hover_cursor(egui::CursorIcon::PointingHand);
 
                             if label.double_clicked() || (is_dir && label.clicked()) {
                                 if is_dir {
@@ -394,14 +398,16 @@ impl ViviviGuiApp {
                                 let indent = "  ".repeat(item.level.saturating_sub(1));
                                 let symbol_label =
                                     format!("{}L{}: {}", indent, item.line_idx + 1, item.title);
-                                let label = ui.add(
-                                    egui::Label::new(
-                                        egui::RichText::new(symbol_label).color(colors::FG_TEXT),
+                                let label = ui
+                                    .add(
+                                        egui::Label::new(
+                                            egui::RichText::new(symbol_label)
+                                                .color(colors::FG_TEXT),
+                                        )
+                                        .selectable(false)
+                                        .sense(Sense::click()),
                                     )
-                                    .selectable(false)
-                                    .sense(Sense::click()),
-                                )
-                                .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
                                 if label.clicked() {
                                     jump_line = Some(item.line_idx);
                                 }

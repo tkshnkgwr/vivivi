@@ -888,7 +888,7 @@ impl ViviviGuiApp {
                     overlay_painter.rect_stroke(
                         available_rect.shrink(8.0),
                         CornerRadius::same(8),
-                        Stroke::new(2.0, colors::ACCENT_BLUE),
+                        Stroke::new(2.0_f32, colors::ACCENT_BLUE),
                         egui::StrokeKind::Inside,
                     );
                     overlay_painter.text(

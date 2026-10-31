@@ -25,8 +25,7 @@ impl ViviviGuiApp {
 
                 if is_single_empty_unmodified {
                     if let Err(e) = self.core.open_file(path.clone()) {
-                        self.core.status_message =
-                            Some(format!("ファイルを開けませんでした: {e}"));
+                        self.core.status_message = Some(format!("ファイルを開けませんでした: {e}"));
                     }
                 } else {
                     self.core.new_tab(Some(path.clone()));

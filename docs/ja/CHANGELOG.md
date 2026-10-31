@@ -4,6 +4,34 @@
 
 ---
 
+## [0.9.11-beta] - 2026-11-01
+
+### Fixed / Improved
+- **コンパイラ警告・Clippyリント完全解消**:
+  - `vivivi-gui`: `canvas.rs` の `Stroke::new` における `float_literal_f32_fallback` 型推論警告を修正（`2.0_f32`）。
+  - `vivivi-vi`: `text_object.rs` の固定長チャンク処理を `chunks_exact(2)` から `as_chunks::<2>().0` に更新し、Clippy リント警告をゼロ化。
+  - `cargo fmt` によるプロジェクト全体のコード自動整形適用。
+- **設定アーキテクチャのモジュール化・ドキュメント拡充**:
+  - `SETTINGS_DESIGN.md` を統合ナビゲーション・ハブへ再構成。
+  - `docs/ja/settings/` ディレクトリを新設し、4つの詳細仕様書へ分割（`config_spec.md`, `themes_spec.md`, `window_state.md`, `dialog_ui.md`）。
+  - GUI ウィンドウ位置・サイズ・最大化の記憶と画面外脱出防止安全ガード（マルチモニター対策）仕様を策定。
+  - ViVi 3 / 4 の2大設定体系（共通プロパティ・タイプ別プロパティ）の歴史的調査および現代的マッピングの体系化。
+- **CLI / GUI インストール環境整備**:
+  - `cargo install` による `%USERPROFILE%\.cargo\bin` への最新バイナリ配備。
+
+## [0.9.10-beta] - 2026-10-30
+
+### Added / Improved
+- **大容量ファイル起動高速化 & 境界判定改善**:
+  - `TextBuffer` に行境界インデックスキャッシュ（`line_starts`）を導入し、行頭・行数計算を $O(1)$ 化。
+  - `ChangeTracker` 初期化の一括取得（`all_lines`）により、大容量ファイル（30MB等）の起動・描画を大幅高速化。
+  - EUC-JP の2バイト文字境界判定ロジックを修正し、Shift_JIS との誤判定を防止。
+- **GUI 操作性向上**:
+  - OS からのドラッグ＆ドロップファイル読み込みと UI オーバーレイ表示に対応。
+  - タブバーおよびファイルツリーのホバーカーソルをポインター/矢印へ調整。
+- **設定設計**:
+  - 設定画面設計書（`SETTINGS_DESIGN.md`）初版策定。
+
 ## [0.9.9-beta] - 2026-10-29
 
 ### Fixed / Improved

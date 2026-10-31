@@ -163,7 +163,7 @@ impl ViEngine {
 
         // 偶数個のペア (q0, q1), (q2, q3)... のみ有効な引用符ペアとして抽出
         let mut valid_pairs = Vec::new();
-        for chunk in quote_indices.chunks_exact(2) {
+        for chunk in quote_indices.as_chunks::<2>().0 {
             valid_pairs.push((chunk[0], chunk[1]));
         }
 
