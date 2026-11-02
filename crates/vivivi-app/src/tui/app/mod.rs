@@ -139,6 +139,12 @@ pub struct App {
     pub selected_recent_idx: usize,
     /// 設定ダイアログ（GUI / TUI）の表示フラグ
     pub show_preferences_dialog: bool,
+    /// TUI 設定ダイアログの選択中カテゴリインデックス (0..6)
+    pub tui_settings_category: usize,
+    /// TUI 設定ダイアログの選択中項目インデックス
+    pub tui_settings_item: usize,
+    /// TUI 設定ダイアログで項目ペインにフォーカスがあるか
+    pub tui_settings_in_items: bool,
 
     // --- 不可視文字可視化 (:set list / :set nolist) ---
     pub list_chars_config: ListCharsConfig,
@@ -342,6 +348,9 @@ impl App {
             show_recent_modal: false,
             selected_recent_idx: 0,
             show_preferences_dialog: false,
+            tui_settings_category: 0,
+            tui_settings_item: 0,
+            tui_settings_in_items: false,
             list_chars_config,
 
             config,

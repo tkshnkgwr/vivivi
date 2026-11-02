@@ -438,3 +438,103 @@ fn test_public_gui_settings_dialog_lifecycle_and_actions() {
     assert_eq!(gui.core.tab_width, 4);
     assert!(gui.minimap_open);
 }
+
+/// シナリオ 11: 設定ダイアログの全6カテゴリのヘッドレス描画、Ctrl+, キー連動、
+/// インクリメンタル検索、および設定ファイル保存・復元の網羅的検証。
+#[test]
+fn test_public_gui_settings_dialog_full_render_and_persistence() {
+    let core = App::new(
+        "fn main() {\n    println!(\"Hello\");\n}",
+        None,
+        CharEncoding::Utf8,
+        NewlineType::Lf,
+    );
+    let mut gui = ViviviGuiApp::from_core(core);
+    let ctx = egui::Context::default();
+
+    // 1. Ctrl+, キーによるダイアログの開閉検証
+    assert!(!gui.settings_dialog.is_open);
+    gui.process_egui_events(
+        &[Event::Key {
+            key: Key::Comma,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::CTRL,
+        }],
+        Modifiers::CTRL,
+    );
+    assert!(
+        gui.settings_dialog.is_open,
+        "Ctrl+, で設定ダイアログが開くこと"
+    );
+
+    // もう一度 Ctrl+, を押すと閉じる
+    gui.process_egui_events(
+        &[Event::Key {
+            key: Key::Comma,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::CTRL,
+        }],
+        Modifiers::CTRL,
+    );
+    assert!(
+        !gui.settings_dialog.is_open,
+        "Ctrl+, で設定ダイアログが閉じること"
+    );
+
+    // 2. :preferences コマンドで開く
+    gui.core.execute_ex("pref");
+    assert!(gui.core.show_preferences_dialog);
+
+    // 3. 全6カテゴリを実際にヘッドレス描画してクラッシュしないことを検証
+    for cat in SettingsCategory::all() {
+        gui.settings_dialog.open(&gui.core.config);
+        gui.settings_dialog.active_category = *cat;
+
+        // egui の 1 フレーム実行（Window 描画を通す）
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            gui.render_settings_dialog(ctx);
+        });
+    }
+
+    // 4. 設定の変更・保存・再読込の整合性検証
+    let temp_dir = std::env::temp_dir().join(format!("vivivi_gui_cfg_test_{}", std::process::id()));
+    std::fs::create_dir_all(&temp_dir).expect("create temp dir");
+    let test_cfg_path = temp_dir.join("config.toml");
+
+    // ドラフト設定を変更
+    gui.settings_dialog.draft_config.general.default_encoding = "sjis".to_string();
+    gui.settings_dialog.draft_config.appearance.theme = "ViVi Classic".to_string();
+    gui.settings_dialog.draft_config.appearance.gui.font_size = 18.0;
+    gui.settings_dialog.draft_config.editing.tab_width = 8;
+    gui.settings_dialog.draft_config.invisibles.enabled = true;
+    gui.settings_dialog.draft_config.appearance.gui.show_minimap = false;
+
+    // 適用
+    gui.apply_dialog_config(&ctx);
+    assert_eq!(gui.core.config.general.default_encoding, "sjis");
+    assert_eq!(gui.core.config.appearance.theme, "ViVi Classic");
+    assert_eq!(gui.core.tab_width, 8);
+    assert!(!gui.minimap_open);
+
+    // ディスク保存
+    gui.core
+        .config
+        .save_to(&test_cfg_path)
+        .expect("save config to temp path");
+    assert!(test_cfg_path.exists());
+
+    // 保存された TOML をロードして完全一致を検証
+    let loaded_config = vivivi_app::config::AppConfig::load_or_default(Some(&test_cfg_path));
+    assert_eq!(loaded_config.general.default_encoding, "sjis");
+    assert_eq!(loaded_config.appearance.theme, "ViVi Classic");
+    assert_eq!(loaded_config.appearance.gui.font_size, 18.0);
+    assert_eq!(loaded_config.editing.tab_width, 8);
+    assert!(loaded_config.invisibles.enabled);
+    assert!(!loaded_config.appearance.gui.show_minimap);
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

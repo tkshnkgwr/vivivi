@@ -186,6 +186,70 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
         return;
     }
 
+    // TUI 設定ダイアログ表示中のキーハンドリング
+    if app.show_preferences_dialog {
+        if is_esc || key.code == KeyCode::Char('q') {
+            app.show_preferences_dialog = false;
+            app.status_message = Some("設定画面を閉じました".to_string());
+            return;
+        }
+
+        match key.code {
+            KeyCode::Char('s') => {
+                app.sync_runtime_to_config();
+                let path = crate::config::AppConfig::default_config_path();
+                match app.config.save_to(&path) {
+                    Ok(()) => {
+                        app.status_message =
+                            Some(format!("設定を保存しました: {}", path.display()));
+                    }
+                    Err(e) => {
+                        app.status_message = Some(format!("設定の保存に失敗しました: {e}"));
+                    }
+                }
+                app.show_preferences_dialog = false;
+            }
+            KeyCode::Left | KeyCode::Char('h') => {
+                app.tui_settings_in_items = false;
+            }
+            KeyCode::Right | KeyCode::Char('l') | KeyCode::Tab => {
+                app.tui_settings_in_items = true;
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if !app.tui_settings_in_items {
+                    app.tui_settings_category = (app.tui_settings_category + 1).min(5);
+                    app.tui_settings_item = 0;
+                } else {
+                    let max_items = crate::tui::ui::settings::get_category_items(
+                        app,
+                        app.tui_settings_category,
+                    )
+                    .len();
+                    if max_items > 0 {
+                        app.tui_settings_item = (app.tui_settings_item + 1).min(max_items - 1);
+                    }
+                }
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if !app.tui_settings_in_items {
+                    app.tui_settings_category = app.tui_settings_category.saturating_sub(1);
+                    app.tui_settings_item = 0;
+                } else {
+                    app.tui_settings_item = app.tui_settings_item.saturating_sub(1);
+                }
+            }
+            KeyCode::Char(' ') | KeyCode::Enter => {
+                if !app.tui_settings_in_items {
+                    app.tui_settings_in_items = true;
+                } else {
+                    toggle_tui_settings_item(app);
+                }
+            }
+            _ => {}
+        }
+        return;
+    }
+
     // 2ペインファイラー表示中のキーハンドリング
     if app.show_filer {
         if is_esc || key.code == KeyCode::Char('q') {
@@ -636,5 +700,186 @@ pub fn play_macro(app: &mut App) {
         app.status_message = Some(format!("マクロ再生完了 ({count} 件のキーイベントを実行)"));
     } else {
         app.status_message = Some("再生可能なキーボードマクロがありません".to_string());
+    }
+}
+
+/// TUI 設定ダイアログで Space または Enter が押されたときの項目トグル処理
+fn toggle_tui_settings_item(app: &mut App) {
+    let cat = app.tui_settings_category;
+    let item = app.tui_settings_item;
+
+    match cat {
+        0 => match item {
+            // 文字エンコーディング
+            0 => {
+                app.config.general.default_encoding =
+                    match app.config.general.default_encoding.as_str() {
+                        "utf-8" => "sjis".to_string(),
+                        "sjis" => "euc-jp".to_string(),
+                        _ => "utf-8".to_string(),
+                    };
+            }
+            // 改行形式
+            1 => {
+                app.config.general.default_fileformat =
+                    if app.config.general.default_fileformat == "dos" {
+                        "unix".to_string()
+                    } else {
+                        "dos".to_string()
+                    };
+            }
+            // クリップボード
+            2 => {
+                app.config.general.clipboard = match app.config.general.clipboard.as_str() {
+                    "none" => "unnamed".to_string(),
+                    "unnamed" => "unnamedplus".to_string(),
+                    _ => "none".to_string(),
+                };
+                let opt = vivivi_vi::ClipboardOption::parse(&app.config.general.clipboard);
+                app.vi.set_clipboard_option(opt);
+            }
+            // スワップ
+            3 => {
+                app.config.general.crash_recovery = !app.config.general.crash_recovery;
+            }
+            // 更新チェック
+            4 => {
+                app.config.general.check_update = !app.config.general.check_update;
+            }
+            _ => {}
+        },
+        1 => match item {
+            // カラーテーマ
+            0 => {
+                let themes = crate::theme::Theme::list_available_themes();
+                let cur = app.config.appearance.theme.to_lowercase().replace(' ', "-");
+                let mut next_theme = "tokyo-night".to_string();
+                if let Some(pos) = themes
+                    .iter()
+                    .position(|t| t == &cur || t.replace('-', " ") == cur)
+                {
+                    next_theme = themes[(pos + 1) % themes.len()].clone();
+                }
+                let loaded = crate::theme::Theme::load_by_name(&next_theme);
+                app.config.appearance.theme = loaded.meta.name;
+            }
+            // 行番号
+            1 => {
+                app.show_line_numbers = !app.show_line_numbers;
+                app.config.appearance.line_number = app.show_line_numbers;
+            }
+            // 相対行番号
+            2 => {
+                app.relative_number = !app.relative_number;
+                app.config.appearance.relative_number = app.relative_number;
+            }
+            // 折り返し
+            3 => {
+                app.wrap = !app.wrap;
+                app.config.appearance.wrap = app.wrap;
+            }
+            // ガター強調
+            4 => {
+                app.change_tracker.enabled = !app.change_tracker.enabled;
+                app.config.appearance.gutter_markers = app.change_tracker.enabled;
+            }
+            // ミニマップ
+            5 => {
+                app.config.appearance.gui.show_minimap = !app.config.appearance.gui.show_minimap;
+            }
+            _ => {}
+        },
+        2 => match item {
+            // 不可視文字
+            0 => {
+                app.list_chars_config.enabled = !app.list_chars_config.enabled;
+                app.config.invisibles.enabled = app.list_chars_config.enabled;
+            }
+            // 全角スペース
+            1 => {
+                if app.config.invisibles.zenkaku_space == "□" {
+                    app.config.invisibles.zenkaku_space = "　".to_string();
+                } else {
+                    app.config.invisibles.zenkaku_space = "□".to_string();
+                }
+                app.list_chars_config.zenkaku_space =
+                    Box::leak(app.config.invisibles.zenkaku_space.clone().into_boxed_str());
+            }
+            // 半角スペース
+            2 => {
+                if app.config.invisibles.space == '·' {
+                    app.config.invisibles.space = ' ';
+                } else {
+                    app.config.invisibles.space = '·';
+                }
+                app.list_chars_config.space = app.config.invisibles.space;
+            }
+            // タブ
+            3 => {
+                if app.config.invisibles.tab == ">---" {
+                    app.config.invisibles.tab = "▸---".to_string();
+                } else {
+                    app.config.invisibles.tab = ">---".to_string();
+                }
+            }
+            // 改行
+            4 => {
+                if app.config.invisibles.eol == '↵' {
+                    app.config.invisibles.eol = '$';
+                } else {
+                    app.config.invisibles.eol = '↵';
+                }
+                app.list_chars_config.eol = app.config.invisibles.eol;
+            }
+            _ => {}
+        },
+        3 => match item {
+            // タブ幅
+            0 => {
+                app.tab_width = if app.tab_width >= 16 {
+                    2
+                } else {
+                    app.tab_width + 2
+                };
+                app.config.editing.tab_width = app.tab_width;
+            }
+            // スペース展開
+            1 => {
+                app.config.editing.expand_tab = !app.config.editing.expand_tab;
+            }
+            // 罫線保護
+            2 => {
+                app.config.editing.keisen_protect = !app.config.editing.keisen_protect;
+            }
+            // 括弧強調
+            3 => {
+                app.config.editing.match_paren = !app.config.editing.match_paren;
+            }
+            // dabbrev大文字無視
+            4 => {
+                app.config.editing.dabbrev_ignorecase = !app.config.editing.dabbrev_ignorecase;
+            }
+            // ignorecase
+            5 => {
+                app.config.editing.ignorecase = !app.config.editing.ignorecase;
+            }
+            // smartcase
+            6 => {
+                app.config.editing.smartcase = !app.config.editing.smartcase;
+            }
+            _ => {}
+        },
+        4 => match item {
+            0 => {
+                app.config.appearance.gui.enable_gravity_drop =
+                    !app.config.appearance.gui.enable_gravity_drop;
+            }
+            1 => {
+                app.config.appearance.gui.reactive_idle_sleep =
+                    !app.config.appearance.gui.reactive_idle_sleep;
+            }
+            _ => {}
+        },
+        _ => {}
     }
 }

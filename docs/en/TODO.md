@@ -335,7 +335,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
     - [x] Implementation of **`:mkvivivirc`** (or `:wconfig`) command to dump active in-memory settings to `config.toml`
     - [x] Implementation of **`:source`** (or `:so`) command for live external reload
     - [x] egui flat 2-pane categorical settings GUI modal dialog
-    - [ ] TUI (Ratatui) centered floating settings modal with full Vi keyboard navigation
+    - [x] TUI (Ratatui) centered floating settings modal with full Vi keyboard navigation
     - [ ] Dedicated theme documentation (`doc/help/theme.md`)
   - **Phase 3: ViVi Signature UX Restoration & TUI Parity**:
     - [ ] Coexistence of Windows-style editing (Shift+Arrow selection, Ctrl+C/V) with modal vi commands

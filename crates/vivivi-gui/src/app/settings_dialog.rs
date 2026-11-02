@@ -1,4 +1,4 @@
-//! GUI 設定パネル（Preferences Dialog: 左右2ペイン・モーダルダイアログ）モジュール。
+﻿//! GUI 設定パネル（Preferences Dialog: 左右2ペイン・モーダルダイアログ）モジュール。
 //!
 //! ViVi 3/4 の多機能プロパティシートを踏襲・洗練させ、6大カテゴリの設定項目を
 //! リアルタイムプレビューおよび TOML 永続化可能なモーダルウィンドウとして提供します。
@@ -114,7 +114,7 @@ impl SettingsDialogState {
 
 impl ViviviGuiApp {
     /// 設定モーダルダイアログを描画します。
-    pub(crate) fn render_settings_dialog(&mut self, ctx: &egui::Context) {
+    pub fn render_settings_dialog(&mut self, ctx: &egui::Context) {
         if !self.settings_dialog.is_open {
             return;
         }
