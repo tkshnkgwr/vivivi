@@ -217,6 +217,20 @@ impl ViviviGuiApp {
 
 impl eframe::App for ViviviGuiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // テーマや外観設定（Exコマンドや外部設定ファイル読込等）の動的同期
+        if self.core.config.appearance.theme != self.active_theme.meta.name {
+            self.active_theme =
+                vivivi_app::theme::Theme::load_by_name(&self.core.config.appearance.theme);
+            crate::theme::apply_theme(ctx, &self.active_theme);
+            self.syntax_cache.clear();
+        }
+        if self.minimap_open != self.core.config.appearance.gui.show_minimap {
+            self.minimap_open = self.core.config.appearance.gui.show_minimap;
+        }
+        if self.particles.enabled != self.core.config.appearance.gui.enable_gravity_drop {
+            self.particles.enabled = self.core.config.appearance.gui.enable_gravity_drop;
+        }
+
         // 0. ウィンドウ位置・サイズ・最大化状態の追跡
         let (outer_rect, is_maximized) = ctx.input(|i| {
             let info = i.viewport();

@@ -1,11 +1,170 @@
-//! エディタ設定およびオプション切替コマンド処理モジュール (`:set`, `:config` など)。
+﻿//! エディタ設定およびオプション切替コマンド処理モジュール (`:set`, `:colorscheme`, `:mkvivivirc`, `:source` など)。
 
 use crate::tui::app::App;
+use std::path::PathBuf;
+
+/// チルダや相対パスを安全に解決します。
+fn resolve_path(path_str: &str) -> PathBuf {
+    let trimmed = path_str.trim();
+    if trimmed.starts_with('~') {
+        let home = std::env::var("USERPROFILE")
+            .or_else(|_| std::env::var("HOME"))
+            .unwrap_or_else(|_| ".".to_string());
+        let rest = trimmed
+            .strip_prefix('~')
+            .unwrap_or("")
+            .trim_start_matches(['/', '\\']);
+        PathBuf::from(home).join(rest)
+    } else {
+        PathBuf::from(trimmed)
+    }
+}
 
 /// 設定・オプション関連の ex コマンドを処理します。
 ///
 /// コマンドを処理した場合は `true`、合致しなかった場合は `false` を返します。
 pub(crate) fn handle_settings_command(app: &mut App, trimmed: &str) -> bool {
+    // --- 1. カラーテーマ操作 (:colorscheme, :colo) ---
+    if trimmed == "colo"
+        || trimmed == "colo?"
+        || trimmed == "colorscheme"
+        || trimmed == "colorscheme?"
+    {
+        app.status_message = Some(format!(
+            "現在のカラーテーマ (colorscheme): {}",
+            app.config.appearance.theme
+        ));
+        return true;
+    }
+    if trimmed.starts_with("colorscheme ") || trimmed.starts_with("colo ") {
+        let theme_name = trimmed
+            .strip_prefix("colorscheme ")
+            .or_else(|| trimmed.strip_prefix("colo "))
+            .unwrap_or("")
+            .trim();
+        if theme_name.is_empty() {
+            app.status_message = Some(format!(
+                "現在のカラーテーマ (colorscheme): {}",
+                app.config.appearance.theme
+            ));
+        } else if let Some(loaded) = crate::theme::Theme::find_by_name(theme_name) {
+            app.config.appearance.theme = loaded.meta.name.clone();
+            app.status_message = Some(format!(
+                "カラーテーマを変更しました: {} ({})",
+                loaded.meta.name, loaded.meta.author
+            ));
+        } else {
+            app.status_message = Some(format!(
+                "E185: テーマ '{theme_name}' が見つかりません (使用可能: tokyo-night, openvivi, vivi-classic, vivivi-dark, vivivi-light, または ~/.vivivi/themes/ 配下)"
+            ));
+        }
+        return true;
+    }
+
+    // --- 2. 設定ファイル永続化 (:mkvivivirc, :wconfig) ---
+    if trimmed == "mkvivivirc"
+        || trimmed == "wconfig"
+        || trimmed.starts_with("mkvivivirc ")
+        || trimmed.starts_with("wconfig ")
+    {
+        app.sync_runtime_to_config();
+        let target_path = if trimmed == "mkvivivirc" || trimmed == "wconfig" {
+            crate::config::AppConfig::default_config_path()
+        } else {
+            let arg = trimmed
+                .strip_prefix("mkvivivirc ")
+                .or_else(|| trimmed.strip_prefix("wconfig "))
+                .unwrap_or("")
+                .trim();
+            resolve_path(arg)
+        };
+
+        match app.config.save_to(&target_path) {
+            Ok(()) => {
+                app.status_message = Some(format!(
+                    "設定ファイルを保存しました: {}",
+                    target_path.display()
+                ));
+            }
+            Err(e) => {
+                app.status_message = Some(format!("E190: 設定ファイルの保存に失敗しました: {e}"));
+            }
+        }
+        return true;
+    }
+
+    // --- 3. 外部ファイル再読込・スクリプト実行 (:source, :so) ---
+    if trimmed == "source"
+        || trimmed == "so"
+        || trimmed.starts_with("source ")
+        || trimmed.starts_with("so ")
+    {
+        let target_path = if trimmed == "source" || trimmed == "so" {
+            crate::config::AppConfig::default_config_path()
+        } else {
+            let arg = trimmed
+                .strip_prefix("source ")
+                .or_else(|| trimmed.strip_prefix("so "))
+                .unwrap_or("")
+                .trim();
+            resolve_path(arg)
+        };
+
+        if !target_path.exists() {
+            app.status_message = Some(format!(
+                "E484: ファイルを開けません: {}",
+                target_path.display()
+            ));
+            return true;
+        }
+
+        match std::fs::read_to_string(&target_path) {
+            Ok(content) => {
+                let is_toml_ext = target_path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|ext| ext.eq_ignore_ascii_case("toml"))
+                    .unwrap_or(false);
+
+                // TOML 設定ファイルとしてパース可能なら設定適用
+                if (is_toml_ext || content.trim_start().starts_with('['))
+                    && let Ok(new_config) = crate::config::AppConfig::from_toml(&content)
+                {
+                    app.apply_config(&new_config);
+                    app.status_message = Some(format!(
+                        "設定ファイルを再読込しました: {}",
+                        target_path.display()
+                    ));
+                    return true;
+                }
+
+                // スクリプト形式: 1行ずつ Ex コマンドを実行
+                let mut count = 0;
+                for line in content.lines() {
+                    let l = line.trim();
+                    if l.is_empty() || l.starts_with('"') || l.starts_with('#') {
+                        continue;
+                    }
+                    crate::tui::event::execute_ex_command(app, l);
+                    count += 1;
+                }
+                app.status_message = Some(format!(
+                    "設定スクリプトを実行しました ({} 行): {}",
+                    count,
+                    target_path.display()
+                ));
+            }
+            Err(e) => {
+                app.status_message = Some(format!(
+                    "E484: ファイル読込エラー: {e} ({})",
+                    target_path.display()
+                ));
+            }
+        }
+        return true;
+    }
+
+    // --- 4. 既存および拡張の :set コマンド ---
     match trimmed {
         // --- 検索ハイライト消去 (:noh, :nohl, :nohlsearch, :set nohls, :set hls) ---
         "noh" | "nohl" | "nohlsearch" => {
@@ -21,6 +180,22 @@ pub(crate) fn handle_settings_command(app: &mut App, trimmed: &str) -> bool {
         "set hls" | "se hls" | "set hlsearch" | "se hlsearch" => {
             app.is_search_highlight_visible = true;
             app.status_message = Some("検索ハイライト: ON (:set hlsearch)".to_string());
+            true
+        }
+        "set hls?" | "se hls?" | "set hlsearch?" | "se hlsearch?" => {
+            let state = if app.is_search_highlight_visible {
+                "hlsearch"
+            } else {
+                "nohlsearch"
+            };
+            app.status_message = Some(format!(
+                "{state} (検索ハイライト: {})",
+                if app.is_search_highlight_visible {
+                    "ON"
+                } else {
+                    "OFF"
+                }
+            ));
             true
         }
 
@@ -204,7 +379,14 @@ pub(crate) fn handle_settings_command(app: &mut App, trimmed: &str) -> bool {
             true
         }
 
-        // --- タブ幅切替 (:set tabstop=<N>, :se tabstop=<N>, :set ts=<N>, :se ts=<N>) ---
+        // --- タブ幅切替 (:set tabstop=<N>, :se tabstop=<N>, :set ts=<N>, :se ts=<N>, :set ts?, :set tabstop?) ---
+        "tabstop?" | "set tabstop?" | "se tabstop?" | "ts?" | "set ts?" | "se ts?" => {
+            app.status_message = Some(format!(
+                "tabstop={} (タブ幅: {})",
+                app.tab_width, app.tab_width
+            ));
+            true
+        }
         _ if trimmed.starts_with("set tabstop=")
             || trimmed.starts_with("se tabstop=")
             || trimmed.starts_with("set ts=")
@@ -233,24 +415,12 @@ pub(crate) fn handle_settings_command(app: &mut App, trimmed: &str) -> bool {
         "config" | "set config" | "se config" => {
             let path = crate::config::AppConfig::default_config_path();
             let new_config = crate::config::AppConfig::load_or_default(Some(&path));
-            app.show_line_numbers = new_config.appearance.line_number;
-            app.relative_number = new_config.appearance.relative_number;
-            app.tab_width = new_config.editing.tab_width;
-            app.wrap = new_config.appearance.wrap;
-            app.change_tracker.enabled = new_config.appearance.gutter_markers;
-            app.list_chars_config.enabled = new_config.invisibles.enabled;
-            app.list_chars_config.zenkaku_space =
-                Box::leak(new_config.invisibles.zenkaku_space.clone().into_boxed_str());
-            app.list_chars_config.space = new_config.invisibles.space;
-            app.list_chars_config.eol = new_config.invisibles.eol;
-            let cb_opt = vivivi_vi::ClipboardOption::parse(&new_config.general.clipboard);
-            app.vi.set_clipboard_option(cb_opt);
-            app.config = new_config;
+            app.apply_config(&new_config);
             app.status_message = Some(format!("設定を再読込しました: {}", path.display()));
             true
         }
 
-        // --- 不可視文字可視化 (:set list / :set nolist / :se list / :se nolist / :list / :nolist) ---
+        // --- 不可視文字可視化 (:set list / :set nolist / :se list / :se nolist / :list / :nolist / :set list?) ---
         "list" | "set list" | "se list" => {
             app.list_chars_config.enabled = true;
             app.status_message =
@@ -262,8 +432,78 @@ pub(crate) fn handle_settings_command(app: &mut App, trimmed: &str) -> bool {
             app.status_message = Some("不可視文字表示: OFF".to_string());
             true
         }
+        "list?" | "set list?" | "se list?" => {
+            let state = if app.list_chars_config.enabled {
+                "list"
+            } else {
+                "nolist"
+            };
+            app.status_message = Some(format!(
+                "{state} (不可視文字表示: {})",
+                if app.list_chars_config.enabled {
+                    "ON"
+                } else {
+                    "OFF"
+                }
+            ));
+            true
+        }
 
-        // --- 変更行ガター強調 (:set gutter / :set nogutter / :se gutter / :se nogutter / :gutter / :nogutter) ---
+        // --- 不可視文字記号設定 (:set listchars=... / :set lcs=... / :set listchars? / :set lcs?) ---
+        "listchars?" | "set listchars?" | "se listchars?" | "lcs?" | "set lcs?" | "se lcs?" => {
+            app.status_message = Some(format!(
+                "listchars=zenkaku:{},tab:{},space:{},eol:{}",
+                app.list_chars_config.zenkaku_space,
+                app.config.invisibles.tab,
+                app.list_chars_config.space,
+                app.list_chars_config.eol
+            ));
+            true
+        }
+        _ if trimmed.starts_with("set listchars=")
+            || trimmed.starts_with("se listchars=")
+            || trimmed.starts_with("set lcs=")
+            || trimmed.starts_with("se lcs=") =>
+        {
+            let val = trimmed
+                .strip_prefix("set listchars=")
+                .or_else(|| trimmed.strip_prefix("se listchars="))
+                .or_else(|| trimmed.strip_prefix("set lcs="))
+                .or_else(|| trimmed.strip_prefix("se lcs="))
+                .unwrap_or("")
+                .trim();
+            for part in val.split(',') {
+                if let Some((k, v)) = part.split_once(':') {
+                    match k.trim() {
+                        "tab" => {
+                            app.config.invisibles.tab = v.to_string();
+                        }
+                        "zenkaku" => {
+                            app.config.invisibles.zenkaku_space = v.to_string();
+                            app.list_chars_config.zenkaku_space =
+                                Box::leak(v.to_string().into_boxed_str());
+                        }
+                        "space" => {
+                            if let Some(ch) = v.chars().next() {
+                                app.config.invisibles.space = ch;
+                                app.list_chars_config.space = ch;
+                            }
+                        }
+                        "eol" => {
+                            if let Some(ch) = v.chars().next() {
+                                app.config.invisibles.eol = ch;
+                                app.list_chars_config.eol = ch;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            app.status_message = Some(format!("不可視文字記号 (listchars) を設定しました: {val}"));
+            true
+        }
+
+        // --- 変更行ガター強調 (:set gutter / :set nogutter / :se gutter / :se nogutter / :gutter / :nogutter / :set gutter?) ---
         "gutter" | "set gutter" | "se gutter" => {
             app.change_tracker.enabled = true;
             app.status_message =
@@ -275,8 +515,153 @@ pub(crate) fn handle_settings_command(app: &mut App, trimmed: &str) -> bool {
             app.status_message = Some("変更行ガター強調表示: OFF".to_string());
             true
         }
+        "gutter?" | "set gutter?" | "se gutter?" => {
+            let state = if app.change_tracker.enabled {
+                "gutter"
+            } else {
+                "nogutter"
+            };
+            app.status_message = Some(format!(
+                "{state} (変更行ガター強調: {})",
+                if app.change_tracker.enabled {
+                    "ON"
+                } else {
+                    "OFF"
+                }
+            ));
+            true
+        }
 
-        // --- 言語構文・ファイルタイプ切替 (:set ft=<lang>, :se ft=<lang>, :set filetype=<lang>, :se filetype=<lang>) ---
+        // --- ミニマップ表示切替 (:set minimap / :set nominimap / :set minimap? / :se minimap) ---
+        "minimap" | "set minimap" | "se minimap" => {
+            app.config.appearance.gui.show_minimap = true;
+            app.status_message = Some("ミニマップ表示: ON (:set minimap)".to_string());
+            true
+        }
+        "nominimap" | "set nominimap" | "se nominimap" => {
+            app.config.appearance.gui.show_minimap = false;
+            app.status_message = Some("ミニマップ表示: OFF (:set nominimap)".to_string());
+            true
+        }
+        "minimap?" | "set minimap?" | "se minimap?" => {
+            let state = if app.config.appearance.gui.show_minimap {
+                "minimap"
+            } else {
+                "nominimap"
+            };
+            app.status_message = Some(format!(
+                "{state} (ミニマップ表示: {})",
+                if app.config.appearance.gui.show_minimap {
+                    "ON"
+                } else {
+                    "OFF"
+                }
+            ));
+            true
+        }
+
+        // --- 文字削除重力落下アニメーション切替 (:set particles / :set noparticles / :set particles?) ---
+        "particles" | "set particles" | "se particles" => {
+            app.config.appearance.gui.enable_gravity_drop = true;
+            app.status_message =
+                Some("文字削除重力落下アニメーション: ON (:set particles)".to_string());
+            true
+        }
+        "noparticles" | "set noparticles" | "se noparticles" => {
+            app.config.appearance.gui.enable_gravity_drop = false;
+            app.status_message =
+                Some("文字削除重力落下アニメーション: OFF (:set noparticles)".to_string());
+            true
+        }
+        "particles?" | "set particles?" | "se particles?" => {
+            let state = if app.config.appearance.gui.enable_gravity_drop {
+                "particles"
+            } else {
+                "noparticles"
+            };
+            app.status_message = Some(format!(
+                "{state} (重力落下アニメーション: {})",
+                if app.config.appearance.gui.enable_gravity_drop {
+                    "ON"
+                } else {
+                    "OFF"
+                }
+            ));
+            true
+        }
+
+        // --- 背景明暗切替 (:set bg=dark / :set bg=light / :set background=dark / :set bg?) ---
+        "bg?" | "set bg?" | "se bg?" | "background?" | "set background?" | "se background?" => {
+            let current_is_light = app.config.appearance.theme.to_lowercase().contains("light");
+            let bg_name = if current_is_light { "light" } else { "dark" };
+            app.status_message = Some(format!(
+                "background={bg_name} ({})",
+                app.config.appearance.theme
+            ));
+            true
+        }
+        "set bg=dark" | "se bg=dark" | "set background=dark" | "se background=dark" => {
+            app.config.appearance.theme = "tokyo-night".to_string();
+            app.status_message = Some("背景明暗を設定しました: dark (tokyo-night)".to_string());
+            true
+        }
+        "set bg=light" | "se bg=light" | "set background=light" | "se background=light" => {
+            app.config.appearance.theme = "vivivi-light".to_string();
+            app.status_message = Some("背景明暗を設定しました: light (vivivi-light)".to_string());
+            true
+        }
+
+        // --- 全設定一覧確認 (:set all / :se all) ---
+        "set all" | "se all" => {
+            let nu = if app.show_line_numbers {
+                "number"
+            } else {
+                "nonumber"
+            };
+            let rnu = if app.relative_number {
+                "relativenumber"
+            } else {
+                "norelativenumber"
+            };
+            let wr = if app.wrap { "wrap" } else { "nowrap" };
+            let mm = if app.config.appearance.gui.show_minimap {
+                "minimap"
+            } else {
+                "nominimap"
+            };
+            let pt = if app.config.appearance.gui.enable_gravity_drop {
+                "particles"
+            } else {
+                "noparticles"
+            };
+            let lc = if app.list_chars_config.enabled {
+                "list"
+            } else {
+                "nolist"
+            };
+            let gt = if app.change_tracker.enabled {
+                "gutter"
+            } else {
+                "nogutter"
+            };
+            app.status_message = Some(format!(
+                "{nu} {rnu} {wr} ts={} {lc} {gt} {mm} {pt} theme={} fenc={} ff={}",
+                app.tab_width,
+                app.config.appearance.theme,
+                app.encoding.name(),
+                app.newline.name()
+            ));
+            true
+        }
+
+        // --- 言語構文・ファイルタイプ切替 (:set ft=<lang>, :se ft=<lang>, :set filetype=<lang>, :se filetype=<lang>, :set ft?) ---
+        "set ft?" | "se ft?" | "set filetype?" | "se filetype?" | "ft?" => {
+            app.status_message = Some(format!(
+                "現在のファイルタイプ (filetype): {:?}",
+                app.syntax_lang
+            ));
+            true
+        }
         _ if trimmed.starts_with("set ft=")
             || trimmed.starts_with("se ft=")
             || trimmed.starts_with("set filetype=")

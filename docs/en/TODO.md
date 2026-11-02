@@ -331,9 +331,9 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
     - [x] **[GUI] Automatic Window State Persistence (`window_state.json`) & Off-Screen Safeguard (Virtual Screen Intersection & Overflow Clamp)**
     - [x] 6-category `config.toml` persistence schema (`[general]`, `[appearance]`, `[invisibles]`, `[editing]`, `[tools]`, `[keymap]`)
     - [x] First-launch auto-generation of annotated Japanese template `config.toml`
-    - [ ] In-session ephemeral mutation rule for Ex commands (`:set` and `:colorscheme` only mutate memory)
-    - [ ] Implementation of **`:mkvivivirc`** (or `:wconfig`) command to dump active in-memory settings to `config.toml`
-    - [ ] Implementation of **`:source`** (or `:so`) command for live external reload
+    - [x] In-session ephemeral mutation rule for Ex commands (`:set` and `:colorscheme` only mutate memory)
+    - [x] Implementation of **`:mkvivivirc`** (or `:wconfig`) command to dump active in-memory settings to `config.toml`
+    - [x] Implementation of **`:source`** (or `:so`) command for live external reload
     - [ ] egui flat 2-pane categorical settings GUI modal dialog
     - [ ] TUI (Ratatui) centered floating settings modal with full Vi keyboard navigation
     - [ ] Dedicated theme documentation (`doc/help/theme.md`)

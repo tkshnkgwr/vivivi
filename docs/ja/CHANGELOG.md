@@ -6,6 +6,14 @@
 
 ## [0.9.11-beta] - 2026-11-01
 
+### Added / Improved
+- **Exコマンド（設定・外観操作）の全面拡充 (settings.rs)**:
+  - **カラーテーマ操作 (:colorscheme <name> / :colo <name>)**: コマンドラインからのテーマ動的切り替え、引数なしまたは ? での現在テーマクエリ、存在しないテーマ指定時の E185 エラーハンドリングを実装。セッション限定のメモリ反映原則を遵守。
+  - **現在設定のワンタッチ永続化 (:mkvivivirc [path] / :wconfig [path])**: 現在のインメモリ設定値（一時変更内容を含む）を %USERPROFILE%\.vivivi\config.toml または指定ファイルへ即座に書き出すコマンドを実装。
+  - **外部設定再読込・スクリプト実行 (:source [path] / :so [path])**: ディスク上の TOML 設定ファイルの即時再読込、および 1行1コマンドの Ex スクリプト順次実行（Vim互換の初期化スクリプト実行）に対応。
+  - **表示・外観系オプション拡充 (:set)**: :set minimap / :set nominimap（ミニマップ表示）、:set particles / :set noparticles（文字削除落下演出）、:set bg=dark / light（背景明暗切替）、:set listchars=...（不可視文字記号カスタム設定）、:set all（全オプション一覧表示）を実装。
+  - **GUI 即時双方向同期**: Exコマンドによるテーマやミニマップの変更が ivivi-gui の描画スタイル・ペイン表示へリアルタイムに連動する双方向同期機構を配備。
+
 ### Fixed / Improved
 - **ミニマップ描画・操作性の完全線形同期＆ドラッグ追従改修 (`canvas.rs`)**:
   - **後半ズレ・終端欠落の完全解消**: ミニラインサンプリングを整数切り捨てから浮動小数点線形補間へ刷新し、ファイルの先頭から最終行までがミニマップの高さ全体に寸分違わず均等描画されるよう修正。
@@ -50,6 +58,14 @@
   - 設定画面設計書（`SETTINGS_DESIGN.md`）初版策定。
 
 ## [0.9.9-beta] - 2026-10-29
+
+### Added / Improved
+- **Exコマンド（設定・外観操作）の全面拡充 (settings.rs)**:
+  - **カラーテーマ操作 (:colorscheme <name> / :colo <name>)**: コマンドラインからのテーマ動的切り替え、引数なしまたは ? での現在テーマクエリ、存在しないテーマ指定時の E185 エラーハンドリングを実装。セッション限定のメモリ反映原則を遵守。
+  - **現在設定のワンタッチ永続化 (:mkvivivirc [path] / :wconfig [path])**: 現在のインメモリ設定値（一時変更内容を含む）を %USERPROFILE%\.vivivi\config.toml または指定ファイルへ即座に書き出すコマンドを実装。
+  - **外部設定再読込・スクリプト実行 (:source [path] / :so [path])**: ディスク上の TOML 設定ファイルの即時再読込、および 1行1コマンドの Ex スクリプト順次実行（Vim互換の初期化スクリプト実行）に対応。
+  - **表示・外観系オプション拡充 (:set)**: :set minimap / :set nominimap（ミニマップ表示）、:set particles / :set noparticles（文字削除落下演出）、:set bg=dark / light（背景明暗切替）、:set listchars=...（不可視文字記号カスタム設定）、:set all（全オプション一覧表示）を実装。
+  - **GUI 即時双方向同期**: Exコマンドによるテーマやミニマップの変更が ivivi-gui の描画スタイル・ペイン表示へリアルタイムに連動する双方向同期機構を配備。
 
 ### Fixed / Improved
 - **全域品質監査に基づく潜在バグ修正・エッジケース対応・堅牢化（計34件以上）**:
@@ -156,6 +172,14 @@
 
 ## [0.9.2-beta] - 2026-10-19
 
+### Added / Improved
+- **Exコマンド（設定・外観操作）の全面拡充 (settings.rs)**:
+  - **カラーテーマ操作 (:colorscheme <name> / :colo <name>)**: コマンドラインからのテーマ動的切り替え、引数なしまたは ? での現在テーマクエリ、存在しないテーマ指定時の E185 エラーハンドリングを実装。セッション限定のメモリ反映原則を遵守。
+  - **現在設定のワンタッチ永続化 (:mkvivivirc [path] / :wconfig [path])**: 現在のインメモリ設定値（一時変更内容を含む）を %USERPROFILE%\.vivivi\config.toml または指定ファイルへ即座に書き出すコマンドを実装。
+  - **外部設定再読込・スクリプト実行 (:source [path] / :so [path])**: ディスク上の TOML 設定ファイルの即時再読込、および 1行1コマンドの Ex スクリプト順次実行（Vim互換の初期化スクリプト実行）に対応。
+  - **表示・外観系オプション拡充 (:set)**: :set minimap / :set nominimap（ミニマップ表示）、:set particles / :set noparticles（文字削除落下演出）、:set bg=dark / light（背景明暗切替）、:set listchars=...（不可視文字記号カスタム設定）、:set all（全オプション一覧表示）を実装。
+  - **GUI 即時双方向同期**: Exコマンドによるテーマやミニマップの変更が ivivi-gui の描画スタイル・ペイン表示へリアルタイムに連動する双方向同期機構を配備。
+
 ### Fixed / Improved
 - **PDF出力における日本語（CJK）文字化けの完全解消**:
   - 従来の欧文専用フォント（`Type 1 / Courier`）およびASCII外文字の `?` 置換処理を廃止し、主要PDFリーダー（Windows Edge / Chrome / Acrobat Reader、macOS Preview、Linux等）標準の日本語ゴシック体で美麗に表示される **Adobe 標準 CIDFont（`Type 0` / `HeiseiKakuGo-W5` / `UniJIS-UTF16-H`）** を実装。
@@ -194,6 +218,14 @@
     - `{`: 前の空行（段落先頭）へジャンプ
     - `}`: 次の空行（段落末尾）へジャンプ
 
+### Added / Improved
+- **Exコマンド（設定・外観操作）の全面拡充 (settings.rs)**:
+  - **カラーテーマ操作 (:colorscheme <name> / :colo <name>)**: コマンドラインからのテーマ動的切り替え、引数なしまたは ? での現在テーマクエリ、存在しないテーマ指定時の E185 エラーハンドリングを実装。セッション限定のメモリ反映原則を遵守。
+  - **現在設定のワンタッチ永続化 (:mkvivivirc [path] / :wconfig [path])**: 現在のインメモリ設定値（一時変更内容を含む）を %USERPROFILE%\.vivivi\config.toml または指定ファイルへ即座に書き出すコマンドを実装。
+  - **外部設定再読込・スクリプト実行 (:source [path] / :so [path])**: ディスク上の TOML 設定ファイルの即時再読込、および 1行1コマンドの Ex スクリプト順次実行（Vim互換の初期化スクリプト実行）に対応。
+  - **表示・外観系オプション拡充 (:set)**: :set minimap / :set nominimap（ミニマップ表示）、:set particles / :set noparticles（文字削除落下演出）、:set bg=dark / light（背景明暗切替）、:set listchars=...（不可視文字記号カスタム設定）、:set all（全オプション一覧表示）を実装。
+  - **GUI 即時双方向同期**: Exコマンドによるテーマやミニマップの変更が ivivi-gui の描画スタイル・ペイン表示へリアルタイムに連動する双方向同期機構を配備。
+
 ### Fixed / Improved
 - **PDF出力連携の二重ファイル生成バグ修正**:
   - 印刷プレビュー内での `p` キー保存および `:pdf` コマンド実行時に、タイムスタンプ付きPDFファイルと入力元拡張子付きPDFファイルが重複して2つ生成されていた不具合を解消し、常に単一の完全なPDFファイルのみを出力するよう改善。
@@ -216,6 +248,14 @@
   - `config.toml` の `[editor]` セクションへの `wrap = false` オプション追加と永続化対応。
 - **挿入モード・置換モードでの Tab キー入力対応**:
   - 挿入モード（`handle_insert_mode`）および置換モード（`handle_replace_mode`）において、未処理だった `KeyCode::Tab` イベントのハンドリングを実装し、タブ文字 `\t` の確実な挿入・置換に対応。
+
+### Added / Improved
+- **Exコマンド（設定・外観操作）の全面拡充 (settings.rs)**:
+  - **カラーテーマ操作 (:colorscheme <name> / :colo <name>)**: コマンドラインからのテーマ動的切り替え、引数なしまたは ? での現在テーマクエリ、存在しないテーマ指定時の E185 エラーハンドリングを実装。セッション限定のメモリ反映原則を遵守。
+  - **現在設定のワンタッチ永続化 (:mkvivivirc [path] / :wconfig [path])**: 現在のインメモリ設定値（一時変更内容を含む）を %USERPROFILE%\.vivivi\config.toml または指定ファイルへ即座に書き出すコマンドを実装。
+  - **外部設定再読込・スクリプト実行 (:source [path] / :so [path])**: ディスク上の TOML 設定ファイルの即時再読込、および 1行1コマンドの Ex スクリプト順次実行（Vim互換の初期化スクリプト実行）に対応。
+  - **表示・外観系オプション拡充 (:set)**: :set minimap / :set nominimap（ミニマップ表示）、:set particles / :set noparticles（文字削除落下演出）、:set bg=dark / light（背景明暗切替）、:set listchars=...（不可視文字記号カスタム設定）、:set all（全オプション一覧表示）を実装。
+  - **GUI 即時双方向同期**: Exコマンドによるテーマやミニマップの変更が ivivi-gui の描画スタイル・ペイン表示へリアルタイムに連動する双方向同期機構を配備。
 
 ### Fixed / Improved
 - **全角スペースの可視化改善（幅2マス維持 ＆ 背景ハイライト）**:

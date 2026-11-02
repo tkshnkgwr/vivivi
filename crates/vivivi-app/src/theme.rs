@@ -1,4 +1,4 @@
-//! カラーテーマ管理モジュール (`themes/<name>.toml`)。
+﻿//! カラーテーマ管理モジュール (`themes/<name>.toml`)。
 //!
 //! TUI (Ratatui) および GUI (egui) で共通の 24bit RGB カラーパレットを管理し、
 //! `%USERPROFILE%\.vivivi\themes\` からの動的読み込み、内蔵5大プリセットテーマ、
@@ -396,7 +396,7 @@ impl Theme {
     /// 1. `%USERPROFILE%\.vivivi\themes\<name>.toml` から読み込み
     /// 2. 内蔵5大テーマ（tokyo-night, openvivi, vivi-classic, vivivi-dark, vivivi-light）から検索
     /// 3. 見つからない場合は Tokyo Night をフォールバックとして返します。
-    pub fn load_by_name(name: &str) -> Self {
+    pub fn find_by_name(name: &str) -> Option<Self> {
         let clean_name = name.trim().to_lowercase().replace(' ', "-");
         let path = Self::themes_dir().join(format!("{}.toml", clean_name));
 
@@ -404,17 +404,23 @@ impl Theme {
             && let Ok(content) = std::fs::read_to_string(&path)
             && let Ok(theme) = Self::from_toml(&content)
         {
-            return theme;
+            return Some(theme);
         }
 
         match clean_name.as_str() {
-            "tokyo-night" | "tokyonight" => Self::builtin_tokyo_night(),
-            "openvivi" => Self::builtin_openvivi(),
-            "vivi-classic" | "viviclassic" => Self::builtin_vivi_classic(),
-            "vivivi-dark" | "vivividark" => Self::builtin_vivivi_dark(),
-            "vivivi-light" | "vivivilight" => Self::builtin_vivivi_light(),
-            _ => Self::builtin_tokyo_night(),
+            "tokyo-night" | "tokyonight" => Some(Self::builtin_tokyo_night()),
+            "openvivi" => Some(Self::builtin_openvivi()),
+            "vivi-classic" | "viviclassic" => Some(Self::builtin_vivi_classic()),
+            "vivivi-dark" | "vivividark" => Some(Self::builtin_vivivi_dark()),
+            "vivivi-light" | "vivivilight" => Some(Self::builtin_vivivi_light()),
+            _ => None,
         }
+    }
+
+    /// テーマ名からテーマを検索・ロードします。
+    /// 見つからない場合は Tokyo Night をフォールバックとして返します。
+    pub fn load_by_name(name: &str) -> Self {
+        Self::find_by_name(name).unwrap_or_else(Self::builtin_tokyo_night)
     }
 
     /// 利用可能なテーマ名一覧（内蔵 + ディレクトリ内）を取得します。

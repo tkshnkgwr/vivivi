@@ -336,3 +336,40 @@ fn test_public_gui_minimap_alignment_and_bounds() {
         "最終行499が正確にサンプリング終端に一致すること"
     );
 }
+
+/// シナリオ 9: Exコマンドによるテーマ・ミニマップ設定のGUI動的同期
+#[test]
+fn test_public_gui_ex_commands_theme_and_appearance_sync() {
+    let core = App::new("fn main() {}", None, CharEncoding::Utf8, NewlineType::Lf);
+    let mut gui = ViviviGuiApp::from_core(core);
+
+    assert!(gui.minimap_open);
+
+    // 1. Ex コマンドでテーマを動的変更
+    gui.core.execute_ex("colo openvivi");
+    assert_eq!(gui.core.config.appearance.theme, "OpenViVi");
+
+    if gui.core.config.appearance.theme != gui.active_theme.meta.name {
+        gui.active_theme =
+            vivivi_app::theme::Theme::load_by_name(&gui.core.config.appearance.theme);
+    }
+    assert_eq!(gui.active_theme.meta.name, "OpenViVi");
+
+    // 2. Ex コマンドでミニマップを OFF
+    gui.core.execute_ex("set nominimap");
+    assert!(!gui.core.config.appearance.gui.show_minimap);
+
+    if gui.minimap_open != gui.core.config.appearance.gui.show_minimap {
+        gui.minimap_open = gui.core.config.appearance.gui.show_minimap;
+    }
+    assert!(!gui.minimap_open);
+
+    // 3. Ex コマンドでミニマップを ON
+    gui.core.execute_ex("set minimap");
+    assert!(gui.core.config.appearance.gui.show_minimap);
+
+    if gui.minimap_open != gui.core.config.appearance.gui.show_minimap {
+        gui.minimap_open = gui.core.config.appearance.gui.show_minimap;
+    }
+    assert!(gui.minimap_open);
+}

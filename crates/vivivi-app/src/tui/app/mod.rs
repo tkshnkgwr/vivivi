@@ -739,6 +739,41 @@ impl App {
     pub fn execute_ex(&mut self, cmd: &str) {
         crate::tui::event::execute_ex_command(self, cmd);
     }
+
+    /// 外部設定構造体 [`crate::config::AppConfig`] を現在の実行時状態に適用します。
+    pub fn apply_config(&mut self, cfg: &crate::config::AppConfig) {
+        self.show_line_numbers = cfg.appearance.line_number;
+        self.relative_number = cfg.appearance.relative_number;
+        self.tab_width = cfg.editing.tab_width;
+        self.wrap = cfg.appearance.wrap;
+        self.change_tracker.enabled = cfg.appearance.gutter_markers;
+        self.list_chars_config.enabled = cfg.invisibles.enabled;
+        self.list_chars_config.zenkaku_space =
+            Box::leak(cfg.invisibles.zenkaku_space.clone().into_boxed_str());
+        self.list_chars_config.space = cfg.invisibles.space;
+        self.list_chars_config.eol = cfg.invisibles.eol;
+        let cb_opt = vivivi_vi::ClipboardOption::parse(&cfg.general.clipboard);
+        self.vi.set_clipboard_option(cb_opt);
+        self.config = cfg.clone();
+    }
+
+    /// 現在のエディタ実行時状態（行番号、折り返し、不可視文字など）を設定構造体に同期させます。
+    pub fn sync_runtime_to_config(&mut self) {
+        self.config.appearance.line_number = self.show_line_numbers;
+        self.config.appearance.relative_number = self.relative_number;
+        self.config.editing.tab_width = self.tab_width;
+        self.config.appearance.wrap = self.wrap;
+        self.config.appearance.gutter_markers = self.change_tracker.enabled;
+        self.config.invisibles.enabled = self.list_chars_config.enabled;
+        self.config.invisibles.zenkaku_space = self.list_chars_config.zenkaku_space.to_string();
+        self.config.invisibles.space = self.list_chars_config.space;
+        self.config.invisibles.eol = self.list_chars_config.eol;
+        self.config.general.clipboard = match self.vi.clipboard_option() {
+            vivivi_vi::ClipboardOption::None => "none".to_string(),
+            vivivi_vi::ClipboardOption::Unnamed => "unnamed".to_string(),
+            vivivi_vi::ClipboardOption::UnnamedPlus => "unnamedplus".to_string(),
+        };
+    }
 }
 
 /// 現在日時（UTC）を YYYY-MM-DD HH:MM:SS 形式の文字列で取得します。

@@ -1,4 +1,4 @@
-﻿//! メニューバー・マルチタブバー・左サイドバー・下部ステータスバー＆コマンドライン描画モジュール。
+//! メニューバー・マルチタブバー・左サイドバー・下部ステータスバー＆コマンドライン描画モジュール。
 
 use eframe::egui;
 use egui::{Color32, CornerRadius, Frame, Margin, Sense, Vec2};
@@ -77,6 +77,7 @@ impl ViviviGuiApp {
                             ui.close_menu();
                         }
                         if ui.checkbox(&mut self.minimap_open, "Minimap").clicked() {
+                            self.core.config.appearance.gui.show_minimap = self.minimap_open;
                             ui.close_menu();
                         }
                         if ui
@@ -104,6 +105,8 @@ impl ViviviGuiApp {
                             .checkbox(&mut self.particles.enabled, "Delete Particles")
                             .clicked()
                         {
+                            self.core.config.appearance.gui.enable_gravity_drop =
+                                self.particles.enabled;
                             ui.close_menu();
                         }
 
