@@ -411,6 +411,13 @@ pub(crate) fn handle_settings_command(app: &mut App, trimmed: &str) -> bool {
             true
         }
 
+        // --- 設定画面・ダイアログ表示 (:preferences, :pref, :settings, :dialog) ---
+        "preferences" | "pref" | "settings" | "dialog" => {
+            app.show_preferences_dialog = true;
+            app.status_message = Some("設定画面を開きます".to_string());
+            true
+        }
+
         // --- 設定ファイル再読込・パス確認 (:config, :set config, :se config) ---
         "config" | "set config" | "se config" => {
             let path = crate::config::AppConfig::default_config_path();

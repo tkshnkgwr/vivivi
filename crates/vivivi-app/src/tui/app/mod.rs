@@ -1,4 +1,4 @@
-use super::window::{EditorWindow, SplitAxis, WindowDirection, WindowTreeNode};
+﻿use super::window::{EditorWindow, SplitAxis, WindowDirection, WindowTreeNode};
 use crate::types::{AppKeyEvent, LogicalRect};
 use std::path::PathBuf;
 use vivivi_core::{CharEncoding, CursorPosition, NewlineType, TextBuffer, TextCursor};
@@ -137,6 +137,8 @@ pub struct App {
     pub recent_manager: RecentManager,
     pub show_recent_modal: bool,
     pub selected_recent_idx: usize,
+    /// 設定ダイアログ（GUI / TUI）の表示フラグ
+    pub show_preferences_dialog: bool,
 
     // --- 不可視文字可視化 (:set list / :set nolist) ---
     pub list_chars_config: ListCharsConfig,
@@ -339,6 +341,7 @@ impl App {
             recent_manager,
             show_recent_modal: false,
             selected_recent_idx: 0,
+            show_preferences_dialog: false,
             list_chars_config,
 
             config,

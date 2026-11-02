@@ -1,4 +1,4 @@
-//! モーダルウィンドウ（ヘルプ・印刷/Diffプレビュー・クリップボード履歴・最近使ったファイル・2ペインファイラー）描画モジュール。
+﻿//! モーダルウィンドウ（ヘルプ・印刷/Diffプレビュー・クリップボード履歴・最近使ったファイル・2ペインファイラー）描画モジュール。
 
 use eframe::egui;
 use std::path::PathBuf;
@@ -14,6 +14,7 @@ impl ViviviGuiApp {
             || self.core.show_clipboard_hist
             || self.core.show_recent_modal
             || self.core.show_filer
+            || self.settings_dialog.is_open
     }
 
     /// 開いているすべてのモーダルウィンドウを閉じます。
@@ -25,6 +26,7 @@ impl ViviviGuiApp {
         if self.core.show_filer {
             self.core.close_filer();
         }
+        self.settings_dialog.close();
     }
 
     /// 共通 `App` コアのモーダル状態（ヘルプ・印刷プレビュー・履歴・クリップボード・ファイラー）を

@@ -1,4 +1,4 @@
-//! エディタ画面骨格レイアウト ＆ 共通 App コア接続・日本語 IME 統合モジュール（ステップ 2, 3, 4）。
+﻿//! エディタ画面骨格レイアウト ＆ 共通 App コア接続・日本語 IME 統合モジュール（ステップ 2, 3, 4）。
 //!
 //! `eframe::App` のライフサイクル内で、Tokyo Night を基調としたレイアウトを構築し、
 //! `egui` 標準の `TextEdit` を一切使用せず、`ui.painter()` による等幅グリッド描画、
@@ -8,6 +8,9 @@ mod canvas;
 mod input;
 mod modals;
 mod panels;
+mod settings_dialog;
+
+pub use settings_dialog::{SettingsCategory, SettingsDialogState};
 
 pub use input::egui_key_to_app_key;
 
@@ -99,6 +102,8 @@ pub struct ViviviGuiApp {
     pub window_state: crate::window_state::WindowState,
     /// 現在適用中のカラーテーマ定義
     pub active_theme: vivivi_app::theme::Theme,
+    /// 左右2ペイン設定ダイアログ状態
+    pub settings_dialog: SettingsDialogState,
 }
 
 impl ViviviGuiApp {
@@ -140,6 +145,7 @@ impl ViviviGuiApp {
         let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         let cached_files = Self::read_directory_entries(&current_dir);
         let active_theme = vivivi_app::theme::Theme::load_by_name(&core.config.appearance.theme);
+        let initial_config = core.config.clone();
 
         Self {
             core,
@@ -163,6 +169,7 @@ impl ViviviGuiApp {
             syntax_cache: HashMap::new(),
             window_state: crate::window_state::WindowState::default(),
             active_theme,
+            settings_dialog: SettingsDialogState::new(&initial_config),
         }
     }
 
@@ -270,6 +277,13 @@ impl eframe::App for ViviviGuiApp {
 
         // 5. モーダルウィンドウ（ヘルプ、印刷プレビュー、履歴、ファイラー等）
         self.render_modals(ctx);
+
+        // 5.5 設定モーダルダイアログ (:preferences / Ctrl+,)
+        if self.core.show_preferences_dialog {
+            self.settings_dialog.open(&self.core.config);
+            self.core.show_preferences_dialog = false;
+        }
+        self.render_settings_dialog(ctx);
 
         // 6. OS ウィンドウの「×」閉じる要求の検知と未保存データ保護
         if ctx.input(|i| i.viewport().close_requested()) {

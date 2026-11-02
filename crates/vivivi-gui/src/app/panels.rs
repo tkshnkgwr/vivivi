@@ -1,4 +1,4 @@
-//! メニューバー・マルチタブバー・左サイドバー・下部ステータスバー＆コマンドライン描画モジュール。
+﻿//! メニューバー・マルチタブバー・左サイドバー・下部ステータスバー＆コマンドライン描画モジュール。
 
 use eframe::egui;
 use egui::{Color32, CornerRadius, Frame, Margin, Sense, Vec2};
@@ -68,6 +68,11 @@ impl ViviviGuiApp {
                         }
                         if ui.button("Clipboard History  (F6)").clicked() {
                             self.core.show_clipboard_hist = !self.core.show_clipboard_hist;
+                            ui.close_menu();
+                        }
+                        ui.separator();
+                        if ui.button("Preferences / 設定...  (Ctrl+,)").clicked() {
+                            self.settings_dialog.open(&self.core.config);
                             ui.close_menu();
                         }
                     });

@@ -7,7 +7,8 @@ use egui::{Event, ImeEvent, Key, Modifiers, Pos2};
 use vivivi_app::{App, KeyCode, KeyModifiers};
 use vivivi_core::{CharEncoding, NewlineType};
 use vivivi_gui::{
-    ParticleManager, ViviviGuiApp, colors, egui_key_to_app_key, extract_deleted_line_segment,
+    ParticleManager, SettingsCategory, ViviviGuiApp, colors, egui_key_to_app_key,
+    extract_deleted_line_segment,
 };
 use vivivi_vi::ViMode;
 
@@ -371,5 +372,69 @@ fn test_public_gui_ex_commands_theme_and_appearance_sync() {
     if gui.minimap_open != gui.core.config.appearance.gui.show_minimap {
         gui.minimap_open = gui.core.config.appearance.gui.show_minimap;
     }
+    assert!(gui.minimap_open);
+}
+
+/// シナリオ 10: GUI 設定ダイアログ（Preferences Dialog: 左右2ペイン）のライフサイクル、
+/// カテゴリ切替、検索フィルタ、ドラフト適用・キャンセルの検証
+#[test]
+fn test_public_gui_settings_dialog_lifecycle_and_actions() {
+    let core = App::new("fn main() {}", None, CharEncoding::Utf8, NewlineType::Lf);
+    let mut gui = ViviviGuiApp::from_core(core);
+
+    // 1. 初期状態では設定ダイアログは閉じている
+    assert!(!gui.settings_dialog.is_open);
+    assert!(!gui.is_any_modal_open());
+
+    // 2. Ex コマンド (:preferences) の実行 -> show_preferences_dialog フラグが立ち、ダイアログが開く
+    gui.core.execute_ex("preferences");
+    assert!(gui.core.show_preferences_dialog);
+
+    if gui.core.show_preferences_dialog {
+        gui.settings_dialog.open(&gui.core.config);
+        gui.core.show_preferences_dialog = false;
+    }
+    assert!(gui.settings_dialog.is_open);
+    assert!(gui.is_any_modal_open());
+
+    // 3. カテゴリ切替
+    assert_eq!(
+        gui.settings_dialog.active_category,
+        SettingsCategory::General
+    );
+    gui.settings_dialog.active_category = SettingsCategory::Appearance;
+    assert_eq!(
+        gui.settings_dialog.active_category,
+        SettingsCategory::Appearance
+    );
+
+    // 4. ドラフト設定の変更（テーマ: OpenViVi, 行番号: false, タブ幅: 8, ミニマップ: false）
+    gui.settings_dialog.draft_config.appearance.theme = "OpenViVi".to_string();
+    gui.settings_dialog.draft_config.appearance.line_number = false;
+    gui.settings_dialog.draft_config.editing.tab_width = 8;
+    gui.settings_dialog.draft_config.appearance.gui.show_minimap = false;
+
+    // 5. 適用 (プレビュー) のシミュレート
+    let ctx = egui::Context::default();
+    gui.apply_dialog_config(&ctx);
+
+    assert_eq!(gui.core.config.appearance.theme, "OpenViVi");
+    assert_eq!(gui.active_theme.meta.name, "OpenViVi");
+    assert!(!gui.core.show_line_numbers);
+    assert_eq!(gui.core.tab_width, 8);
+    assert!(!gui.minimap_open);
+
+    // 6. キャンセルによる初期バックアップ設定への復帰
+    let backup = gui.settings_dialog.backup_config.clone();
+    gui.core.apply_config(&backup);
+    gui.minimap_open = backup.appearance.gui.show_minimap;
+    if gui.active_theme.meta.name != backup.appearance.theme {
+        gui.active_theme = vivivi_app::theme::Theme::load_by_name(&backup.appearance.theme);
+    }
+    gui.settings_dialog.close();
+
+    assert!(!gui.settings_dialog.is_open);
+    assert!(gui.core.show_line_numbers);
+    assert_eq!(gui.core.tab_width, 4);
     assert!(gui.minimap_open);
 }

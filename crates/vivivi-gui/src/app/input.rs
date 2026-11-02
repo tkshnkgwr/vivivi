@@ -1,4 +1,4 @@
-//! `egui` 入力イベント変換・IME Preedit 保護・削除パーティクル生成ディスパッチモジュール。
+﻿//! `egui` 入力イベント変換・IME Preedit 保護・削除パーティクル生成ディスパッチモジュール。
 
 use eframe::egui;
 use egui::{Event, ImeEvent, Key, Modifiers, Pos2};
@@ -243,6 +243,16 @@ impl ViviviGuiApp {
                                 | Key::ArrowDown
                         )
                     {
+                        continue;
+                    }
+
+                    // Ctrl+, (Preferences 設定ダイアログの表示トグル)
+                    if modifiers.ctrl && *key == Key::Comma {
+                        if self.settings_dialog.is_open {
+                            self.settings_dialog.close();
+                        } else {
+                            self.settings_dialog.open(&self.core.config);
+                        }
                         continue;
                     }
 
