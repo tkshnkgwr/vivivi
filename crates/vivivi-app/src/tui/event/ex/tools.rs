@@ -6,6 +6,60 @@ use crate::tui::app::App;
 ///
 /// コマンドを処理した場合は `true`、合致しなかった場合は `false` を返します。
 pub(crate) fn handle_tools_command(app: &mut App, trimmed: &str) -> bool {
+    // --- 外部コマンド実行・選択テキストパイプ連携 (:!, :w !) ---
+    if let Some(cmd) = trimmed.strip_prefix("w !") {
+        let cmd = cmd.trim();
+        let input_text = if let Some(sel) = app.get_selected_text() {
+            sel
+        } else {
+            app.buffer.to_string()
+        };
+        match app.pipe_command_with_input(cmd, &input_text) {
+            Ok(output) => {
+                let first_line = output.lines().next().unwrap_or("[出力なし]");
+                app.status_message = Some(format!(":w !{cmd} ➔ {first_line}"));
+            }
+            Err(e) => {
+                app.status_message = Some(format!("コマンド実行エラー: {e}"));
+            }
+        }
+        return true;
+    }
+
+    if trimmed == "!" {
+        match app.execute_selected_text() {
+            Ok(output) => {
+                let first_line = output.lines().next().unwrap_or("[完了]");
+                app.status_message = Some(format!("選択テキスト実行結果: {first_line}"));
+            }
+            Err(e) => {
+                app.status_message = Some(format!("実行エラー: {e}"));
+            }
+        }
+        return true;
+    }
+
+    if let Some(cmd) = trimmed.strip_prefix('!') {
+        let cmd = cmd.trim();
+        if !cmd.is_empty() {
+            let res = if app.get_selected_text().is_some() {
+                app.pipe_selected_text(cmd)
+            } else {
+                app.execute_shell_command(cmd)
+            };
+            match res {
+                Ok(output) => {
+                    let first_line = output.lines().next().unwrap_or("[完了]");
+                    app.status_message = Some(format!("!{cmd} ➔ {first_line}"));
+                }
+                Err(e) => {
+                    app.status_message = Some(format!("コマンド実行エラー: {e}"));
+                }
+            }
+            return true;
+        }
+    }
+
     match trimmed {
         // --- インラインCSV/TSVモードトグル (:csv, :tsv) ---
         "csv" | "tsv" => {

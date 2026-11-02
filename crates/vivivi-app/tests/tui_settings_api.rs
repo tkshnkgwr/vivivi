@@ -84,14 +84,20 @@ fn test_tui_settings_render_and_save() {
     let mut app = App::new("test content", None, Default::default(), Default::default());
     app.show_preferences_dialog = true;
 
-    // 1. Ratatui TestBackend で実際に描画してもクラッシュしないことを検証
-    let backend = TestBackend::new(100, 30);
-    let mut terminal = Terminal::new(backend).unwrap();
-    terminal
-        .draw(|frame| {
-            render_settings_modal(frame, &app, frame.area());
-        })
-        .unwrap();
+    // 1. Ratatui TestBackend (100x30 および標準 80x24) で全6カテゴリを描画しても見切れ・クラッシュしないことを検証
+    for (w, h) in [(100, 30), (80, 24)] {
+        let backend = TestBackend::new(w, h);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        for cat_idx in 0..6 {
+            app.tui_settings_category = cat_idx;
+            terminal
+                .draw(|frame| {
+                    render_settings_modal(frame, &app, frame.area());
+                })
+                .unwrap();
+        }
+    }
 
     // 2. 設定を変更して 's' キーで保存
     app.show_line_numbers = false;

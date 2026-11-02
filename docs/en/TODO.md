@@ -302,9 +302,6 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
     - **Modes Module Hardening (22 items)**: Fixed full-width space indent panic, tab stop alignment for full-width characters, Keisen corner alignment, ToDo full-width column calculation, wave dash (`〜`) conversion, dynamic abbreviation symbol filtering, LCS common prefix/suffix optimization & OOM cell cap, zero-division guards, small-page PDF protection, filer same-path & EXDEV fallback, operator alignment guards, CSV RFC 4180 escaping, calc comma-separated number handling, nested renumbering, DiffLog blame generation tracking, regex expression substitution capture groups, token separation for method calls, tags modifier extraction, template sanitization.
     - **TUI Frontend Usability & Safety (12 items)**: Unsaved changes guard across `:e`, filer, history, grep, tabs, `:q`, `:qa`; prevent accidental app exit on window close when other tabs exist; `Ctrl+[` support across all modes; command-line `Ctrl+u/w/h` editing; `:set nonumber` cursor alignment; Migemo full-width cursor width fix; horizontal scroll split prevention; modal scroll sync; centered scroll jump; Ex escaped slash handling; narrow terminal statusline overflow prevention.
     - **GUI Performance Optimization & Usability (11 items)**: Syntax token line cache, paint buffer reuse, PlemolJP font precedence loader, mouse click char index calculation, inactive tab & window close unsaved guard, modal key event capture, blank path safety, viewport scroll sync, IME candidate window coordinate clamp, shortcut additions, particle heap reduction.
-- [ ] **[Distribution & CI/CD] GitHub Actions Automated Release Pipeline (`.github/workflows/release.yml`)**
-  - Windows x86_64 portable zip & SHA256 checksum generation triggered on `v*` tags.
-- [ ] **[General Availability Criteria] TUI Edition Official GA Release Sign-off (v1.0.0)**
 
 ---
 
@@ -318,15 +315,15 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - **Step 4**: Gravity-drop character deletion physics animation (0.5s fade-out) & 0% CPU reactive idle hybrid loop (`particles.rs`).
   - *(※For detailed evaluation, framework comparison, theme styling, and prompt templates, see [GUI_DESIGN.md](file:///docs/en/GUI_DESIGN.md))*
 
-- [ ] **[egui GUI Roadmap] Aesthetic Maturation & ViVi-Native UX Evolution (Phase 5 Expansion)**
+- [x] **[egui GUI Roadmap] Aesthetic Maturation & ViVi-Native UX Evolution (Phase 5 Expansion)**
   - *(※Design specs: see [SETTINGS_DESIGN.md](file:///docs/en/SETTINGS_DESIGN.md) & [GUI_DESIGN.md](file:///docs/en/GUI_DESIGN.md))*
   - **Phase 1: Aesthetic & Thematic Foundations (External TOML Themes & High-Contrast Support)**:
     - [x] Standalone external theme TOML separation (`%USERPROFILE%\.vivivi\themes\<name>.toml`)
     - [x] Standard presets implementation & dynamic menu switching (`TokyoNight`, `OpenViVi`, `ViViClassic`, `ViviviDark`, `ViviviLight`)
     - [x] Startup bootstrap pipeline (auto-deploy `%USERPROFILE%\.vivivi\` and bundled standard themes)
-    - [ ] Dynamic I-beam text input cursor switching on central editor canvas hover (`ctx.set_cursor_icon(CursorIcon::Text)`)
-    - [ ] Flat modern design tuning: line-height padding (1.3–1.5x), hairline borders (<=1px), unified widget rounding (2.0px)
-    - [ ] Reactive-only frame repaint on input/cursor/event to guarantee 0% idle CPU footprint
+    - [x] Dynamic I-beam text input cursor switching on central editor canvas hover (`ctx.set_cursor_icon(CursorIcon::Text)`)
+    - [x] Flat modern design tuning: line-height padding (1.3–1.5x), hairline borders (<=1px), unified widget rounding (2.0px)
+    - [x] Reactive-only frame repaint on input/cursor/event to guarantee 0% idle CPU footprint
   - **Phase 2: 6-Category Configuration Infrastructure & Ephemeral Mutation Rules**:
     - [x] **[GUI] Automatic Window State Persistence (`window_state.json`) & Off-Screen Safeguard (Virtual Screen Intersection & Overflow Clamp)**
     - [x] 6-category `config.toml` persistence schema (`[general]`, `[appearance]`, `[invisibles]`, `[editing]`, `[tools]`, `[keymap]`)
@@ -336,11 +333,11 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
     - [x] Implementation of **`:source`** (or `:so`) command for live external reload
     - [x] egui flat 2-pane categorical settings GUI modal dialog
     - [x] TUI (Ratatui) centered floating settings modal with full Vi keyboard navigation
-    - [ ] Dedicated theme documentation (`doc/help/theme.md`)
+    - [x] Dedicated theme documentation (`doc/help/theme.md`)
   - **Phase 3: ViVi Signature UX Restoration & TUI Parity**:
-    - [ ] Coexistence of Windows-style editing (Shift+Arrow selection, Ctrl+C/V) with modal vi commands
-    - [ ] Selected text partial execution & external process piping
-    - [ ] Port shared theme logic to terminal TUI (`ratatui`)
+    - [x] Coexistence of Windows-style editing (Shift+Arrow selection, Ctrl+C/V) with modal vi commands
+    - [x] Selected text partial execution & external process piping
+    - [x] Port shared theme logic to terminal TUI (`ratatui`)
 
 - [x] **[OpenViVi] Minimap Overview (egui-backed)**
   - High-level bird's-eye code overview displaying viewport rectangle, click-to-scroll jump, and Viewport Culling (`vivivi-gui`).
@@ -390,6 +387,9 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 ---
 
 ## 5. Phase 6: Multi-Platform Expansion & Ecosystem Infrastructure
+- [ ] **[Distribution & CI/CD] GitHub Actions Automated Release Pipeline (`.github/workflows/release.yml`)**
+  - Windows x86_64 portable zip & SHA256 checksum generation triggered on `v*` tags.
+- [ ] **[General Availability Criteria] TUI Edition Official GA Release Sign-off (v1.0.0)**
 - [ ] **[External Package Managers] Windows Package Managers Support (Scoop / Winget) (Medium priority)**
   - **Scoop**: Create custom bucket (`scoop-bucket`) and `vivivi.json` manifest for portable, non-admin CLI/TUI distribution.
   - **Winget**: Submit package manifest to `microsoft/winget-pkgs` using `wingetcreate` for Windows 11 default package manager integration.

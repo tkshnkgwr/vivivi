@@ -49,6 +49,7 @@ pub(crate) fn handle_settings_command(app: &mut App, trimmed: &str) -> bool {
             ));
         } else if let Some(loaded) = crate::theme::Theme::find_by_name(theme_name) {
             app.config.appearance.theme = loaded.meta.name.clone();
+            app.active_theme = loaded.clone();
             app.status_message = Some(format!(
                 "カラーテーマを変更しました: {} ({})",
                 loaded.meta.name, loaded.meta.author

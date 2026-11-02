@@ -1,4 +1,4 @@
-﻿use super::window::{EditorWindow, SplitAxis, WindowDirection, WindowTreeNode};
+use super::window::{EditorWindow, SplitAxis, WindowDirection, WindowTreeNode};
 use crate::types::{AppKeyEvent, LogicalRect};
 use std::path::PathBuf;
 use vivivi_core::{CharEncoding, CursorPosition, NewlineType, TextBuffer, TextCursor};
@@ -27,6 +27,7 @@ mod files;
 mod tabs;
 pub mod tools;
 pub use tools::get_recent_file_path;
+pub mod process;
 mod windows;
 
 #[cfg(test)]
@@ -151,6 +152,8 @@ pub struct App {
 
     // --- 永続設定 & 表示オプション ---
     pub config: crate::config::AppConfig,
+    /// 現在適用中のカラーテーマ（TUI / GUI 共通）
+    pub active_theme: crate::theme::Theme,
     pub show_line_numbers: bool,
     pub relative_number: bool,
     pub tab_width: usize,
@@ -224,6 +227,7 @@ impl App {
         let initial_window = EditorWindow::new(0, 0);
 
         let config = crate::config::AppConfig::load_or_default(None);
+        let active_theme = crate::theme::Theme::load_by_name(&config.appearance.theme);
         let show_line_numbers = config.appearance.line_number;
         let relative_number = config.appearance.relative_number;
         let tab_width = config.editing.tab_width;
@@ -353,6 +357,7 @@ impl App {
             tui_settings_in_items: false,
             list_chars_config,
 
+            active_theme,
             config,
             show_line_numbers,
             relative_number,

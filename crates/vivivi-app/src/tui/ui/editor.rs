@@ -188,16 +188,26 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
         for token in tokens {
             let token_style = match token.token_type {
                 vivivi_modes::TokenType::Keyword => Style::default()
-                    .fg(Color::Cyan)
+                    .fg(app.active_theme.syntax.keyword.to_ratatui())
                     .add_modifier(Modifier::BOLD),
-                vivivi_modes::TokenType::Type => Style::default().fg(Color::Yellow),
-                vivivi_modes::TokenType::StringLiteral => Style::default().fg(Color::Green),
-                vivivi_modes::TokenType::Number => Style::default().fg(Color::Magenta),
+                vivivi_modes::TokenType::Type => {
+                    Style::default().fg(app.active_theme.syntax.type_name.to_ratatui())
+                }
+                vivivi_modes::TokenType::StringLiteral => {
+                    Style::default().fg(app.active_theme.syntax.string.to_ratatui())
+                }
+                vivivi_modes::TokenType::Number => {
+                    Style::default().fg(app.active_theme.syntax.number.to_ratatui())
+                }
                 vivivi_modes::TokenType::Comment => Style::default()
-                    .fg(Color::DarkGray)
+                    .fg(app.active_theme.syntax.comment.to_ratatui())
                     .add_modifier(Modifier::ITALIC),
-                vivivi_modes::TokenType::Punctuation => Style::default().fg(Color::LightCyan),
-                vivivi_modes::TokenType::Text => Style::default().fg(Color::White),
+                vivivi_modes::TokenType::Punctuation => {
+                    Style::default().fg(app.active_theme.syntax.operator.to_ratatui())
+                }
+                vivivi_modes::TokenType::Text => {
+                    Style::default().fg(app.active_theme.ui.fg_text.to_ratatui())
+                }
             };
             for _ in token.text.chars() {
                 styles.push(token_style);
@@ -209,10 +219,11 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
             styles.resize(chars.len(), Style::default().fg(Color::DarkGray));
         }
 
-        // カレント行の背景色（暗いブルーグレー）
+        // カレント行の背景色
         if is_current_line {
+            let curline_bg = app.active_theme.ui.bg_statusline.to_ratatui();
             for s in &mut styles {
-                *s = s.bg(Color::Rgb(30, 35, 45));
+                *s = s.bg(curline_bg);
             }
         }
 
@@ -275,8 +286,8 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
 
             if line_idx >= min_line && line_idx <= max_line {
                 let sel_style = Style::default()
-                    .bg(Color::Rgb(55, 75, 115))
-                    .fg(Color::White);
+                    .bg(app.active_theme.ui.bg_selection.to_ratatui())
+                    .fg(app.active_theme.ui.fg_text.to_ratatui());
 
                 match mode {
                     ViMode::VisualBlock => {

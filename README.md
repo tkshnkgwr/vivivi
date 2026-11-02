@@ -6,7 +6,7 @@
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024%20Edition-orange.svg)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/version-v0.9.9--beta-brightgreen.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/version-v0.9.11--beta-brightgreen.svg)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/tkshnkgwr/vivivi)
 
 [English](./README.md) | [日本語](./README_JA.md)
@@ -27,7 +27,7 @@ It would be a privilege if former ViVi or OpenViVi users find a home here, thoug
 * **Development Approach**:  
   The Rust implementation is developed in active collaboration with AI (Gemini). As I am relatively new to GitHub and open-source workflows, I appreciate your patience and understanding.
 * **Current Status**:  
-  Currently in Beta (`v0.9.9-beta`). Both the full-featured terminal TUI (`vivivi`) and the native desktop GUI (`vivivi-gui`) powered by `egui` / `eframe` are implemented and share a unified headless core.
+  Currently in Beta (`v0.9.11-beta`). Both the full-featured terminal TUI (`vivivi`) and the native desktop GUI (`vivivi-gui`) powered by `egui` / `eframe` are implemented and share a unified headless core.
 * **GUI & TUI Dual Architecture**:  
   Use `vivivi` for ultra-fast terminal/SSH workflows, or launch `vivivi-gui` for a modern Tokyo Night desktop experience with PlemolJP typography, inline Japanese IME, minimap, and gravity-drop deletion animations.
 
@@ -137,7 +137,33 @@ graph TD
 - Rust 1.85+ (Edition 2024 support)
 - Cargo
 
-### Local Build
+### Install (`cargo install`)
+
+Installs compiled binaries into `%USERPROFILE%\.cargo\bin` (ensure this directory is in your PATH).
+
+#### 1. Install from local source (inside the repository)
+```powershell
+# Terminal TUI (binary name: vivivi)
+cargo install --path crates/vivivi-app
+
+# Desktop GUI (binary name: vivivi-gui)
+cargo install --path crates/vivivi-gui
+
+# Use --force to overwrite/update existing binaries with latest changes
+cargo install --path crates/vivivi-app --force
+cargo install --path crates/vivivi-gui --force
+```
+
+#### 2. Install directly from GitHub (without manual clone)
+```powershell
+# Terminal TUI (vivivi)
+cargo install --git https://github.com/tkshnkgwr/vivivi.git vivivi-app
+
+# Desktop GUI (vivivi-gui)
+cargo install --git https://github.com/tkshnkgwr/vivivi.git vivivi-gui
+```
+
+### Local Build & Run
 ```powershell
 # Clone repository
 git clone https://github.com/tkshnkgwr/vivivi.git

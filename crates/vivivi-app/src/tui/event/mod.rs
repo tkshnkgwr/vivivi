@@ -10,6 +10,7 @@ use vivivi_vi::ViMode;
 
 use super::app::App;
 use super::window::WindowDirection;
+pub mod windows_keys;
 
 /// キーイベントを処理し、アプリケーション状態やテキストバッファを更新します。
 ///
@@ -72,8 +73,18 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) {
 /// 内部キーイベントディスパッチ処理
 fn dispatch_key_event(app: &mut App, key: KeyEvent) {
     // 1. グローバルショートカット
-    // Ctrl + C: 強制終了
+    // Ctrl + C: ビジュアルモード中はコピー（ヤンク）、それ以外は終了
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
+        let mode = app.mode();
+        if mode == ViMode::Visual || mode == ViMode::VisualLine || mode == ViMode::VisualBlock {
+            if let Some(text) = app.get_selected_text() {
+                app.set_clipboard_text(&text);
+                app.status_message = Some(format!("{} 文字をコピーしました", text.chars().count()));
+            }
+            app.cursor.anchor = None;
+            app.vi.set_mode(ViMode::Normal);
+            return;
+        }
         app.should_quit = true;
         return;
     }
@@ -654,6 +665,12 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
         }
     }
 
+    // 2.8 Windows ライク操作体系 (Shift+矢印選択, Ctrl+C/V/X/Z/Y/A/S)
+    let app_key_event: crate::AppKeyEvent = key.into();
+    if windows_keys::handle_windows_shortcuts(app, &app_key_event) {
+        return;
+    }
+
     // 3. Viモード別のキーハンドリング
     match app.mode() {
         ViMode::Insert => handle_insert_mode(app, key),
@@ -761,7 +778,8 @@ fn toggle_tui_settings_item(app: &mut App) {
                     next_theme = themes[(pos + 1) % themes.len()].clone();
                 }
                 let loaded = crate::theme::Theme::load_by_name(&next_theme);
-                app.config.appearance.theme = loaded.meta.name;
+                app.config.appearance.theme = loaded.meta.name.clone();
+                app.active_theme = loaded;
             }
             // 行番号
             1 => {

@@ -92,14 +92,27 @@ impl ViviviGuiApp {
                     self.core.adjust_scroll(view_height, view_width);
                 }
 
-                // マウスクリックによるウィンドウフォーカス＆カーソル位置移動判定
-                let pointer_click_pos = ui.input(|i| {
-                    if i.pointer.primary_clicked() {
-                        i.pointer.interact_pos()
-                    } else {
-                        None
-                    }
-                });
+                // エディタ中央ペイン領域のマウスホバー連動「Iビーム（テキスト入力）」カーソル変更
+                // モーダル表示中はモーダル側のカーソル優先のためスキップ
+                if !self.is_any_modal_open()
+                    && let Some(pos) = ui.input(|i| i.pointer.hover_pos())
+                    && editor_rect.contains(pos)
+                {
+                    ctx.set_cursor_icon(egui::CursorIcon::Text);
+                }
+
+                // マウスクリックによるウィンドウフォーカス＆カーソル位置移動判定（モーダル中は無効化）
+                let pointer_click_pos = if self.is_any_modal_open() {
+                    None
+                } else {
+                    ui.input(|i| {
+                        if i.pointer.primary_clicked() {
+                            i.pointer.interact_pos()
+                        } else {
+                            None
+                        }
+                    })
+                };
 
                 let mut active_cursor_screen_rect: Option<Rect> = None;
                 let active_search_re = self.core.active_search_regex();

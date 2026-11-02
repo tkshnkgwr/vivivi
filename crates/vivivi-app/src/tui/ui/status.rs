@@ -171,8 +171,8 @@ pub fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
             .add_modifier(Modifier::BOLD)
     } else {
         Style::default()
-            .bg(Color::Rgb(40, 44, 52))
-            .fg(Color::Rgb(220, 223, 228))
+            .bg(app.active_theme.ui.bg_statusline.to_ratatui())
+            .fg(app.active_theme.ui.fg_text.to_ratatui())
             .add_modifier(Modifier::BOLD)
     };
 

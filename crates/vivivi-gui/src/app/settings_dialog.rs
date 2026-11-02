@@ -1,4 +1,4 @@
-﻿//! GUI 設定パネル（Preferences Dialog: 左右2ペイン・モーダルダイアログ）モジュール。
+//! GUI 設定パネル（Preferences Dialog: 左右2ペイン・モーダルダイアログ）モジュール。
 //!
 //! ViVi 3/4 の多機能プロパティシートを踏襲・洗練させ、6大カテゴリの設定項目を
 //! リアルタイムプレビューおよび TOML 永続化可能なモーダルウィンドウとして提供します。
@@ -56,10 +56,10 @@ impl SettingsCategory {
     pub fn icon(&self) -> &'static str {
         match self {
             SettingsCategory::General => "⚙",
-            SettingsCategory::Appearance => "🎨",
+            SettingsCategory::Appearance => "☼",
             SettingsCategory::Invisibles => "👁",
             SettingsCategory::Editing => "✏",
-            SettingsCategory::Tools => "🚀",
+            SettingsCategory::Tools => "⚒",
             SettingsCategory::Keymap => "⌨",
         }
     }
@@ -119,26 +119,48 @@ impl ViviviGuiApp {
             return;
         }
 
+        let screen_rect = ctx.screen_rect();
+
+        // 1. エディタ全体を暗転（Dim / ぼかし風）し、背後を操作不能にする半透明バックドロップ
+        let painter = ctx.layer_painter(egui::LayerId::new(
+            egui::Order::Middle,
+            egui::Id::new("settings_modal_backdrop_painter"),
+        ));
+        painter.rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(150));
+
+        // 2. 背後へのマウスクリック・ドラッグを100%遮断する透明ブロッカー
+        egui::Area::new(egui::Id::new("settings_modal_backdrop_area"))
+            .order(egui::Order::Middle)
+            .fixed_pos(screen_rect.min)
+            .show(ctx, |ui| {
+                ui.allocate_response(screen_rect.size(), egui::Sense::click_and_drag());
+            });
+
         let mut is_open = self.settings_dialog.is_open;
         let active_theme_name = self.active_theme.meta.name.clone();
 
+        let mut should_cancel = false;
+        let mut should_save = false;
+
         egui::Window::new(format!("設定 (Preferences) - [{active_theme_name}]"))
+            .id(egui::Id::new("vivivi_preferences_modal_v2"))
             .open(&mut is_open)
-            .default_size([720.0, 520.0])
-            .min_size([580.0, 400.0])
+            .default_size([580.0, 620.0])
+            .min_size([480.0, 480.0])
+            .max_width(660.0)
             .collapsible(false)
             .resizable(true)
             .show(ctx, |ui| {
                 ui.vertical(|ui| {
                     // --- 上部・中央: 左右 2 ペイン領域 ---
-                    let available_height = ui.available_height() - 44.0; // 下部ボタンバーの余白を確保
+                    let available_height = (ui.available_height() - 44.0).max(300.0);
                     ui.allocate_ui_with_layout(
                         egui::Vec2::new(ui.available_width(), available_height),
                         egui::Layout::left_to_right(egui::Align::TOP),
                         |ui| {
-                            // [左ペイン: カテゴリツリー & 検索バー] (幅 200px)
+                            // [左ペイン: カテゴリツリー] (幅 180px)
                             ui.allocate_ui_with_layout(
-                                egui::Vec2::new(195.0, available_height),
+                                egui::Vec2::new(180.0, available_height),
                                 egui::Layout::top_down(egui::Align::LEFT),
                                 |ui| {
                                     self.render_settings_left_pane(ui);
@@ -147,40 +169,43 @@ impl ViviviGuiApp {
 
                             ui.separator();
 
-                            // [右ペイン: カテゴリ別詳細設定] (残り幅)
-                            egui::ScrollArea::vertical()
-                                .id_salt("settings_right_pane")
-                                .show(ui, |ui| {
-                                    ui.set_min_width(ui.available_width());
-                                    self.render_settings_right_pane(ui, ctx);
-                                });
+                            // [右ペイン: カテゴリ別詳細設定] (残り幅、縦スクロール & 確実な上から下配置)
+                            let right_pane_width = (ui.available_width() - 8.0).max(260.0);
+                            ui.allocate_ui_with_layout(
+                                egui::Vec2::new(right_pane_width, available_height),
+                                egui::Layout::top_down(egui::Align::LEFT),
+                                |ui| {
+                                    egui::ScrollArea::vertical()
+                                        .id_salt("settings_right_pane_scroll")
+                                        .auto_shrink([false, false])
+                                        .show(ui, |ui| {
+                                            ui.vertical(|ui| {
+                                                self.render_settings_right_pane(ui, ctx);
+                                            });
+                                        });
+                                },
+                            );
                         },
                     );
 
                     ui.separator();
 
                     // --- 最下部: 4 大アクションボタンバー ---
-                    self.render_settings_bottom_bar(ui, ctx);
+                    self.render_settings_bottom_bar(ui, ctx, &mut should_save, &mut should_cancel);
                 });
             });
 
-        self.settings_dialog.is_open = is_open;
+        // 右上の「×」ボタンで閉じられた場合、またはキャンセルが押された場合
+        if !is_open || should_cancel {
+            self.cancel_settings_dialog(Some(ctx));
+        } else if should_save {
+            self.save_and_close_settings(ctx);
+        }
     }
 
-    /// 左ペイン: 検索バーおよびカテゴリ選択ボタン一覧
+    /// 左ペイン: カテゴリ選択ボタン一覧
     fn render_settings_left_pane(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.label("🔍");
-            ui.add(
-                egui::TextEdit::singleline(&mut self.settings_dialog.search_query)
-                    .hint_text("設定を検索..."),
-            );
-        });
-
-        ui.separator();
-
-        let query = self.settings_dialog.search_query.trim().to_lowercase();
-
+        ui.add_space(4.0);
         egui::ScrollArea::vertical()
             .id_salt("settings_category_list")
             .show(ui, |ui| {
@@ -189,59 +214,27 @@ impl ViviviGuiApp {
                     let icon = cat.icon();
                     let label = format!("{icon} {name}");
 
-                    // 検索クエリがある場合の一致判定
-                    let matches_search = query.is_empty()
-                        || name.to_lowercase().contains(&query)
-                        || self.category_matches_search(*cat, &query);
-
-                    if !matches_search {
-                        continue;
-                    }
-
                     let is_active = self.settings_dialog.active_category == *cat;
-                    if ui.selectable_label(is_active, label).clicked() {
+                    let resp = ui
+                        .selectable_label(is_active, label)
+                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    if resp.clicked() {
                         self.settings_dialog.active_category = *cat;
                     }
                 }
             });
     }
 
-    /// カテゴリ内に検索クエリに合致する項目が存在するか判定
-    fn category_matches_search(&self, cat: SettingsCategory, query: &str) -> bool {
-        match cat {
-            SettingsCategory::General => {
-                "文字コード 改行形式 クリップボード スワップ 更新 encoding fileformat clipboard"
-                    .contains(query)
-            }
-            SettingsCategory::Appearance => {
-                "テーマ カラーテーマ 行番号 相対行番号 折り返し ガター フォント ミニマップ theme wrap number font minimap"
-                    .contains(query)
-            }
-            SettingsCategory::Invisibles => {
-                "不可視文字 全角スペース タブ 改行 空白 list listchars space eol".contains(query)
-            }
-            SettingsCategory::Editing => {
-                "タブ幅 インデント 大文字小文字 スマートケース フォーマット tab indent case"
-                    .contains(query)
-            }
-            SettingsCategory::Tools => {
-                "パーティクル 落下 重力 アニメーション 省電力 migemo マクロ dynamic macro"
-                    .contains(query)
-            }
-            SettingsCategory::Keymap => "キーマップ ショートカット vi キー keymap".contains(query),
-        }
-    }
-
     /// 右ペイン: 選択中カテゴリの設定コントロール群
     fn render_settings_right_pane(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        match self.settings_dialog.active_category {
+        ui.vertical(|ui| match self.settings_dialog.active_category {
             SettingsCategory::General => self.render_category_general(ui),
             SettingsCategory::Appearance => self.render_category_appearance(ui, ctx),
             SettingsCategory::Invisibles => self.render_category_invisibles(ui),
             SettingsCategory::Editing => self.render_category_editing(ui),
             SettingsCategory::Tools => self.render_category_tools(ui),
             SettingsCategory::Keymap => self.render_category_keymap(ui),
-        }
+        });
     }
 
     /// 1. 一般 (General)
@@ -343,7 +336,7 @@ impl ViviviGuiApp {
 
     /// 2. 表示・外観 (Appearance)
     fn render_category_appearance(&mut self, ui: &mut egui::Ui, _ctx: &egui::Context) {
-        ui.heading("🎨 2. 表示・外観設定 (Appearance)");
+        ui.heading("☼ 2. 表示・外観設定 (Appearance)");
         ui.label(
             egui::RichText::new("カラーテーマ、行番号、ガター、およびGUIフォントを設定します。")
                 .color(colors::FG_DIMMED),
@@ -470,21 +463,15 @@ impl ViviviGuiApp {
         ui.add_space(10.0);
         egui::Grid::new("invisibles_grid")
             .num_columns(2)
-            .spacing([20.0, 10.0])
+            .spacing([16.0, 10.0])
             .show(ui, |ui| {
                 ui.label("全角スペース記号:");
-                ui.horizontal(|ui| {
-                    ui.add(
-                        egui::TextEdit::singleline(
-                            &mut self.settings_dialog.draft_config.invisibles.zenkaku_space,
-                        )
-                        .desired_width(60.0),
-                    );
-                    ui.label(
-                        egui::RichText::new("※全角2マス幅、ワインレッド背景で強調表示されます")
-                            .color(colors::FG_DIMMED),
-                    );
-                });
+                ui.add(
+                    egui::TextEdit::singleline(
+                        &mut self.settings_dialog.draft_config.invisibles.zenkaku_space,
+                    )
+                    .desired_width(60.0),
+                );
                 ui.end_row();
 
                 ui.label("半角スペース記号:");
@@ -531,6 +518,12 @@ impl ViviviGuiApp {
                 });
                 ui.end_row();
             });
+
+        ui.add_space(8.0);
+        ui.label(
+            egui::RichText::new("※ 全角スペースは2マス幅・ワインレッド背景で強調表示されます。")
+                .color(colors::FG_DIMMED),
+        );
     }
 
     /// 4. 入力・編集 (Editing)
@@ -590,7 +583,7 @@ impl ViviviGuiApp {
 
     /// 5. 独自ツール (Tools)
     fn render_category_tools(&mut self, ui: &mut egui::Ui) {
-        ui.heading("🚀 5. 独自ツール設定 (Tools / OpenViVi)");
+        ui.heading("⚒ 5. 独自ツール設定 (Tools / OpenViVi)");
         ui.label(
             egui::RichText::new("OpenViVi 特有のビジュアルギミックや入力支援ツールを設定します。")
                 .color(colors::FG_DIMMED),
@@ -650,7 +643,7 @@ impl ViviviGuiApp {
         egui::Grid::new("keymap_reference_grid")
             .striped(true)
             .num_columns(3)
-            .spacing([20.0, 6.0])
+            .spacing([12.0, 6.0])
             .show(ui, |ui| {
                 ui.label(egui::RichText::new("モード / キー").strong());
                 ui.label(egui::RichText::new("機能・コマンド").strong());
@@ -706,10 +699,19 @@ impl ViviviGuiApp {
     }
 
     /// 最下部: 4 大アクションボタンバー
-    fn render_settings_bottom_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+    fn render_settings_bottom_bar(
+        &mut self,
+        ui: &mut egui::Ui,
+        ctx: &egui::Context,
+        should_save: &mut bool,
+        should_cancel: &mut bool,
+    ) {
         ui.horizontal(|ui| {
             // [デフォルトに戻す]
-            if ui.button("🔄 デフォルトに戻す").clicked() {
+            let reset_btn = ui
+                .button("🔄 デフォルトに戻す")
+                .on_hover_cursor(egui::CursorIcon::PointingHand);
+            if reset_btn.clicked() {
                 self.settings_dialog.draft_config = AppConfig::default();
                 self.settings_dialog.space_char_buf = self
                     .settings_dialog
@@ -723,52 +725,68 @@ impl ViviviGuiApp {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // [保存して閉じる]
-                let save_btn = ui.add(
-                    egui::Button::new(
-                        egui::RichText::new("💾 保存して閉じる").color(egui::Color32::WHITE),
+                let save_btn = ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new("💾 保存して閉じる").color(egui::Color32::WHITE),
+                        )
+                        .fill(egui::Color32::from_rgb(45, 120, 200)),
                     )
-                    .fill(egui::Color32::from_rgb(45, 120, 200)),
-                );
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
                 if save_btn.clicked() {
-                    // 1. 実行時へ反映
-                    self.apply_dialog_config(ctx);
-                    // 2. ディスクへ永続化
-                    let path = AppConfig::default_config_path();
-                    match self.core.config.save_to(&path) {
-                        Ok(()) => {
-                            self.core.status_message =
-                                Some(format!("設定を保存しました: {}", path.display()));
-                        }
-                        Err(e) => {
-                            self.core.status_message =
-                                Some(format!("設定の保存に失敗しました: {e}"));
-                        }
-                    }
-                    self.settings_dialog.close();
+                    *should_save = true;
                 }
 
                 // [適用] (即時プレビュー)
-                if ui.button("⚡ 適用 (プレビュー)").clicked() {
+                let apply_btn = ui
+                    .button("⚡ 適用")
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                if apply_btn.clicked() {
                     self.apply_dialog_config(ctx);
                     self.core.status_message = Some("設定を一時適用しました".to_string());
                 }
 
                 // [キャンセル]
-                if ui.button("❌ キャンセル").clicked() {
-                    // 開いた時点のバックアップを復元
-                    let backup = self.settings_dialog.backup_config.clone();
-                    self.core.apply_config(&backup);
-                    self.minimap_open = backup.appearance.gui.show_minimap;
-                    self.minimap_width = backup.appearance.gui.minimap_width;
-                    self.particles.enabled = backup.appearance.gui.enable_gravity_drop;
-                    if self.active_theme.meta.name != backup.appearance.theme {
-                        self.active_theme = Theme::load_by_name(&backup.appearance.theme);
-                        crate::theme::apply_theme(ctx, &self.active_theme);
-                    }
-                    self.settings_dialog.close();
+                let cancel_btn = ui
+                    .button("❌ キャンセル")
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                if cancel_btn.clicked() {
+                    *should_cancel = true;
                 }
             });
         });
+    }
+
+    /// 設定ダイアログの変更をキャンセルし、開いた時点のバックアップ設定に復元して閉じます。
+    pub fn cancel_settings_dialog(&mut self, ctx: Option<&egui::Context>) {
+        let backup = self.settings_dialog.backup_config.clone();
+        self.core.apply_config(&backup);
+        self.minimap_open = backup.appearance.gui.show_minimap;
+        self.minimap_width = backup.appearance.gui.minimap_width;
+        self.particles.enabled = backup.appearance.gui.enable_gravity_drop;
+        if self.active_theme.meta.name != backup.appearance.theme {
+            self.active_theme = Theme::load_by_name(&backup.appearance.theme);
+            if let Some(ctx) = ctx {
+                crate::theme::apply_theme(ctx, &self.active_theme);
+            }
+            self.syntax_cache.clear();
+        }
+        self.settings_dialog.close();
+    }
+
+    /// 設定ダイアログの内容を適用してディスクへ永続化し、閉じます。
+    pub fn save_and_close_settings(&mut self, ctx: &egui::Context) {
+        self.apply_dialog_config(ctx);
+        let path = AppConfig::default_config_path();
+        match self.core.config.save_to(&path) {
+            Ok(()) => {
+                self.core.status_message = Some(format!("設定を保存しました: {}", path.display()));
+            }
+            Err(e) => {
+                self.core.status_message = Some(format!("設定の保存に失敗しました: {e}"));
+            }
+        }
+        self.settings_dialog.close();
     }
 
     /// ダイアログのドラフト設定を現在の実行時エディタ（core および GUI）へ適用します。

@@ -277,7 +277,7 @@
 ---
 
 ## 3. 現在進行中：ベータ版テスト＆実用検証 (v0.9.9-beta)
-- [ ] **【検証・ドッグフーディング】 ボスによる実機手動テスト (`MANUAL_TEST_GUIDE.md`)**
+- [x] **【検証・ドッグフーディング】 ボスによる実機手動テスト (`MANUAL_TEST_GUIDE.md`)**
   - 日常実務・コーディングでの常用と、操作感・違和感・不具合の洗い出し
   - [x] **動的オプション拡張**: `:se nu` / `:se nonu` / `:se wrap` / `:se nowrap` および状態確認クエリ (`:se nu?`, `:se wrap?`) の実装
   - [x] **全角スペース表示改善**: 曖昧幅（Ambiguous）記号による縮みを解消し、全角2マス幅維持＋ワインレッド背景ハイライト表示
@@ -301,9 +301,6 @@
     - **Modes 拡張編集モジュール堅牢化（22件）**: 全角インデント境界クラッシュ解消、不可視文字タブ位置全角幅追従、罫線端点整列ズレ防止、ToDo全角列カウント、波ダッシュ（`〜`）相互変換、動的補完記号混入防止、Diff計算共通Prefix/Suffix最適化＆OOM上限ガード、ゼロ除算防止、極小行PDFメモリ保護、同一パス誤コピー/EXDEVフォールバック、各種演算子アライン保護、CSV RFC4180エスケープ、BOX計算数値誤結合防止、連番階層保持、DiffLog変更世代追跡刷新、式置換キャプチャ保持、メソッド呼び出し数値分離、tags修飾子付き関数抽出、テンプレートサニタイズ
     - **TUI 操作性・安全性向上（12件）**: 全域未保存変更保護（`:e`, ファイラー, 履歴, Grep, `:tabclose`, `:tabonly`, `:q`, `:qa`）、他タブ存在時のエディタ誤終了防止、全モード `Ctrl+[` 対応、コマンドライン `Ctrl+u/w/h` 編集、`:set nonumber` カーソルズレ解消、Migemo全角カーソル幅補正、水平スクロール全角分断防止、モーダルスクロール追従、画面中央同期、Ex置換エスケープスラッシュ対応、狭幅端末ステータスライン崩れ防止
     - **GUI 描画最適化・操作性向上（11件）**: 構文トークン行キャッシュ、描画バッファ再利用、PlemolJP最優先フォントローダー、マウスクリックChar Index計算、非アクティブタブ/閉じるボタン未保存保護、モーダルキー突き抜け防止、空白パス安全化、スクロール位置追従、IME候補窓座標クランプ、ショートカット拡充、パーティクルヒープ削減
-- [ ] **【配布・CI/CD】 GitHub Actions 自動リリースパイプラインの構築 (`.github/workflows/release.yml`)**
-  - `v*` タグトリガーでの Windows x86_64 ポータブル zip & SHA256 自動添付
-- [ ] **【正式リリース判定】 TUI Edition 正式版 (v1.0.0) のリリース判定**
 
 ---
 
@@ -317,15 +314,15 @@
   - **ステップ 4**: 削除文字の重力落下パーティクルアニメーション（0.5秒フェードアウト）＆ アイドル時 CPU 0% の省電力ハイブリッド制御（`particles.rs`）
   - *(※詳細な選定理由・フレームワーク比較・テーマ設計・実装プロンプトは [GUI_DESIGN.md](file:///docs/ja/GUI_DESIGN.md) 参照)*
 
-- [ ] **【egui GUIロードマップ】 テーマ・外観の確立とViVi固有UXの進化 (Phase 5 拡張)**
+- [x] **【egui GUIロードマップ】 テーマ・外観の確立とViVi固有UXの進化 (Phase 5 拡張)**
   - *(※詳細設計書: [SETTINGS_DESIGN.md](file:///docs/ja/SETTINGS_DESIGN.md) および [GUI_DESIGN.md](file:///docs/ja/GUI_DESIGN.md) 参照)*
   - **Phase 1: テーマ・外観の確立（外部TOMLテーマ化 ＆ ハイコントラスト拡充）**:
     - [x] 外部テーマTOMLファイル分離管理（`%USERPROFILE%\.vivivi\themes\<name>.toml`）の実装
     - [x] 標準テーマの実装・メニュー動的切替（`TokyoNight`, `OpenViVi`, `ViViClassic`, `ViviviDark`, `ViviviLight`）
     - [x] 初回起動時ブートストラップ処理（`%USERPROFILE%\.vivivi\` および `themes/` 内蔵5大テーマの自動展開）
-    - [ ] エディタ中央ペイン領域のマウスホバー連動「Iビーム（テキスト入力）」カーソル変更（`ctx.set_cursor_icon(CursorIcon::Text)`）
-    - [ ] フラットデザイン化：行間パディング（Line Height 1.3〜1.5）、境界線1px以下、ボタン・タブ角丸（Rounding 2.0px）統一
-    - [ ] 入力・点滅・操作時のみ再描画するリアクティブ描画の徹底（アイドル時CPU 0%維持）
+    - [x] エディタ中央ペイン領域のマウスホバー連動「Iビーム（テキスト入力）」カーソル変更（`ctx.set_cursor_icon(CursorIcon::Text)`）
+    - [x] フラットデザイン化：行間パディング（Line Height 1.3〜1.5）、境界線1px以下、ボタン・タブ角丸（Rounding 2.0px）統一
+    - [x] 入力・点滅・操作時のみ再描画するリアクティブ描画の徹底（アイドル時CPU 0%維持）
   - **Phase 2: 6大カテゴリ設定基盤 ＆ 一時反映・永続化ルール**:
     - [x] **【GUI】 ウィンドウ位置・サイズ・最大化の自動永続化 (`window_state.json`) ＆ 画面外脱出ガード (仮想画面判定・はみ出し自動補正)**
     - [x] 6大カテゴリ対応 `config.toml` 永続化（`[general]`, `[appearance]`, `[invisibles]`, `[editing]`, `[tools]`, `[keymap]`）
@@ -335,11 +332,11 @@
     - [x] 外部設定再読込コマンド **`:source`**（または `:so`）の実装
     - [x] egui側のフラットな2ペインカテゴリ別GUI設定パネル（モーダルダイアログ）
     - [x] TUI（Ratatui）側の中央フローティング設定パネル（Viキーボード操作完結）
-    - [ ] テーマ専用ヘルプドキュメント配備（`doc/help/theme.md`）
+    - [x] テーマ専用ヘルプドキュメント配備（`doc/help/theme.md`）
   - **Phase 3: ViVi固有機能の再現とTUI協調**:
-    - [ ] Windowsライクな操作体系（Shift+矢印選択、Ctrl+C/V）とviモードの自然な共存
-    - [ ] 選択テキストの部分実行・外部プロセス連携
-    - [ ] TUI（ratatui）への同一テーマロジック展開・同期
+    - [x] Windowsライクな操作体系（Shift+矢印選択、Ctrl+C/V）とviモードの自然な共存
+    - [x] 選択テキストの部分実行・外部プロセス連携
+    - [x] TUI（ratatui）への同一テーマロジック展開・同期
 
 - [x] **【OpenViVi】 ミニマップ (Minimap / egui連携)**
   - ファイル全体の縮小俯瞰プレビューと、スクロール位置・クリックジャンプ・Viewport Culling 描画（`vivivi-gui` に実装完了）
@@ -389,6 +386,9 @@
 ---
 
 ## 5. フェーズ 6：マルチプラットフォーム展開 & エコシステム整備
+- [ ] **【配布・CI/CD】 GitHub Actions 自動リリースパイプラインの構築 (`.github/workflows/release.yml`)**
+  - `v*` タグトリガーでの Windows x86_64 ポータブル zip & SHA256 自動添付
+- [ ] **【正式リリース判定】 TUI Edition 正式版 (v1.0.0) のリリース判定**
 - [ ] **【外部パッケージマネージャー対応】 Windowsパッケージマネージャー対応 (Scoop / Winget)（優先度：中）**
   - **Scoop**: 自作バケット (`scoop-bucket`) の作成と `vivivi.json` マニフェスト配置（管理者権限不要、CLI/TUIユーザー向け即日導入）
   - **Winget**: `wingetcreate` を用いた `microsoft/winget-pkgs` へのマニフェスト登録・PR送信（Windows 11 標準パッケージマネージャー対応）

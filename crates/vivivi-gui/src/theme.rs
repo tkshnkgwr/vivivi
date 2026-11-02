@@ -57,15 +57,15 @@ pub fn apply_theme(ctx: &egui::Context, theme: &Theme) {
     visuals.widgets.open.bg_stroke = Stroke::NONE;
     visuals.window_stroke = Stroke::NONE;
 
-    // 3. 角丸は 4px で統一
-    let corner_4 = CornerRadius::same(4);
-    visuals.widgets.noninteractive.corner_radius = corner_4;
-    visuals.widgets.inactive.corner_radius = corner_4;
-    visuals.widgets.hovered.corner_radius = corner_4;
-    visuals.widgets.active.corner_radius = corner_4;
-    visuals.widgets.open.corner_radius = corner_4;
-    visuals.window_corner_radius = corner_4;
-    visuals.menu_corner_radius = corner_4;
+    // 3. フラットデザイン統一：ボタン・タブ・ウィンドウ角丸は 2.0px
+    let corner_2 = CornerRadius::same(2);
+    visuals.widgets.noninteractive.corner_radius = corner_2;
+    visuals.widgets.inactive.corner_radius = corner_2;
+    visuals.widgets.hovered.corner_radius = corner_2;
+    visuals.widgets.active.corner_radius = corner_2;
+    visuals.widgets.open.corner_radius = corner_2;
+    visuals.window_corner_radius = corner_2;
+    visuals.menu_corner_radius = corner_2;
 
     // 4. ウィジェット背景色
     visuals.widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;

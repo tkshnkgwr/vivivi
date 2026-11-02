@@ -25,20 +25,23 @@ pub fn render_tab_bar(frame: &mut Frame, app: &App, area: Rect) {
         let style = if is_active {
             Style::default()
                 .fg(Color::Black)
-                .bg(Color::Cyan)
+                .bg(app.active_theme.modes.normal.to_ratatui())
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::Gray).bg(Color::Rgb(40, 44, 52))
+            Style::default()
+                .fg(app.active_theme.ui.fg_dimmed.to_ratatui())
+                .bg(app.active_theme.ui.bg_statusline.to_ratatui())
         };
 
         spans.push(Span::styled(label, style));
         spans.push(Span::styled(
             " ",
-            Style::default().bg(Color::Rgb(25, 28, 34)),
+            Style::default().bg(app.active_theme.ui.bg_panel.to_ratatui()),
         ));
     }
 
     let tab_line = Line::from(spans);
-    let bar_widget = Paragraph::new(tab_line).style(Style::default().bg(Color::Rgb(25, 28, 34)));
+    let bar_widget = Paragraph::new(tab_line)
+        .style(Style::default().bg(app.active_theme.ui.bg_panel.to_ratatui()));
     frame.render_widget(bar_widget, area);
 }

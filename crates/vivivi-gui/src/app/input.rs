@@ -1,4 +1,4 @@
-﻿//! `egui` 入力イベント変換・IME Preedit 保護・削除パーティクル生成ディスパッチモジュール。
+//! `egui` 入力イベント変換・IME Preedit 保護・削除パーティクル生成ディスパッチモジュール。
 
 use eframe::egui;
 use egui::{Event, ImeEvent, Key, Modifiers, Pos2};
@@ -124,6 +124,25 @@ impl ViviviGuiApp {
     /// assert_eq!(gui.core.mode(), ViMode::Insert);
     /// ```
     pub fn process_egui_events(&mut self, events: &[Event], current_modifiers: Modifiers) {
+        // 設定ダイアログ表示中は、エディタへのキー入力を完全に遮断（操作不能化＆モーダル保護）
+        if self.settings_dialog.is_open {
+            for event in events {
+                if let Event::Key {
+                    key,
+                    pressed: true,
+                    modifiers,
+                    ..
+                } = event
+                {
+                    // Esc キー または Ctrl+, で設定ダイアログをキャンセルして閉じる
+                    if *key == Key::Escape || (modifiers.ctrl && *key == Key::Comma) {
+                        self.cancel_settings_dialog(None);
+                    }
+                }
+            }
+            return;
+        }
+
         let is_modal_active = self.is_any_modal_open();
 
         for event in events {

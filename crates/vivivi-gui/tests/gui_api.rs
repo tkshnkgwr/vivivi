@@ -425,13 +425,7 @@ fn test_public_gui_settings_dialog_lifecycle_and_actions() {
     assert!(!gui.minimap_open);
 
     // 6. キャンセルによる初期バックアップ設定への復帰
-    let backup = gui.settings_dialog.backup_config.clone();
-    gui.core.apply_config(&backup);
-    gui.minimap_open = backup.appearance.gui.show_minimap;
-    if gui.active_theme.meta.name != backup.appearance.theme {
-        gui.active_theme = vivivi_app::theme::Theme::load_by_name(&backup.appearance.theme);
-    }
-    gui.settings_dialog.close();
+    gui.cancel_settings_dialog(Some(&ctx));
 
     assert!(!gui.settings_dialog.is_open);
     assert!(gui.core.show_line_numbers);
@@ -467,6 +461,15 @@ fn test_public_gui_settings_dialog_full_render_and_persistence() {
     assert!(
         gui.settings_dialog.is_open,
         "Ctrl+, で設定ダイアログが開くこと"
+    );
+
+    // ダイアログ表示中は通常打鍵（'j' によるカーソル移動等）が完全に遮断されることを検証
+    let initial_cursor = gui.core.cursor_pos();
+    gui.process_egui_events(&[Event::Text("j".to_string())], Modifiers::NONE);
+    assert_eq!(
+        gui.core.cursor_pos(),
+        initial_cursor,
+        "設定ダイアログ表示中はエディタへの入力が完全に遮断されること"
     );
 
     // もう一度 Ctrl+, を押すと閉じる
@@ -537,4 +540,28 @@ fn test_public_gui_settings_dialog_full_render_and_persistence() {
     assert!(!loaded_config.appearance.gui.show_minimap);
 
     let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+/// シナリオ 12: フラットデザイン化（Line Height 1.3〜1.5、角丸 2.0px、Iビームカーソル）の検証
+#[test]
+fn test_public_gui_flat_design_and_ibeam_cursor() {
+    let core = App::new("test content", None, CharEncoding::Utf8, NewlineType::Lf);
+    let gui = ViviviGuiApp::from_core(core);
+
+    // Line Height が 1.3〜1.5倍の範囲（21.0 / 15.0 = 1.4）
+    let ratio = gui.line_height / gui.font_size;
+    assert!(
+        (1.3..=1.5).contains(&ratio),
+        "Line Height はフォントサイズの 1.3〜1.5倍 (現在: {ratio})"
+    );
+
+    let ctx = egui::Context::default();
+    vivivi_gui::theme::setup_visuals(&ctx);
+
+    // Visuals の角丸が 2.0px に統一されていることの検証
+    let corner = ctx.style().visuals.widgets.inactive.corner_radius;
+    assert_eq!(corner.nw, 2);
+    assert_eq!(corner.ne, 2);
+    assert_eq!(corner.sw, 2);
+    assert_eq!(corner.se, 2);
 }

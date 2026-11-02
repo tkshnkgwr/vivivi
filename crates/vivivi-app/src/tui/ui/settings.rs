@@ -10,30 +10,48 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use super::clear_modal_area;
 use crate::tui::app::App;
 
-/// 画面中央に指定パーセンテージの矩形領域を計算します。
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::vertical([
-        Constraint::Percentage((100 - percent_y) / 2),
-        Constraint::Percentage(percent_y),
-        Constraint::Percentage((100 - percent_y) / 2),
-    ])
-    .split(r);
+/// 全角文字幅（East Asian Width）を考慮し、指定表示桁数（カラム数）まで空白でパディングします。
+fn pad_display_width(s: &str, target_width: usize) -> String {
+    let current_width = s.width();
+    if current_width >= target_width {
+        format!("{s} ")
+    } else {
+        let padding = " ".repeat(target_width - current_width);
+        format!("{s}{padding}")
+    }
+}
 
-    Layout::horizontal([
-        Constraint::Percentage((100 - percent_x) / 2),
-        Constraint::Percentage(percent_x),
-        Constraint::Percentage((100 - percent_x) / 2),
-    ])
-    .split(popup_layout[1])[1]
+/// 画面サイズに応じて見切れの発生しない最適な中央ポップアップ領域を計算します。
+fn calculate_popup_area(area: Rect) -> Rect {
+    // 画面幅の約 86% を活用（最小 76 カラム、最大 112 カラム）
+    let width = ((area.width as u32 * 86) / 100)
+        .clamp(76, 112)
+        .min(area.width.saturating_sub(2) as u32) as u16;
+
+    // 画面高さの約 82% を活用（最小 18 行、最大 28 行）
+    let height = ((area.height as u32 * 82) / 100)
+        .clamp(18, 28)
+        .min(area.height.saturating_sub(2) as u32) as u16;
+
+    let x = (area.width.saturating_sub(width)) / 2;
+    let y = (area.height.saturating_sub(height)) / 2;
+
+    Rect {
+        x: area.x + x,
+        y: area.y + y,
+        width,
+        height,
+    }
 }
 
 /// TUI 設定ダイアログを描画します。
 pub fn render_settings_modal(frame: &mut Frame, app: &App, area: Rect) {
-    let popup_area = centered_rect(76, 76, area);
+    let popup_area = calculate_popup_area(area);
 
     // 背景を安全にクリア（全角文字の境界重なり防止）
     clear_modal_area(frame, popup_area);
@@ -65,10 +83,11 @@ pub fn render_settings_modal(frame: &mut Frame, app: &App, area: Rect) {
     ])
     .split(inner);
 
-    // 上部を左右 2 カラム（カテゴリ一覧: 24, 詳細項目: 残り幅）に分割
+    // 上部を左右 2 カラム（カテゴリ一覧: 28, 詳細項目: 残り幅）に分割
+    let left_width = 28.min(chunks[0].width.saturating_sub(30));
     let col_chunks = Layout::horizontal([
-        Constraint::Length(24), // 左: カテゴリツリー
-        Constraint::Min(1),     // 右: 詳細設定項目
+        Constraint::Length(left_width), // 左: カテゴリツリー (幅28でカテゴリ名見切れ防止)
+        Constraint::Min(1),             // 右: 詳細設定項目
     ])
     .split(chunks[0]);
 
@@ -82,15 +101,15 @@ pub fn render_settings_modal(frame: &mut Frame, app: &App, area: Rect) {
     render_footer_help(frame, chunks[1]);
 }
 
-/// 左ペイン: 6大カテゴリ一覧
+/// 左ペイン: 6大カテゴリ一覧（数字・アイコン・名前を垂直整列）
 fn render_categories_pane(frame: &mut Frame, app: &App, area: Rect) {
     let categories = [
-        ("⚙", "1. 一般 (General)"),
-        ("🎨", "2. 外観 (Appearance)"),
-        ("👁", "3. 不可視 (Invisibles)"),
-        ("✏", "4. 編集 (Editing)"),
-        ("🚀", "5. ツール (Tools)"),
-        ("⌨", "6. キーマップ (Keymap)"),
+        ("1.", "⚙", "一般 (General)"),
+        ("2.", "☼", "外観 (Appearance)"),
+        ("3.", "👁", "不可視 (Invisibles)"),
+        ("4.", "✏", "編集 (Editing)"),
+        ("5.", "⚒", "ツール (Tools)"),
+        ("6.", "⌨", "キーマップ (Keymap)"),
     ];
 
     let is_focused = !app.tui_settings_in_items;
@@ -98,10 +117,12 @@ fn render_categories_pane(frame: &mut Frame, app: &App, area: Rect) {
     let items: Vec<ListItem> = categories
         .iter()
         .enumerate()
-        .map(|(idx, (icon, name))| {
+        .map(|(idx, (num, icon, name))| {
             let is_selected = idx == app.tui_settings_category;
+            // プレフィックスを正確に2カラム固定（絵文字幅のブレを排除）
             let prefix = if is_selected { "▶ " } else { "  " };
-            let text = format!("{prefix}{icon} {name}");
+            let padded_icon = pad_display_width(icon, 2);
+            let text = format!("{prefix}{num} {padded_icon} {name}");
 
             let style = if is_selected && is_focused {
                 Style::default()
@@ -133,12 +154,17 @@ fn render_categories_pane(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(list, area);
 }
 
-/// 右ペイン: 各カテゴリの詳細項目
+/// 右ペイン: 各カテゴリの詳細項目（ラベル・現在値・説明を垂直整列）
 fn render_items_pane(frame: &mut Frame, app: &App, area: Rect) {
     let is_focused = app.tui_settings_in_items;
     let selected_item = app.tui_settings_item;
 
     let items_data = get_category_items(app, app.tui_settings_category);
+
+    let right_width = area.width as usize;
+    // prefix: 2カラム, label: 30カラム（最長ラベル28幅も確実に吸収）, val: 22カラム, desc: 残り幅
+    let label_target_width = 30;
+    let val_target_width = if right_width >= 72 { 22 } else { 18 };
 
     let list_items: Vec<ListItem> = items_data
         .iter()
@@ -160,16 +186,38 @@ fn render_items_pane(frame: &mut Frame, app: &App, area: Rect) {
                 Style::default().fg(Color::White)
             };
 
+            let padded_label = pad_display_width(label, label_target_width);
+            let padded_val = pad_display_width(val, val_target_width);
+
+            // 残りの利用可能幅に合わせて説明文を表示（枠突き破り防止）
+            let consumed = 2 + label_target_width + val_target_width + 1;
+            let desc_avail = right_width.saturating_sub(consumed);
+            let formatted_desc = if desc_avail > 0 {
+                let mut truncated = String::new();
+                let mut cur_w = 0;
+                for ch in desc.chars() {
+                    let w = UnicodeWidthChar::width(ch).unwrap_or(1);
+                    if cur_w + w > desc_avail {
+                        break;
+                    }
+                    truncated.push(ch);
+                    cur_w += w;
+                }
+                format!(" {truncated}")
+            } else {
+                String::new()
+            };
+
             let line = Line::from(vec![
                 Span::styled(prefix, row_style),
-                Span::styled(format!("{label:<32}"), row_style),
+                Span::styled(padded_label, row_style),
                 Span::styled(
-                    format!("{val:<20}"),
+                    padded_val,
                     Style::default()
                         .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(format!(" {desc}"), Style::default().fg(Color::DarkGray)),
+                Span::styled(formatted_desc, Style::default().fg(Color::DarkGray)),
             ]);
 
             ListItem::new(line)

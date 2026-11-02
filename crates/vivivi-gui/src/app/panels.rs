@@ -229,8 +229,8 @@ impl ViviviGuiApp {
                         Frame::NONE
                             .fill(bg_color)
                             .corner_radius(CornerRadius {
-                                nw: 4,
-                                ne: 4,
+                                nw: 2,
+                                ne: 2,
                                 sw: 0,
                                 se: 0,
                             })
@@ -468,7 +468,7 @@ impl ViviviGuiApp {
 
                             Frame::NONE
                                 .fill(badge_bg)
-                                .corner_radius(CornerRadius::same(3))
+                                .corner_radius(CornerRadius::same(2))
                                 .inner_margin(Margin::symmetric(6, 2))
                                 .show(ui, |ui| {
                                     ui.label(
