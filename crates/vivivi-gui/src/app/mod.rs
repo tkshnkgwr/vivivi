@@ -20,6 +20,7 @@ use vivivi_modes::TokenType;
 use vivivi_vi::ViMode;
 
 use crate::particles::ParticleManager;
+#[cfg(test)]
 use crate::theme::colors;
 
 /// 左サイドバーの表示タブ種別。
@@ -94,6 +95,10 @@ pub struct ViviviGuiApp {
     pub minimap_cache_key: (usize, usize),
     /// 構文ハイライト用行トークンキャッシュ（行テキストハッシュ + 言語 -> トークン列）
     pub syntax_cache: HashMap<u64, Vec<vivivi_modes::SyntaxToken>>,
+    /// ウィンドウ表示状態（座標、サイズ、最大化フラグ）
+    pub window_state: crate::window_state::WindowState,
+    /// 現在適用中のカラーテーマ定義
+    pub active_theme: vivivi_app::theme::Theme,
 }
 
 impl ViviviGuiApp {
@@ -134,6 +139,7 @@ impl ViviviGuiApp {
     pub fn from_core(core: App) -> Self {
         let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         let cached_files = Self::read_directory_entries(&current_dir);
+        let active_theme = vivivi_app::theme::Theme::load_by_name(&core.config.appearance.theme);
 
         Self {
             core,
@@ -155,6 +161,8 @@ impl ViviviGuiApp {
             minimap_cache: Vec::new(),
             minimap_cache_key: (usize::MAX, usize::MAX),
             syntax_cache: HashMap::new(),
+            window_state: crate::window_state::WindowState::default(),
+            active_theme,
         }
     }
 
@@ -173,33 +181,67 @@ impl ViviviGuiApp {
 
     /// 現在のモードに応じたステータスバッジの背景色と文字色を取得します。
     pub(crate) fn mode_badge_color(&self, mode: ViMode) -> (Color32, Color32) {
-        match mode {
-            ViMode::Normal => (colors::ACCENT_BLUE, Color32::from_rgb(16, 20, 36)),
-            ViMode::Insert => (colors::ACCENT_GREEN, Color32::from_rgb(16, 32, 16)),
+        let bg_theme = match mode {
+            ViMode::Normal => self.active_theme.modes.normal,
+            ViMode::Insert => self.active_theme.modes.insert,
             ViMode::Visual | ViMode::VisualLine | ViMode::VisualBlock => {
-                (colors::ACCENT_PURPLE, Color32::from_rgb(26, 16, 36))
+                self.active_theme.modes.visual
             }
-            ViMode::CommandLine => (colors::ACCENT_YELLOW, Color32::from_rgb(36, 28, 12)),
-            ViMode::Replace => (colors::ACCENT_RED, Color32::WHITE),
-        }
+            ViMode::CommandLine => self.active_theme.modes.command,
+            ViMode::Replace => self.active_theme.modes.replace,
+        };
+        let bg = crate::theme::to_color32(bg_theme);
+        let luminance = 0.299 * bg.r() as f32 + 0.587 * bg.g() as f32 + 0.114 * bg.b() as f32;
+        let fg = if luminance > 128.0 {
+            Color32::from_rgb(16, 16, 20)
+        } else {
+            Color32::WHITE
+        };
+        (bg, fg)
     }
 
-    /// シンタックストークン種別に応じた Tokyo Night 文字色を返します。
-    pub(crate) fn syntax_token_color(token_type: TokenType) -> Color32 {
-        match token_type {
-            TokenType::Keyword => colors::ACCENT_PURPLE,
-            TokenType::Type => colors::ACCENT_CYAN,
-            TokenType::StringLiteral => colors::ACCENT_GREEN,
-            TokenType::Number => colors::ACCENT_YELLOW,
-            TokenType::Comment => colors::FG_DIMMED,
-            TokenType::Punctuation => colors::ACCENT_BLUE,
-            TokenType::Text => colors::FG_TEXT,
-        }
+    /// 現在適用中のテーマに応じた構文トークン色を返します。
+    pub(crate) fn syntax_token_color(&self, token_type: TokenType) -> Color32 {
+        let tc = match token_type {
+            TokenType::Keyword => self.active_theme.syntax.keyword,
+            TokenType::Type => self.active_theme.syntax.type_name,
+            TokenType::StringLiteral => self.active_theme.syntax.string,
+            TokenType::Number => self.active_theme.syntax.number,
+            TokenType::Comment => self.active_theme.syntax.comment,
+            TokenType::Punctuation => self.active_theme.syntax.operator,
+            TokenType::Text => self.active_theme.ui.fg_text,
+        };
+        crate::theme::to_color32(tc)
     }
 }
 
 impl eframe::App for ViviviGuiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // 0. ウィンドウ位置・サイズ・最大化状態の追跡
+        let (outer_rect, is_maximized) = ctx.input(|i| {
+            let info = i.viewport();
+            (
+                info.outer_rect.or(info.inner_rect),
+                info.maximized.unwrap_or(false),
+            )
+        });
+
+        if is_maximized {
+            self.window_state.is_maximized = true;
+        } else {
+            self.window_state.is_maximized = false;
+            if let Some(rect) = outer_rect
+                && rect.width() >= crate::window_state::MIN_WINDOW_WIDTH
+                && rect.height() >= crate::window_state::MIN_WINDOW_HEIGHT
+                && rect.min.x.is_finite()
+                && rect.min.y.is_finite()
+            {
+                self.window_state.x = rect.min.x;
+                self.window_state.y = rect.min.y;
+                self.window_state.width = rect.width();
+                self.window_state.height = rect.height();
+            }
+        }
         // 1. トップパネル（メニューバー ＆ マルチタブバー）
         self.render_top_panel(ctx);
 
@@ -225,6 +267,7 @@ impl eframe::App for ViviviGuiApp {
                     "E37: 未保存の変更があります (:w で保存、または :q! で強制終了)".to_string(),
                 );
             } else {
+                let _ = self.window_state.save();
                 self.core.remove_swap_file();
                 self.core.should_quit = true;
             }
@@ -232,6 +275,7 @@ impl eframe::App for ViviviGuiApp {
 
         // 7. :q 等で終了フラグが立った場合は OS ウィンドウを閉じる
         if self.core.should_quit {
+            let _ = self.window_state.save();
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
     }
@@ -260,11 +304,11 @@ mod tests {
         assert_eq!(gui.mode_badge_color(ViMode::Replace).0, colors::ACCENT_RED);
 
         assert_eq!(
-            ViviviGuiApp::syntax_token_color(TokenType::Keyword),
+            gui.syntax_token_color(TokenType::Keyword),
             colors::ACCENT_PURPLE
         );
         assert_eq!(
-            ViviviGuiApp::syntax_token_color(TokenType::StringLiteral),
+            gui.syntax_token_color(TokenType::StringLiteral),
             colors::ACCENT_GREEN
         );
     }

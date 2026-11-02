@@ -321,15 +321,16 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 - [ ] **[egui GUI Roadmap] Aesthetic Maturation & ViVi-Native UX Evolution (Phase 5 Expansion)**
   - *(※Design specs: see [SETTINGS_DESIGN.md](file:///docs/en/SETTINGS_DESIGN.md) & [GUI_DESIGN.md](file:///docs/en/GUI_DESIGN.md))*
   - **Phase 1: Aesthetic & Thematic Foundations (External TOML Themes & High-Contrast Support)**:
-    - [ ] Standalone external theme TOML separation (`%USERPROFILE%\.vivivi\themes\<name>.toml`)
-    - [ ] 6 standard presets implementation & dynamic menu switching (`OpenViVi`, `ViViClassic`, `ViviviDark`, `ViviviLight`, `HighContrastDark`, `HighContrastLight`)
-    - [ ] Startup bootstrap pipeline (auto-deploy `%USERPROFILE%\.vivivi\` and bundled standard themes)
+    - [x] Standalone external theme TOML separation (`%USERPROFILE%\.vivivi\themes\<name>.toml`)
+    - [x] Standard presets implementation & dynamic menu switching (`TokyoNight`, `OpenViVi`, `ViViClassic`, `ViviviDark`, `ViviviLight`)
+    - [x] Startup bootstrap pipeline (auto-deploy `%USERPROFILE%\.vivivi\` and bundled standard themes)
     - [ ] Dynamic I-beam text input cursor switching on central editor canvas hover (`ctx.set_cursor_icon(CursorIcon::Text)`)
     - [ ] Flat modern design tuning: line-height padding (1.3–1.5x), hairline borders (<=1px), unified widget rounding (2.0px)
     - [ ] Reactive-only frame repaint on input/cursor/event to guarantee 0% idle CPU footprint
   - **Phase 2: 6-Category Configuration Infrastructure & Ephemeral Mutation Rules**:
-    - [ ] 6-category `config.toml` persistence schema (`[general]`, `[appearance]`, `[invisibles]`, `[editing]`, `[tools]`, `[keymap]`)
-    - [ ] First-launch auto-generation of annotated Japanese template `config.toml`
+    - [x] **[GUI] Automatic Window State Persistence (`window_state.json`) & Off-Screen Safeguard (Virtual Screen Intersection & Overflow Clamp)**
+    - [x] 6-category `config.toml` persistence schema (`[general]`, `[appearance]`, `[invisibles]`, `[editing]`, `[tools]`, `[keymap]`)
+    - [x] First-launch auto-generation of annotated Japanese template `config.toml`
     - [ ] In-session ephemeral mutation rule for Ex commands (`:set` and `:colorscheme` only mutate memory)
     - [ ] Implementation of **`:mkvivivirc`** (or `:wconfig`) command to dump active in-memory settings to `config.toml`
     - [ ] Implementation of **`:source`** (or `:so`) command for live external reload

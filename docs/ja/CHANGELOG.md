@@ -7,6 +7,23 @@
 ## [0.9.11-beta] - 2026-11-01
 
 ### Fixed / Improved
+- **ミニマップ描画・操作性の完全線形同期＆ドラッグ追従改修 (`canvas.rs`)**:
+  - **後半ズレ・終端欠落の完全解消**: ミニラインサンプリングを整数切り捨てから浮動小数点線形補間へ刷新し、ファイルの先頭から最終行までがミニマップの高さ全体に寸分違わず均等描画されるよう修正。
+  - **ビューポート矩形・スクロール位置の幾何学的完全整合**: スクロール可能域（`max_scroll`）とビューポート可動域（`scrollable_h`）を1:1同期させ、先頭・末尾・途中いずれをクリックしても矩形とテキスト表示が完全一致するよう数学的逆変換を確立。
+  - **マウスクリック＆ドラッグ追従**: ミニマップ上で左マウスボタンを押したままドラッグすることでリアルタイムにテキストが滑らかに高速スクロールする操作性を実現。
+- **外部テーマTOML分離＆内蔵5大テーマ自動展開 (`theme.rs`)**:
+  - `Theme` / `ThemeColor` 構造体を策定し、TrueColor (24bit RGB) に基づく TUI / GUI 共通テーマスキーマを確立。
+  - 内蔵5大プリセットテーマ（*Tokyo Night*, *OpenViVi*, *ViVi Classic*, *vivivi Dark*, *vivivi Light*）をビルトイン配備。
+  - `%USERPROFILE%\.vivivi\themes\<name>.toml` からの動的テーマロードと、GUI メニューバー（「View」→「Color Theme」）からの動的切り替え・即時再描画を実装。
+- **6大カテゴリ対応設定管理＆自動ブートストラップ (`config.rs`)**:
+  - `config_spec.md` に準拠した6大カテゴリ（`general`, `appearance`, `invisibles`, `editing`, `tools`, `keymap`）対応の `AppConfig` 構造体へ刷新。
+  - 初回起動時に `%USERPROFILE%\.vivivi\`、`cache/`、`themes/`、および日本語解説コメント付き `config.toml` テンプレートを自律配備するブートストラップを実装。
+  - 旧形式（`[editor]`, `[gutter]`, `[invisible]`）からの後方互換マッピングを維持。
+- **GUI ウィンドウ状態の永続化とマルチモニター安全ガードの実装 (`window_state.rs`)**:
+  - `WindowState` 構造体を策定し、`%USERPROFILE%\.vivivi\cache\window_state.json` へのウィンドウ座標（X, Y）、サイズ（幅, 高さ）、最大化状態の自動追跡・終了時保存を実装。
+  - Windows API（`GetSystemMetrics` の `SM_XVIRTUALSCREEN`, `SM_CXVIRTUALSCREEN` 等）を用いた仮想画面交差判定（Intersection）を実装。
+  - 外部ディスプレイ切断時や80%以上が画面外へはみ出している場合に安全にプライマリモニター中央へフォールバックする安全ガードを配備。
+  - 最大化中は通常時のウィンドウサイズを保持し、最大化解除時に直前のサイズへ安全に復帰できる状態分離ロジックを確立。
 - **コンパイラ警告・Clippyリント完全解消**:
   - `vivivi-gui`: `canvas.rs` の `Stroke::new` における `float_literal_f32_fallback` 型推論警告を修正（`2.0_f32`）。
   - `vivivi-vi`: `text_object.rs` の固定長チャンク処理を `chunks_exact(2)` から `as_chunks::<2>().0` に更新し、Clippy リント警告をゼロ化。

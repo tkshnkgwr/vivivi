@@ -233,17 +233,17 @@ pub(crate) fn handle_settings_command(app: &mut App, trimmed: &str) -> bool {
         "config" | "set config" | "se config" => {
             let path = crate::config::AppConfig::default_config_path();
             let new_config = crate::config::AppConfig::load_or_default(Some(&path));
-            app.show_line_numbers = new_config.editor.line_number;
-            app.relative_number = new_config.editor.relative_number;
-            app.tab_width = new_config.editor.tab_width;
-            app.wrap = new_config.editor.wrap;
-            app.change_tracker.enabled = new_config.gutter.enabled;
-            app.list_chars_config.enabled = new_config.invisible.enabled;
+            app.show_line_numbers = new_config.appearance.line_number;
+            app.relative_number = new_config.appearance.relative_number;
+            app.tab_width = new_config.editing.tab_width;
+            app.wrap = new_config.appearance.wrap;
+            app.change_tracker.enabled = new_config.appearance.gutter_markers;
+            app.list_chars_config.enabled = new_config.invisibles.enabled;
             app.list_chars_config.zenkaku_space =
-                Box::leak(new_config.invisible.zenkaku_space.clone().into_boxed_str());
-            app.list_chars_config.space = new_config.invisible.space;
-            app.list_chars_config.eol = new_config.invisible.eol;
-            let cb_opt = vivivi_vi::ClipboardOption::parse(&new_config.editor.clipboard);
+                Box::leak(new_config.invisibles.zenkaku_space.clone().into_boxed_str());
+            app.list_chars_config.space = new_config.invisibles.space;
+            app.list_chars_config.eol = new_config.invisibles.eol;
+            let cb_opt = vivivi_vi::ClipboardOption::parse(&new_config.general.clipboard);
             app.vi.set_clipboard_option(cb_opt);
             app.config = new_config;
             app.status_message = Some(format!("設定を再読込しました: {}", path.display()));

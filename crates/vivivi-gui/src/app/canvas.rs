@@ -359,7 +359,7 @@ impl ViviviGuiApp {
                         char_colors_buf.clear();
                         let char_colors = &mut char_colors_buf;
                         for token in tokens {
-                            let c = Self::syntax_token_color(token.token_type);
+                            let c = self.syntax_token_color(token.token_type);
                             for _ in token.text.chars() {
                                 char_colors.push(c);
                             }
@@ -774,26 +774,48 @@ impl ViviviGuiApp {
                     });
                 }
 
-                // --- 右端ミニマップ領域（可視行 Viewport Culling 描画） ---
+                // --- 右端ミニマップ領域（完全幾何学的線形対応 ＆ ドラッグ追従） ---
                 if self.minimap_open {
                     let minimap_rect = Rect::from_min_size(
                         Pos2::new(editor_rect.max.x, available_rect.min.y),
                         Vec2::new(minimap_width, available_rect.height()),
                     );
 
-                    // ミニマップクリックで画面中央へスクロールジャンプ
-                    if let Some(click_pos) = pointer_click_pos
-                        && minimap_rect.contains(click_pos)
+                    let total_lines_mm = self.core.buffer.line_count().max(1);
+                    let visible_rows = (editor_rect.height() / line_height).max(1.0) as usize;
+                    let max_scroll = total_lines_mm.saturating_sub(visible_rows);
+                    let mm_h = minimap_rect.height();
+
+                    // ビューポートハイライト矩形の高さ（画面表示行数と総行数の比率、最小24px）
+                    let vp_height = if total_lines_mm <= visible_rows {
+                        mm_h
+                    } else {
+                        ((visible_rows as f32 / total_lines_mm as f32) * mm_h).clamp(24.0, mm_h)
+                    };
+                    let scrollable_h = (mm_h - vp_height).max(0.0);
+
+                    // ミニマップのマウスクリックおよびドラッグ追従処理
+                    let is_pointer_down = ui.input(|i| i.pointer.primary_down());
+                    let pointer_pos =
+                        ui.input(|i| i.pointer.interact_pos().or(i.pointer.latest_pos()));
+
+                    if is_pointer_down
+                        && let Some(pos) = pointer_pos
+                        && minimap_rect.contains(pos)
+                        && max_scroll > 0
+                        && scrollable_h > 0.0
                     {
-                        let ratio = ((click_pos.y - minimap_rect.top()) / minimap_rect.height())
-                            .clamp(0.0, 1.0);
-                        let total_cnt = self.core.buffer.line_count().max(1);
-                        let target_line =
-                            (ratio * (total_cnt.saturating_sub(1)) as f32).round() as usize;
-                        let visible_rows = (editor_rect.height() / line_height).max(1.0) as usize;
-                        let half_screen = visible_rows / 2;
-                        self.core.scroll.0 = target_line.saturating_sub(half_screen);
-                        self.core.cursor.pos.line = target_line;
+                        // クリック・ドラッグ位置がビューポート矩形の中心になるよう吸着
+                        let target_vp_top = (pos.y - vp_height / 2.0)
+                            .clamp(minimap_rect.top(), minimap_rect.top() + scrollable_h);
+                        let ratio = (target_vp_top - minimap_rect.top()) / scrollable_h;
+                        let new_scroll = (ratio * max_scroll as f32).round() as usize;
+                        self.core.scroll.0 = new_scroll.min(max_scroll);
+
+                        // カーソル位置も可視画面中央へ同期
+                        let center_line =
+                            (new_scroll + visible_rows / 2).min(total_lines_mm.saturating_sub(1));
+                        self.core.cursor.pos.line = center_line;
                         self.core.clamp_cursor();
                     }
 
@@ -804,23 +826,28 @@ impl ViviviGuiApp {
                         Stroke::new(1.0_f32, colors::BG_STATUSLINE),
                     );
 
-                    let total_lines_mm = self.core.buffer.line_count().max(1);
-                    let scroll_row = self.core.scroll.0;
-                    let visible_rows = (editor_rect.height() / line_height).max(1.0) as usize;
-
-                    // 可視範囲周辺のコード構造ミニライン描画（バッファ内容キーによるキャッシュ化）
-                    let max_mm_rows = (minimap_rect.height() / 3.0) as usize;
+                    // ミニライン構造描画（0行目から最終行まで均等にサンプリングして端数の切り捨てを防止）
+                    let max_mm_rows = (mm_h / 3.0).max(1.0) as usize;
                     let current_key = (self.core.buffer.len(), total_lines_mm);
                     if self.minimap_cache_key != current_key
                         || self.minimap_cache.len() != max_mm_rows
                     {
                         self.minimap_cache.clear();
-                        let step = (total_lines_mm / max_mm_rows.max(1)).max(1);
-                        for i in 0..max_mm_rows {
-                            let l_idx = i * step;
-                            if l_idx >= total_lines_mm {
-                                break;
-                            }
+                        let num_samples = if total_lines_mm <= max_mm_rows {
+                            total_lines_mm
+                        } else {
+                            max_mm_rows
+                        };
+
+                        for i in 0..num_samples {
+                            let l_idx = if total_lines_mm <= max_mm_rows {
+                                i
+                            } else {
+                                (i as f32 * (total_lines_mm - 1) as f32
+                                    / (max_mm_rows - 1).max(1) as f32)
+                                    .round() as usize
+                            };
+
                             if let Some(line_str) = self.core.buffer.get_line(l_idx) {
                                 let trimmed = line_str.trim_start();
                                 if !trimmed.is_empty() {
@@ -837,9 +864,16 @@ impl ViviviGuiApp {
                         self.minimap_cache_key = current_key;
                     }
 
+                    let cache_len = self.minimap_cache.len().max(1);
                     for (i, &(indent, len)) in self.minimap_cache.iter().enumerate() {
                         if len > 0.0 {
-                            let y = minimap_rect.top() + (i as f32) * 3.0 + 2.0;
+                            let y = if total_lines_mm <= max_mm_rows {
+                                minimap_rect.top() + (i as f32) * 3.0 + 2.0
+                            } else {
+                                minimap_rect.top()
+                                    + (i as f32 / (cache_len - 1).max(1) as f32) * (mm_h - 4.0)
+                                    + 2.0
+                            };
                             let x1 = minimap_rect.left() + 6.0 + indent * 1.2;
                             let x2 = (x1 + len).min(minimap_rect.right() - 4.0);
                             if x2 > x1 {
@@ -851,13 +885,14 @@ impl ViviviGuiApp {
                         }
                     }
 
-                    // ビューポートハイライト矩形
-                    let norm_start = (scroll_row as f32 / total_lines_mm as f32).clamp(0.0, 1.0);
-                    let norm_len = (visible_rows as f32 / total_lines_mm as f32).clamp(0.05, 1.0);
-
-                    let vp_top = minimap_rect.top() + norm_start * minimap_rect.height();
-                    let vp_height =
-                        (norm_len * minimap_rect.height()).min(minimap_rect.bottom() - vp_top);
+                    // ビューポートハイライト矩形（現在スクロール位置と100%線形同期）
+                    let current_scroll = self.core.scroll.0.min(max_scroll);
+                    let vp_top = if max_scroll == 0 || scrollable_h <= 0.0 {
+                        minimap_rect.top()
+                    } else {
+                        minimap_rect.top()
+                            + (current_scroll as f32 / max_scroll as f32) * scrollable_h
+                    };
 
                     let vp_rect = Rect::from_min_size(
                         Pos2::new(minimap_rect.left() + 2.0, vp_top),

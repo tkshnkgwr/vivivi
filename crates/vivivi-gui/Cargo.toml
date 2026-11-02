@@ -22,3 +22,5 @@ eframe = "0.31"
 egui = "0.31"
 anyhow.workspace = true
 unicode-width.workspace = true
+serde.workspace = true
+serde_json.workspace = true

@@ -216,14 +216,14 @@ impl App {
         let initial_window = EditorWindow::new(0, 0);
 
         let config = crate::config::AppConfig::load_or_default(None);
-        let show_line_numbers = config.editor.line_number;
-        let relative_number = config.editor.relative_number;
-        let tab_width = config.editor.tab_width;
-        let wrap = config.editor.wrap;
+        let show_line_numbers = config.appearance.line_number;
+        let relative_number = config.appearance.relative_number;
+        let tab_width = config.editing.tab_width;
+        let wrap = config.appearance.wrap;
 
         let mut vi = ViEngine::new();
         vi.set_clipboard_provider(crate::tui::clipboard::SystemClipboard::new_shared());
-        let cb_opt = vivivi_vi::ClipboardOption::parse(&config.editor.clipboard);
+        let cb_opt = vivivi_vi::ClipboardOption::parse(&config.general.clipboard);
         vi.set_clipboard_option(cb_opt);
         if let Some(ref path) = file_path {
             vi.current_file_path = path.to_string_lossy().to_string();
@@ -232,7 +232,7 @@ impl App {
         // 変更行ガター追跡の初期化
         let lines: Vec<String> = buffer.all_lines();
         let mut change_tracker = ChangeTracker::new(&lines);
-        change_tracker.enabled = config.gutter.enabled;
+        change_tracker.enabled = config.appearance.gutter_markers;
 
         // 最近使ったファイルとお気に入りの読み込み
         let mut recent_manager = RecentManager::new();
@@ -244,10 +244,10 @@ impl App {
         }
 
         let list_chars_config = ListCharsConfig {
-            enabled: config.invisible.enabled,
-            zenkaku_space: Box::leak(config.invisible.zenkaku_space.clone().into_boxed_str()),
-            space: config.invisible.space,
-            eol: config.invisible.eol,
+            enabled: config.invisibles.enabled,
+            zenkaku_space: Box::leak(config.invisibles.zenkaku_space.clone().into_boxed_str()),
+            space: config.invisibles.space,
+            eol: config.invisibles.eol,
             ..Default::default()
         };
 

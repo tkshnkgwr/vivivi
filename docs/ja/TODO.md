@@ -320,15 +320,16 @@
 - [ ] **【egui GUIロードマップ】 テーマ・外観の確立とViVi固有UXの進化 (Phase 5 拡張)**
   - *(※詳細設計書: [SETTINGS_DESIGN.md](file:///docs/ja/SETTINGS_DESIGN.md) および [GUI_DESIGN.md](file:///docs/ja/GUI_DESIGN.md) 参照)*
   - **Phase 1: テーマ・外観の確立（外部TOMLテーマ化 ＆ ハイコントラスト拡充）**:
-    - [ ] 外部テーマTOMLファイル分離管理（`%USERPROFILE%\.vivivi\themes\<name>.toml`）の実装
-    - [ ] 6種標準テーマの実装・メニュー動的切替（`OpenViVi`、`ViViClassic`、`ViviviDark`、`ViviviLight`、`HighContrastDark`、`HighContrastLight`）
-    - [ ] 初回起動時ブートストラップ処理（`%USERPROFILE%\.vivivi\` および `themes/` 5〜6大テーマの自動展開）
+    - [x] 外部テーマTOMLファイル分離管理（`%USERPROFILE%\.vivivi\themes\<name>.toml`）の実装
+    - [x] 標準テーマの実装・メニュー動的切替（`TokyoNight`, `OpenViVi`, `ViViClassic`, `ViviviDark`, `ViviviLight`）
+    - [x] 初回起動時ブートストラップ処理（`%USERPROFILE%\.vivivi\` および `themes/` 内蔵5大テーマの自動展開）
     - [ ] エディタ中央ペイン領域のマウスホバー連動「Iビーム（テキスト入力）」カーソル変更（`ctx.set_cursor_icon(CursorIcon::Text)`）
     - [ ] フラットデザイン化：行間パディング（Line Height 1.3〜1.5）、境界線1px以下、ボタン・タブ角丸（Rounding 2.0px）統一
     - [ ] 入力・点滅・操作時のみ再描画するリアクティブ描画の徹底（アイドル時CPU 0%維持）
   - **Phase 2: 6大カテゴリ設定基盤 ＆ 一時反映・永続化ルール**:
-    - [ ] 6大カテゴリ対応 `config.toml` 永続化（`[general]`, `[appearance]`, `[invisibles]`, `[editing]`, `[tools]`, `[keymap]`）
-    - [ ] 初回起動時の日本語コメント解説付き `config.toml` テンプレート自動生成
+    - [x] **【GUI】 ウィンドウ位置・サイズ・最大化の自動永続化 (`window_state.json`) ＆ 画面外脱出ガード (仮想画面判定・はみ出し自動補正)**
+    - [x] 6大カテゴリ対応 `config.toml` 永続化（`[general]`, `[appearance]`, `[invisibles]`, `[editing]`, `[tools]`, `[keymap]`）
+    - [x] 初回起動時の日本語コメント解説付き `config.toml` テンプレート自動生成
     - [ ] コマンドライン（Ex）設定の一時反映（セッション限定）原則の実装（`:set` や `:colorscheme` はメモリのみ変更）
     - [ ] 現在設定のワンタッチ永続化コマンド **`:mkvivivirc`**（または `:wconfig`）の実装
     - [ ] 外部設定再読込コマンド **`:source`**（または `:so`）の実装

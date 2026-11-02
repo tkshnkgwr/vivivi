@@ -44,13 +44,28 @@ fn main() -> eframe::Result {
 
     let core_app = App::new(&initial_text, file_path_opt, encoding, newline);
 
+    // ウィンドウ表示状態を読み込み、マルチモニタ切断等の画面外脱出安全ガードを適用
+    let window_state = vivivi_gui::WindowState::load_and_validate();
+
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_inner_size([window_state.width, window_state.height])
+        .with_min_inner_size([
+            vivivi_gui::window_state::MIN_WINDOW_WIDTH,
+            vivivi_gui::window_state::MIN_WINDOW_HEIGHT,
+        ])
+        .with_active(true)
+        .with_drag_and_drop(true)
+        .with_title("vivivi");
+
+    if window_state.custom_position {
+        viewport = viewport.with_position([window_state.x, window_state.y]);
+    }
+    if window_state.is_maximized {
+        viewport = viewport.with_maximized(true);
+    }
+
     let native_options = NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1024.0, 768.0])
-            .with_min_inner_size([640.0, 480.0])
-            .with_active(true)
-            .with_drag_and_drop(true)
-            .with_title("vivivi"),
+        viewport,
         vsync: true,
         ..Default::default()
     };
@@ -58,12 +73,16 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "vivivi",
         native_options,
-        Box::new(|cc| {
-            // ステップ 1: スタイルとフォントの初期化
-            theme::setup_visuals(&cc.egui_ctx);
+        Box::new(move |cc| {
+            // スタイルとフォントの初期化
+            let theme = vivivi_app::theme::Theme::load_by_name(&core_app.config.appearance.theme);
+            theme::apply_theme(&cc.egui_ctx, &theme);
             fonts::setup_fonts(&cc.egui_ctx);
 
-            Ok(Box::new(ViviviGuiApp::new(core_app, cc)))
+            let mut app = ViviviGuiApp::new(core_app, cc);
+            app.active_theme = theme;
+            app.window_state = window_state;
+            Ok(Box::new(app))
         }),
     )
 }

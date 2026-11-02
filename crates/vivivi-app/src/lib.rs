@@ -5,11 +5,13 @@
 //! 設定管理、および ex コマンドエンジンを提供します。
 
 pub mod config;
+pub mod theme;
 pub mod tui;
 pub mod types;
 
 // 主要な共通型およびイベントディスパッチャをトップレベルに再エクスポート
 pub use config::EditorConfig;
+pub use theme::{Theme, ThemeColor};
 pub use tui::app::App;
 pub use tui::event::{execute_ex_command, handle_key_event, play_macro};
 pub use tui::tab::TabPage;

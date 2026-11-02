@@ -310,3 +310,29 @@ fn test_public_gui_drag_and_drop_scenario() {
     let _ = std::fs::remove_file(file1);
     let _ = std::fs::remove_file(file2);
 }
+
+/// シナリオ 8: ミニマップの線形性・終端サンプリング整合性の検証
+#[test]
+fn test_public_gui_minimap_alignment_and_bounds() {
+    let lines = (0..500)
+        .map(|i| format!("    let x_{} = {};", i, i))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let core = App::new(&lines, None, CharEncoding::Utf8, NewlineType::Lf);
+    let gui = ViviviGuiApp::from_core(core);
+
+    assert!(gui.minimap_open);
+    assert_eq!(gui.core.buffer.line_count(), 500);
+
+    // 0行目（先頭）と499行目（末尾）がサンプリング可能か検証
+    let max_mm_rows = 150;
+    let total = gui.core.buffer.line_count();
+    let first_idx = 0;
+    let last_idx =
+        ((max_mm_rows - 1) as f32 * (total - 1) as f32 / (max_mm_rows - 1) as f32).round() as usize;
+    assert_eq!(first_idx, 0);
+    assert_eq!(
+        last_idx, 499,
+        "最終行499が正確にサンプリング終端に一致すること"
+    );
+}

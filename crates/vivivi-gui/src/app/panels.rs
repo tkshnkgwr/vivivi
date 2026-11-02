@@ -1,4 +1,4 @@
-//! メニューバー・マルチタブバー・左サイドバー・下部ステータスバー＆コマンドライン描画モジュール。
+﻿//! メニューバー・マルチタブバー・左サイドバー・下部ステータスバー＆コマンドライン描画モジュール。
 
 use eframe::egui;
 use egui::{Color32, CornerRadius, Frame, Margin, Sense, Vec2};
@@ -106,6 +106,24 @@ impl ViviviGuiApp {
                         {
                             ui.close_menu();
                         }
+
+                        ui.separator();
+                        ui.menu_button("Color Theme", |ui| {
+                            let available = vivivi_app::theme::Theme::list_available_themes();
+                            let current_name = self.active_theme.meta.name.to_lowercase();
+                            for theme_name in available {
+                                let is_active =
+                                    current_name.contains(&theme_name.replace('-', " "));
+                                if ui.selectable_label(is_active, &theme_name).clicked() {
+                                    self.active_theme =
+                                        vivivi_app::theme::Theme::load_by_name(&theme_name);
+                                    crate::theme::apply_theme(ui.ctx(), &self.active_theme);
+                                    self.core.config.appearance.theme = theme_name;
+                                    self.syntax_cache.clear();
+                                    ui.close_menu();
+                                }
+                            }
+                        });
                     });
 
                     ui.menu_button("Window", |ui| {
