@@ -565,3 +565,69 @@ fn test_public_gui_flat_design_and_ibeam_cursor() {
     assert_eq!(corner.sw, 2);
     assert_eq!(corner.se, 2);
 }
+
+/// シナリオ 13: 非同期ツリートグル・耐障害スキャンとプロジェクト可視化グラフの検証
+#[test]
+fn test_public_gui_async_tree_and_visualize_graph_scenario() {
+    let core = App::new("fn main() {}", None, CharEncoding::Utf8, NewlineType::Lf);
+    let mut gui = ViviviGuiApp::from_core(core);
+
+    // 1. Ctrl+E キーによるサイドバー開閉トグル
+    assert!(gui.sidebar_open);
+    gui.process_egui_events(
+        &[Event::Key {
+            key: Key::E,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::CTRL,
+        }],
+        Modifiers::CTRL,
+    );
+    assert!(!gui.sidebar_open, "Ctrl+E でサイドバーが閉じること");
+
+    gui.process_egui_events(
+        &[Event::Key {
+            key: Key::E,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::CTRL,
+        }],
+        Modifiers::CTRL,
+    );
+    assert!(gui.sidebar_open, "再度 Ctrl+E でサイドバーが開くこと");
+
+    // 2. Exコマンド (:tree, :Explore) によるトグル要求
+    gui.core.execute_ex("tree");
+    assert!(gui.core.toggle_tree_request);
+
+    // 3. 非同期ツリーのスキャンとポーリング
+    let start = std::time::Instant::now();
+    while gui.async_tree.is_scanning() && start.elapsed() < std::time::Duration::from_secs(3) {
+        gui.async_tree.poll();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert_eq!(gui.async_tree.status, vivivi_gui::ScanStatus::Ready);
+    assert!(!gui.async_tree.entries.is_empty());
+
+    // 4. プロジェクト可視化グラフ (:graph, :visualize)
+    assert!(!gui.core.show_visualize_graph);
+    gui.core.execute_ex("graph");
+    assert!(
+        gui.core.show_visualize_graph,
+        ":graph で可視化フラグが立つこと"
+    );
+
+    let mut graph = vivivi_gui::ForceGraph::build_from_dir(&gui.current_dir);
+    assert!(!graph.nodes.is_empty(), "ノードが生成されていること");
+    let is_moving = graph.update_physics(0.016);
+    assert!(is_moving, "初期配置で物理運動が発生すること");
+
+    // 再度 :visualize でトグル
+    gui.core.execute_ex("visualize");
+    assert!(
+        !gui.core.show_visualize_graph,
+        ":visualize でフラグがトグルして閉じること"
+    );
+}

@@ -17,12 +17,15 @@ pub mod app;
 pub mod fonts;
 pub mod particles;
 pub mod theme;
+pub mod visualize;
 pub mod window_state;
 
 pub use app::{
-    SettingsCategory, SettingsDialogState, SidebarTab, ViviviGuiApp, egui_key_to_app_key,
+    AsyncFileTree, FileEntryNode, ScanStatus, SettingsCategory, SettingsDialogState, SidebarTab,
+    ViviviGuiApp, egui_key_to_app_key,
 };
 pub use fonts::setup_fonts;
 pub use particles::{Particle, ParticleManager, extract_deleted_line_segment};
 pub use theme::{apply_theme, colors, setup_visuals, to_color32};
+pub use visualize::ForceGraph;
 pub use window_state::WindowState;

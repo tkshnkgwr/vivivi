@@ -131,6 +131,11 @@ pub struct App {
     pub show_filer: bool,
     pub filer: Option<vivivi_modes::TwoPaneFiler>,
 
+    /// サイドバー・ファイルツリーの表示トグル要求フラグ (:tree, :explore)
+    pub toggle_tree_request: bool,
+    /// プロジェクト可視化グラフ (Visualize / ViVi 4) の表示フラグ (:visualize, :graph)
+    pub show_visualize_graph: bool,
+
     // --- 変更行ガター追跡 (Change Markers) ---
     pub change_tracker: ChangeTracker,
 
@@ -375,6 +380,8 @@ impl App {
 
             show_filer: false,
             filer: None,
+            toggle_tree_request: false,
+            show_visualize_graph: false,
 
             change_tracker,
             recent_manager,

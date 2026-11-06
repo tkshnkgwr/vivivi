@@ -72,13 +72,13 @@
 | OS Integration     | System Clipboard Integration ("+y, "*p)       | Common (ViVi / OpenViVi) | Bidirectional transparent sync with OS clipboard registers              |  Implemented (Phase 4.8) |
 | Languages & Syntax | Syntax Highlighting Expansion (Go, Ruby, etc) | Common (ViVi / OpenViVi) | Syntax highlighting for Go, Ruby, TOML, PowerShell, YAML, XML, BAT      |  Implemented (Phase 4.8) |
 | UI/UX Visual       | Minimap Overview                              |         OpenViVi         | Bird's-eye code preview with viewport and search highlights             | Implemented (vivivi-gui) |
-| UI/UX Visual       | Sidebar File Explorer (File Tree)             |     ViVi 4 / Modern      | Hierarchical tree, async lazy loading, cloud/NAS-safe design            |  Basic Impl (vivivi-gui) |
+| UI/UX Visual       | Sidebar File Explorer (File Tree)             |     ViVi 4 / Modern      | Hierarchical tree, async lazy loading, cloud/NAS-safe design            | Implemented (vivivi-gui) |
 | UI/UX Visual       | Gravity Drop Deletion Animation               |         OpenViVi         | Playful physical falling character animation upon deletion              | Implemented (vivivi-gui) |
 | UI/UX Visual       | Desktop GUI (egui / eframe)                   |  OpenViVi (Qt rewrite)   | Modern GUI frontend with rich borders and custom fonts                  | Implemented (vivivi-gui) |
 | Future             | Tree-sitter Syntax Engine Integration         |     Modern Extension     | Accurate AST-based syntax highlighting and AST node selection           |        Planned (Phase 5) |
 | Future             | Binary / Hex Editor Mode                      |     ViVi 3 / ViVi 4      | Hex dump + ASCII parallel view and byte-level editing                   |        Planned (Phase 5) |
 | Future             | Scripting Engine (Modern ViViScript)          |     ViVi 3 / ViVi 4      | Editor automation via Rhai / Lua integration                            |        Planned (Phase 6) |
-| Future             | Project Visualizer Graph (Visualize)          |          ViVi 4          | 2D force-directed graph of file sizes, dependencies & freshness         |        Planned (Phase 5) |
+| Future             | Project Visualizer Graph (Visualize)          |          ViVi 4          | 2D force-directed graph of file sizes, dependencies & freshness         | Implemented (vivivi-gui) |
 | Distribution       | Update Check, Notify & Auto-Update Prep       |     Modern Extension     | GitHub Releases integration, version notification UI & self-update      |        Planned (Phase 5) |
 
 ---
@@ -350,12 +350,12 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - High-level bird's-eye code overview displaying viewport rectangle, click-to-scroll jump, and Viewport Culling (`vivivi-gui`).
 - [x] **[OpenViVi] Gravity Drop Character Deletion Animation (egui-backed)**
   - Playful physical falling character animation upon deletions (`vivivi-gui::particles`).
-- [ ] **[ViVi 4 / Modern Extension] Sidebar File Explorer Async Cloud-Resilient Enhancements**
+- [x] **[ViVi 4 / Modern Extension] Sidebar File Explorer Async Cloud-Resilient Enhancements**
   - Basic left-pane directory listing, parent `..` traversal, and click-to-open are implemented in `vivivi-gui`.
   - Future enhancements: keyboard-driven tree navigation (`:tree` / `Ctrl-e`) and **async on-demand lazy loading with I/O timeouts** for network drives & cloud storage (Box/OneDrive).
 - [ ] **[ViVi 3 / ViVi 4] Binary / Hex Editor Mode**
   - Hex dump + ASCII parallel view and byte-level editing.
-- [ ] **[ViVi 4] Project Visualizer Graph (Visualize / Force-Directed Graph)**
+- [x] **[ViVi 4] Project Visualizer Graph (Visualize / Force-Directed Graph)**
   - 2D force-directed layout graph visualizing file sizes, include dependencies, and edit freshness.
 - [ ] **[Original]** Gigabyte file (1GB+) handling via Piece Tree & Memory-Mapped Files (`memmap2`).
 - [ ] **[Modern Extension] Tree-sitter Syntax Engine Integration**

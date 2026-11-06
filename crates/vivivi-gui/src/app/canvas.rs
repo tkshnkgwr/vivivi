@@ -38,6 +38,23 @@ impl ViviviGuiApp {
             .frame(Frame::NONE.fill(colors::BG_EDITOR))
             .show(ctx, |ui| {
                 let available_rect = ui.available_rect_before_wrap();
+
+                // プロジェクト可視化グラフ (Visualize / ViVi 4) の描画
+                if let Some(ref mut graph) = self.visualize_graph {
+                    let file_to_open = graph.ui(ui, available_rect);
+                    if let Some(path) = file_to_open {
+                        if let Err(e) = self.core.open_file(path) {
+                            self.core.status_message = Some(format!("ファイル読込エラー: {e}"));
+                        }
+                        self.visualize_graph = None;
+                        self.core.show_visualize_graph = false;
+                    }
+                    if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                        self.visualize_graph = None;
+                        self.core.show_visualize_graph = false;
+                    }
+                    return;
+                }
                 let minimap_width = if self.minimap_open {
                     self.minimap_width
                 } else {

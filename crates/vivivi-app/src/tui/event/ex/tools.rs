@@ -577,6 +577,25 @@ pub(crate) fn handle_tools_command(app: &mut App, trimmed: &str) -> bool {
             true
         }
 
+        // --- サイドバー / ファイルツリー (:tree, :Explore) ---
+        "tree" | "Explore" => {
+            app.toggle_tree_request = true;
+            app.status_message = Some("ファイルツリーの表示をトグルしました".to_string());
+            true
+        }
+
+        // --- プロジェクト可視化グラフ (:visualize, :graph) ---
+        "visualize" | "graph" => {
+            app.show_visualize_graph = !app.show_visualize_graph;
+            let status = if app.show_visualize_graph {
+                "プロジェクト可視化グラフを開きました (Esc でエディタに戻る)"
+            } else {
+                "プロジェクト可視化グラフを閉じました"
+            };
+            app.status_message = Some(status.to_string());
+            true
+        }
+
         _ => false,
     }
 }

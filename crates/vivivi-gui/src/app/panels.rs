@@ -1,4 +1,4 @@
-﻿//! メニューバー・マルチタブバー・左サイドバー・下部ステータスバー＆コマンドライン描画モジュール。
+//! メニューバー・マルチタブバー・左サイドバー・下部ステータスバー＆コマンドライン描画モジュール。
 
 use eframe::egui;
 use egui::{Color32, CornerRadius, Frame, Margin, Sense, Vec2};
@@ -78,9 +78,17 @@ impl ViviviGuiApp {
                     });
 
                     ui.menu_button("View", |ui| {
-                        if ui.checkbox(&mut self.sidebar_open, "Sidebar").clicked() {
+                        if ui
+                            .checkbox(&mut self.sidebar_open, "Sidebar (Ctrl+e / :tree)")
+                            .clicked()
+                        {
                             ui.close_menu();
                         }
+                        if ui.button("🌐 Visualize (Project Graph) (:graph)").clicked() {
+                            self.core.show_visualize_graph = !self.core.show_visualize_graph;
+                            ui.close_menu();
+                        }
+                        ui.separator();
                         if ui.checkbox(&mut self.minimap_open, "Minimap").clicked() {
                             self.core.config.appearance.gui.show_minimap = self.minimap_open;
                             ui.close_menu();
@@ -371,27 +379,103 @@ impl ViviviGuiApp {
                             }
                         }
 
-                        for path in &self.cached_files {
-                            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("?");
-                            let is_dir = path.is_dir();
-                            let icon = if is_dir { "📁" } else { "📄" };
-                            let label_text = format!("  {} {}", icon, name);
+                        // 非同期走査ステータスに応じた耐障害表示
+                        match &self.async_tree.status {
+                            crate::app::async_tree::ScanStatus::Scanning { .. } => {
+                                ui.horizontal(|ui| {
+                                    ui.spinner();
+                                    ui.label(
+                                        egui::RichText::new("読み込み中...")
+                                            .color(colors::ACCENT_BLUE)
+                                            .size(11.0),
+                                    );
+                                });
+                                ui.add_space(2.0);
+                            }
+                            crate::app::async_tree::ScanStatus::Timeout => {
+                                ui.label(
+                                    egui::RichText::new("⚠️ 読込タイムアウト (2.0s)")
+                                        .color(colors::ACCENT_YELLOW)
+                                        .size(11.0),
+                                );
+                                ui.label(
+                                    egui::RichText::new("クラウド/SMB共有が遅延しています")
+                                        .color(colors::FG_DIMMED)
+                                        .size(10.0),
+                                );
+                                if ui.button("🔄 再試行").clicked() {
+                                    self.async_tree.request_scan(self.current_dir.clone());
+                                }
+                                ui.add_space(4.0);
+                            }
+                            crate::app::async_tree::ScanStatus::Error(err) => {
+                                ui.label(
+                                    egui::RichText::new(format!("⚠️ {err}"))
+                                        .color(colors::ACCENT_RED)
+                                        .size(11.0),
+                                );
+                                if ui.button("🔄 再試行").clicked() {
+                                    self.async_tree.request_scan(self.current_dir.clone());
+                                }
+                                ui.add_space(4.0);
+                            }
+                            _ => {}
+                        }
 
-                            let label = ui
-                                .add(
-                                    egui::Label::new(
-                                        egui::RichText::new(label_text).color(colors::FG_TEXT),
-                                    )
-                                    .selectable(false)
-                                    .sense(Sense::click()),
-                                )
-                                .on_hover_cursor(egui::CursorIcon::PointingHand);
-
-                            if label.double_clicked() || (is_dir && label.clicked()) {
-                                if is_dir {
-                                    dir_to_navigate = Some(path.clone());
+                        if !self.async_tree.entries.is_empty() {
+                            for entry in &self.async_tree.entries {
+                                let icon = if entry.is_dir {
+                                    "📁"
+                                } else if entry.is_cloud_placeholder {
+                                    "☁"
+                                } else if entry.is_symlink {
+                                    "🔗"
                                 } else {
-                                    file_to_open = Some(path.clone());
+                                    "📄"
+                                };
+
+                                let label_text = format!("  {} {}", icon, entry.name);
+                                let label = ui
+                                    .add(
+                                        egui::Label::new(
+                                            egui::RichText::new(label_text).color(colors::FG_TEXT),
+                                        )
+                                        .selectable(false)
+                                        .sense(Sense::click()),
+                                    )
+                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+
+                                if label.double_clicked() || (entry.is_dir && label.clicked()) {
+                                    if entry.is_dir {
+                                        dir_to_navigate = Some(entry.path.clone());
+                                    } else {
+                                        file_to_open = Some(entry.path.clone());
+                                    }
+                                }
+                            }
+                        } else {
+                            for path in &self.cached_files {
+                                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("?");
+                                let is_dir = path.is_dir();
+                                let icon = if is_dir { "📁" } else { "📄" };
+                                let label_text = format!("  {} {}", icon, name);
+
+                                let label = ui
+                                    .add(
+                                        egui::Label::new(
+                                            egui::RichText::new(label_text).color(colors::FG_TEXT),
+                                        )
+                                        .selectable(false)
+                                        .sense(Sense::click()),
+                                    )
+                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+
+                                if label.double_clicked() || (is_dir && label.clicked()) {
+                                    if is_dir {
+                                        dir_to_navigate = Some(path.clone());
+                                    } else {
+                                        file_to_open = Some(path.clone());
+                                    }
                                 }
                             }
                         }

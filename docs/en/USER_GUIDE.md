@@ -363,8 +363,12 @@ cargo run -p vivivi-gui -- path/to/file.rs
   - Access common operations via `File`, `Edit`, `View`, `Mode`, `Tools`, and `Help` menus (Save, Split/Vsplit, Character Conversions, Keisen Mode, CSV Mode, ToDo Extraction, PDF Export, Help viewer).
   - Click any tab in the tab bar to switch buffers, or click `+` to open a new tab page (`:tabnew`).
 - **Collapsible Left Sidebar (`Files` / `Outline`)**:
-  - `📁 Files` tab: Browse directory contents. Click `📁 .. (Parent Directory)` to move up a directory, click subdirectories to navigate into them, or click any file to open it in the active editor window.
+  - `📁 Files` tab: Browse directory contents. Background asynchronous loading ensures that cloud folders (OneDrive, Dropbox) or network shares never freeze the GUI. Click `📁 ..` to move up, or click any file to open it immediately. Toggle sidebar via `Ctrl+e` or Ex commands `:tree`, `:explore`.
   - `🌲 Outline` tab: Displays extracted Markdown headings and code symbols (`fn`, `struct`, `impl`, etc.); click any symbol to jump directly to its line.
+- **Project Visualizer Graph (`Visualize` / `:visualize`, `:graph`)**:
+  - Activating View -> `Visualize (Project Graph)` or running `:visualize`, `:graph` switches the central editor canvas into an interactive 2D Force-Directed Graph.
+  - Project files appear as nodes with radius reflecting file size and glow intensity encoding edit freshness. Dependency edges (`use`, `mod`, `#include`) pull related files together via simulated spring forces.
+  - Nodes can be freely dragged; clicking any node opens the target file in the editor and returns to code view.
 - **Central Split Editor Canvas & Right Minimap**:
   - Renders nested `:split` and `:vsplit` windows. Clicking inside any split pane switches active window focus and positions the cursor at the clicked cell.
   - Clicking anywhere on the right-side Minimap jumps the viewport scroll directly to that proportional position in the document.

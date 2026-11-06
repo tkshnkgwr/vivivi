@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [0.9.14-beta] - 2026-11-06
+
+### Added / Improved
+- **Sidebar File Explorer Async Cloud Resilience (`async_tree.rs`, ViVi 4 / Modern Extension)**:
+  - **Worker Thread Async Directory Scanning**: Leveraged `std::thread::Builder` and `std::sync::mpsc` channels to ensure zero GUI thread blocking even during high-latency OneDrive / SMB network I/O.
+  - **2.0s Timeout Monitoring & Resilient UI**: Automatically transitions to `Timeout` state upon delays, presenting spinners, warning badges, retry buttons, and parent directory navigation.
+  - **Safe Windows Reparse Point / Cloud-on-Demand Detection**: Utilizes `symlink_metadata` to identify cloud placeholder files (☁ icon) without triggering forced downloads.
+  - **Keybindings & Ex Commands**: Added `Ctrl+e` toggle shortcut and `:tree`, `:Explore` Ex commands.
+- **Project Visualizer Force-Directed Graph (`visualize.rs`, ViVi 4 Parity)**:
+  - **2D Force-Directed Simulation**: Implemented Coulomb repulsion, Hooke spring attraction, central gravity, and velocity damping (0.85).
+  - **Visual Attribute Encoding**: Encodes logarithmic file size radius (14px–36px), modification freshness glow (cyan for <1h, gold for <24h, blue for <1w), and extension-based border colors.
+  - **Power-Saving Hybrid Control**: Puts physics calculation to sleep upon kinetic energy convergence, maintaining 0% idle CPU usage.
+  - **Interaction & One-Click Open**: Supports node dragging/pinning, canvas pan/zoom, and one-click file open to immediately transition back to editor mode.
+  - **Command & Menu Integration**: Added `:visualize`, `:graph` Ex commands and "View" -> "Visualize (Project Graph)" menu option.
+
+---
+
 ## [0.9.13-beta] - 2026-11-06
 
 ### Added / Improved

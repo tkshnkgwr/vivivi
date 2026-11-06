@@ -275,6 +275,12 @@ impl ViviviGuiApp {
                         continue;
                     }
 
+                    // Ctrl+E (サイドバー・ファイルエクスプローラーの表示トグル)
+                    if modifiers.ctrl && *key == Key::E {
+                        self.sidebar_open = !self.sidebar_open;
+                        continue;
+                    }
+
                     if let Some(app_key) = egui_key_to_app_key(*key, *modifiers) {
                         if is_modal_active {
                             if app_key.code == KeyCode::Esc {

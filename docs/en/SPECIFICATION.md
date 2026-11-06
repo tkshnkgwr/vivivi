@@ -661,3 +661,47 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
   - `:set trim` or `:set trim_on_save`: Enables automated trimming on buffer write.
   - `:set notrim` or `:set notrim_on_save`: Disables automated trimming on buffer write.
 - **Write Integration**: Executing `:w` automatically trims the buffer prior to serialization if `trim_on_save` is enabled, recording the edit in undo history and saving clean text.
+
+---
+
+## 18. Asynchronous Cloud-Resilient Sidebar File Explorer Specification (`async_tree.rs`, ViVi 4 / Modern Extension)
+
+### 18.1 Cloud Sync & Network Drive Fault Tolerance
+- **100% Non-Blocking Main UI Thread**:
+  Scanning directories across OneDrive, Dropbox, Google Drive, Box, or enterprise SMB/NFS/WebDAV shares offloads `std::fs::read_dir` to background worker threads over `mpsc` channels, preventing main UI thread locks.
+- **I/O Timeout & Graceful Degradation**:
+  Employs a 2.0s I/O timeout threshold to avoid application freezing. In the event of network disruption or permission denials, renders clean error indicators with quick parent-directory recovery.
+- **On-Demand Lazy Loading**:
+  Subdirectories are queried asynchronously only upon user expansion, drastically minimizing latency and network traffic.
+- **Reparse Point / Cloud Placeholder Protection**:
+  Inspects `symlink_metadata` and Windows reparse attributes (`FILE_ATTRIBUTE_REPARSE_POINT`) to avoid triggering unintentional bulk hydration of online-only files.
+
+### 18.2 Keyboard & Command Integration
+- **Sidebar Toggle**:
+  - Ex commands `:tree`, `:explore`, `:Explore` or `Ctrl+e` shortcut toggle sidebar visibility seamlessly in both GUI and TUI.
+
+---
+
+## 19. Project Visualizer Graph Specification (`visualize.rs`, ViVi 4 Parity)
+
+### 19.1 Force-Directed Physics Simulation
+- **Overview**:
+  Parses project source files (nodes) and dependency relationships (edges: `use crate::...`, `mod ...;`, `#include`, Markdown links), simulating their spatial layout using a 2D physics model on `CentralPanel`.
+- **Force Equations**:
+  - **Coulomb Repulsion**: Applies inverse-square repulsion $F_{\text{rep}} = k_{\text{rep}} / d^2$ across all node pairs to prevent overlap.
+  - **Hooke Attraction (Springs)**: Applies spring attraction $F_{\text{att}} = k_{\text{spring}} \times (d - d_0)$ along dependency edges.
+  - **Center Gravity & Damping**: Gentle centripetal pull keeps the graph centered, while velocity damping (0.85) ensures stable convergence.
+- **0% Idle CPU Hybrid Loop**:
+  Automatically puts physics calculations to sleep and halts `ctx.request_repaint()` once total kinetic energy drops below the convergence threshold.
+
+### 19.2 Visual Encoding & Interactivity
+- **Node Size (Radius)**: Logarithmic scaling based on file size in bytes (14px to 36px).
+- **Node Color**:
+  - Edit freshness: Recently modified files glow in high-contrast accent colors (Tokyo Night Cyan / Gold).
+  - File extension border encoding (`.rs`, `.c`, `.cpp`, `.h`, `.md`, `.toml`).
+- **Interactions**:
+  - **Node Dragging**: Dragging a node pins its position dynamically, with neighboring nodes reacting in real-time.
+  - **One-Click Jump**: Clicking a node immediately opens the file in a new editor tab and returns to the code view.
+  - **Zoom & Pan**: Smooth mouse wheel zooming and right-click canvas panning.
+- **Commands**:
+  - Toggled via `:visualize`, `:graph`, or menu bar View → Visualize (Project Graph).

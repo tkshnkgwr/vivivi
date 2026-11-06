@@ -3695,7 +3695,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vivivi-app"
-version = "0.9.13-beta"
+version = "0.9.14-beta"
 dependencies = [
  "anyhow",
  "arboard",
@@ -3712,7 +3712,7 @@ dependencies = [
 
 [[package]]
 name = "vivivi-core"
-version = "0.9.13-beta"
+version = "0.9.14-beta"
 dependencies = [
  "criterion",
  "encoding_rs",
@@ -3723,7 +3723,7 @@ dependencies = [
 
 [[package]]
 name = "vivivi-gui"
-version = "0.9.13-beta"
+version = "0.9.14-beta"
 dependencies = [
  "anyhow",
  "eframe",
@@ -3739,7 +3739,7 @@ dependencies = [
 
 [[package]]
 name = "vivivi-modes"
-version = "0.9.13-beta"
+version = "0.9.14-beta"
 dependencies = [
  "criterion",
  "regex",
@@ -3750,7 +3750,7 @@ dependencies = [
 
 [[package]]
 name = "vivivi-vi"
-version = "0.9.13-beta"
+version = "0.9.14-beta"
 dependencies = [
  "regex",
  "thiserror 2.0.21",

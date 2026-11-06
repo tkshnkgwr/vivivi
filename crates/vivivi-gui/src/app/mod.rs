@@ -1,15 +1,17 @@
-﻿//! エディタ画面骨格レイアウト ＆ 共通 App コア接続・日本語 IME 統合モジュール（ステップ 2, 3, 4）。
+//! エディタ画面骨格レイアウト ＆ 共通 App コア接続・日本語 IME 統合モジュール（ステップ 2, 3, 4）。
 //!
 //! `eframe::App` のライフサイクル内で、Tokyo Night を基調としたレイアウトを構築し、
 //! `egui` 標準の `TextEdit` を一切使用せず、`ui.painter()` による等幅グリッド描画、
 //! OS ネイティブの日本語 IME インライン入力・座標通知、および削除文字落下アニメーションを実現します。
 
+pub mod async_tree;
 mod canvas;
 mod input;
 mod modals;
 mod panels;
 mod settings_dialog;
 
+pub use async_tree::{AsyncFileTree, FileEntryNode, ScanStatus};
 pub use settings_dialog::{SettingsCategory, SettingsDialogState};
 
 pub use input::egui_key_to_app_key;
@@ -104,6 +106,10 @@ pub struct ViviviGuiApp {
     pub active_theme: vivivi_app::theme::Theme,
     /// 左右2ペイン設定ダイアログ状態
     pub settings_dialog: SettingsDialogState,
+    /// 非同期クラウド耐障害ファイルツリー
+    pub async_tree: AsyncFileTree,
+    /// プロジェクト可視化グラフ (Visualize / ViVi 4)
+    pub visualize_graph: Option<crate::visualize::ForceGraph>,
 }
 
 impl ViviviGuiApp {
@@ -146,6 +152,7 @@ impl ViviviGuiApp {
         let cached_files = Self::read_directory_entries(&current_dir);
         let active_theme = vivivi_app::theme::Theme::load_by_name(&core.config.appearance.theme);
         let initial_config = core.config.clone();
+        let async_tree = AsyncFileTree::new(current_dir.clone());
 
         Self {
             core,
@@ -170,6 +177,8 @@ impl ViviviGuiApp {
             window_state: crate::window_state::WindowState::default(),
             active_theme,
             settings_dialog: SettingsDialogState::new(&initial_config),
+            async_tree,
+            visualize_graph: None,
         }
     }
 
@@ -182,6 +191,7 @@ impl ViviviGuiApp {
     pub fn navigate_sidebar_dir(&mut self, target_dir: PathBuf) {
         if target_dir.is_dir() {
             self.cached_files = Self::read_directory_entries(&target_dir);
+            self.async_tree.navigate_to(target_dir.clone());
             self.current_dir = target_dir;
         }
     }
@@ -236,6 +246,26 @@ impl eframe::App for ViviviGuiApp {
         }
         if self.particles.enabled != self.core.config.appearance.gui.enable_gravity_drop {
             self.particles.enabled = self.core.config.appearance.gui.enable_gravity_drop;
+        }
+
+        // 非同期ツリーの完了・タイムアウト監視と再描画要求
+        if self.async_tree.poll() {
+            ctx.request_repaint();
+        }
+
+        // Exコマンド (:tree, :explore) によるサイドバートグル
+        if self.core.toggle_tree_request {
+            self.sidebar_open = !self.sidebar_open;
+            self.core.toggle_tree_request = false;
+        }
+
+        // Exコマンド (:visualize, :graph) によるプロジェクト可視化グラフの同期
+        if self.core.show_visualize_graph && self.visualize_graph.is_none() {
+            self.visualize_graph = Some(crate::visualize::ForceGraph::build_from_dir(
+                &self.current_dir,
+            ));
+        } else if !self.core.show_visualize_graph && self.visualize_graph.is_some() {
+            self.visualize_graph = None;
         }
 
         // 0. ウィンドウ位置・サイズ・最大化状態の追跡

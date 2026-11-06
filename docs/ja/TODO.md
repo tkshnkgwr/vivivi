@@ -70,13 +70,13 @@
 | OS連携       | システム共有クリップボード ("+y, "*p)      | 共通 (ViVi / OpenViVi) | OSクリップボードとViレジスタの双方向透過同期                       | 実装済み (Phase 4.8)  |
 | 言語・構文   | 構文強調拡充 (Go, Ruby, TOML, PS, YAML 等) | 共通 (ViVi / OpenViVi) | Go, Ruby, TOML, PowerShell, YAML, XML, bat/cmd の構文色分け        | 実装済み (Phase 4.8)  |
 | UI/UX表示    | ミニマップ (Minimap)                       |        OpenViVi        | ファイル全体の縮小俯瞰プレビューと検索ヒット位置の可視化           | 実装済み (vivivi-gui) |
-| UI/UX表示    | サイドバー ファイルツリー (Explorer)       |  共通 (ViVi / モダン)  | 階層フォルダ展開、非同期遅延読込、クラウド/NAS安全設計             | 基本実装 (vivivi-gui) |
+| UI/UX表示    | サイドバー ファイルツリー (Explorer)       |  共通 (ViVi / モダン)  | 階層フォルダ展開、非同期遅延読込、クラウド/NAS安全設計             | 実装済み (vivivi-gui) |
 | UI/UX表示    | 削除文字落下アニメーション                 |        OpenViVi        | 文字削除時に文字が物理重力で落下するOpenViVi特有の演出             | 実装済み (vivivi-gui) |
 | UI/UX表示    | デスクトップGUI (egui / eframe)            |  OpenViVi (Qt再構築)   | ターミナルTUIに加え、モダンGUIによるリッチグラフィック描画         | 実装済み (vivivi-gui) |
 | 将来構想     | 構文木ハイライト (Tree-sitter 統合)        |       モダン拡張       | 多言語のAST解析に基づく高度シンタックスハイライト・ノード選択      |   未実装 (Phase 5)    |
 | 将来構想     | バイナリモード (Hex Editor)                |    ViVi 3 / ViVi 4     | 16進ダンプ＋ASCII並行表示によるバイト単位の直接編集                |   未実装 (Phase 5)    |
 | 将来構想     | スクリプトエンジン (現代版ViViScript)      |    ViVi 3 / ViVi 4     | Rhai / Lua等を用いたエディタ操作自動化・マクロ拡張                 |   未実装 (Phase 6)    |
-| 将来構想     | プロジェクト可視化グラフ (Visualize)       |         ViVi 4         | インクルード依存関係・ファイル鮮度を物理力学2Dグラフで描画         |   未実装 (Phase 5)    |
+| 将来構想     | プロジェクト可視化グラフ (Visualize)       |         ViVi 4         | インクルード依存関係・ファイル鮮度を物理力学2Dグラフで描画         | 実装済み (vivivi-gui) |
 | 配布・運用   | 更新チェック・通知・自動更新準備           |        独自拡張        | GitHub Releases連携による更新確認・通知UI・自己更新基盤の調査      |   未実装 (Phase 5)    |
 
 ---
@@ -349,12 +349,12 @@
   - ファイル全体の縮小俯瞰プレビューと、スクロール位置・クリックジャンプ・Viewport Culling 描画（`vivivi-gui` に実装完了）
 - [x] **【OpenViVi】 削除文字落下アニメーション (Gravity Drop Animation / egui連携)**
   - 文字削除時に文字が重力でポロポロ落下するOpenViVi特有のビジュアルギミック（`vivivi-gui::particles` に実装完了）
-- [ ] **【ViVi 4 / モダン拡張】 サイドバー・ファイルエクスプローラーの非同期クラウド耐障害強化**
+- [x] **【ViVi 4 / モダン拡張】 サイドバー・ファイルエクスプローラーの非同期クラウド耐障害強化**
   - エディタ左ペインへのファイル/ディレクトリ階層表示・親子移動・クリックオープンは `vivivi-gui` に基本実装済み
   - 今後の拡張：キーボード駆動ナビゲーション（`:tree` / `:Explore` / `Ctrl-e` トグル）、および **ネットワークドライブ・クラウド同期（Box/OneDrive等）向け非同期遅延読み込み（Lazy Loading）・I/Oタイムアウト** の本格導入
 - [ ] **【ViVi 3 / ViVi 4】 バイナリモード (Hex Editor)**
   - 16進ダンプ＋ASCII並行表示、バイト単位の直感編集
-- [ ] **【ViVi 4】 プロジェクト可視化グラフ (Visualize / 力学モデルグラフ)**
+- [x] **【ViVi 4】 プロジェクト可視化グラフ (Visualize / 力学モデルグラフ)**
   - インクルード依存関係・ファイルサイズ・更新鮮度を物理力学モデルで2Dグラフ描画
 - [ ] **【独自】** 巨大ファイル（1GB超）の高速表示・編集（Piece Tree / Memory-Mapped File `memmap2`）
 - [ ] **【モダン拡張】 構文木ハイライト (Tree-sitter 統合)**
