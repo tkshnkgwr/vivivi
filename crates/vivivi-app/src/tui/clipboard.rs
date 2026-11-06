@@ -61,3 +61,44 @@ impl ClipboardProvider for SystemClipboard {
         }
     }
 }
+
+/// テストおよびヘッドレス環境向けのインメモリクリップボードプロバイダ。
+///
+/// Windows OLE/API を直接呼び出さずメモリ内で安全に送受信をシミュレートするため、
+/// マルチスレッド並行テスト時の競合やヒープ破損（STATUS_HEAP_CORRUPTION: 0xc0000374）を防止します。
+#[derive(Debug, Default, Clone)]
+pub struct MockClipboard {
+    content: String,
+}
+
+impl MockClipboard {
+    /// 新しい空の [`MockClipboard`] を作成します。
+    pub fn new() -> Self {
+        Self {
+            content: String::new(),
+        }
+    }
+
+    /// 初期テキストを持つ [`MockClipboard`] を作成します。
+    pub fn with_content(content: &str) -> Self {
+        Self {
+            content: content.to_string(),
+        }
+    }
+
+    /// `Arc<Mutex<Self>>` でラップした共有インスタンスを生成します。
+    pub fn new_shared() -> Arc<Mutex<dyn ClipboardProvider>> {
+        Arc::new(Mutex::new(Self::new()))
+    }
+}
+
+impl ClipboardProvider for MockClipboard {
+    fn get_text(&mut self) -> Result<String, String> {
+        Ok(self.content.clone())
+    }
+
+    fn set_text(&mut self, text: String) -> Result<(), String> {
+        self.content = text;
+        Ok(())
+    }
+}

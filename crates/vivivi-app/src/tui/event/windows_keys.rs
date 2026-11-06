@@ -146,6 +146,12 @@ pub fn handle_windows_shortcuts(app: &mut App, key: &AppKeyEvent) -> bool {
                 }
                 return true;
             }
+            // Ctrl+,: 設定画面の起動 (:preferences)
+            KeyCode::Char(',') if app.mode() != ViMode::CommandLine => {
+                app.open_preferences_dialog();
+                app.status_message = Some("設定画面を開きます".to_string());
+                return true;
+            }
             _ => {}
         }
     }

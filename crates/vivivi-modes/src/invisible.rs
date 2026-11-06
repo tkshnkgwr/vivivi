@@ -3,6 +3,8 @@
 //! 全角スペース (U+3000)、半角スペース、タブ (\t)、行末記号 (EOL) を
 //! 視覚的に識別可能な記号に置換・フォーマットします。
 
+use std::borrow::Cow;
+
 /// 不可視文字表示の設定。
 ///
 /// タブ、半角スペース、全角スペース（`\u{3000}`）、行末改行記号（EOL）の可視化記号を設定します。
@@ -29,7 +31,7 @@ pub struct ListCharsConfig {
     /// 半角スペース記号。デフォルト: '·'
     pub space: char,
     /// 全角スペース記号。デフォルト: "　" (\u{3000}。全角幅を維持しエディタ側で背景ハイライト表示)
-    pub zenkaku_space: &'static str,
+    pub zenkaku_space: Cow<'static, str>,
     /// 行末改行記号。デフォルト: '$'
     pub eol: char,
     /// 通常スペースもすべて可視化するか、末尾スペースのみ可視化するか
@@ -42,7 +44,7 @@ impl Default for ListCharsConfig {
             enabled: false,
             tab: ('▸', '-'),
             space: '·',
-            zenkaku_space: "　",
+            zenkaku_space: Cow::Borrowed("　"),
             eol: '$',
             show_all_spaces: false,
         }
@@ -228,7 +230,7 @@ mod tests {
         // カスタム記号指定の場合
         let custom_config = ListCharsConfig {
             enabled: true,
-            zenkaku_space: "□",
+            zenkaku_space: Cow::Borrowed("□"),
             ..Default::default()
         };
         let custom_chars = format_line_invisibles("テスト　コード", 4, &custom_config);

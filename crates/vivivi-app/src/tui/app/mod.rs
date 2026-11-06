@@ -146,6 +146,8 @@ pub struct App {
     pub tui_settings_item: usize,
     /// TUI 設定ダイアログで項目ペインにフォーカスがあるか
     pub tui_settings_in_items: bool,
+    /// TUI 設定ダイアログを開いた時点の設定バックアップ（キャンセル・ロールバック用）
+    pub tui_settings_backup: Option<crate::config::AppConfig>,
 
     // --- 不可視文字可視化 (:set list / :set nolist) ---
     pub list_chars_config: ListCharsConfig,
@@ -226,7 +228,11 @@ impl App {
         let initial_cursor = TextCursor::new(0, 0);
         let initial_window = EditorWindow::new(0, 0);
 
+        #[cfg(not(test))]
         let config = crate::config::AppConfig::load_or_default(None);
+        #[cfg(test)]
+        let config = crate::config::AppConfig::default();
+
         let active_theme = crate::theme::Theme::load_by_name(&config.appearance.theme);
         let show_line_numbers = config.appearance.line_number;
         let relative_number = config.appearance.relative_number;
@@ -234,7 +240,12 @@ impl App {
         let wrap = config.appearance.wrap;
 
         let mut vi = ViEngine::new();
-        vi.set_clipboard_provider(crate::tui::clipboard::SystemClipboard::new_shared());
+        #[cfg(not(test))]
+        let clipboard_provider = crate::tui::clipboard::SystemClipboard::new_shared();
+        #[cfg(test)]
+        let clipboard_provider = crate::tui::clipboard::MockClipboard::new_shared();
+        vi.set_clipboard_provider(clipboard_provider);
+
         let cb_opt = vivivi_vi::ClipboardOption::parse(&config.general.clipboard);
         vi.set_clipboard_option(cb_opt);
         if let Some(ref path) = file_path {
@@ -248,16 +259,25 @@ impl App {
 
         // 最近使ったファイルとお気に入りの読み込み
         let mut recent_manager = RecentManager::new();
-        let recent_file_path = get_recent_file_path();
-        let _ = recent_manager.load_from_file(&recent_file_path);
-        if let Some(ref path) = file_path {
-            recent_manager.add_recent(path.clone());
-            let _ = recent_manager.save_to_file(&recent_file_path);
+        #[cfg(not(test))]
+        {
+            let recent_file_path = get_recent_file_path();
+            let _ = recent_manager.load_from_file(&recent_file_path);
+            if let Some(ref path) = file_path {
+                recent_manager.add_recent(path.clone());
+                let _ = recent_manager.save_to_file(&recent_file_path);
+            }
+        }
+        #[cfg(test)]
+        {
+            if let Some(ref path) = file_path {
+                recent_manager.add_recent(path.clone());
+            }
         }
 
         let list_chars_config = ListCharsConfig {
             enabled: config.invisibles.enabled,
-            zenkaku_space: Box::leak(config.invisibles.zenkaku_space.clone().into_boxed_str()),
+            zenkaku_space: config.invisibles.zenkaku_space.clone().into(),
             space: config.invisibles.space,
             eol: config.invisibles.eol,
             ..Default::default()
@@ -355,6 +375,7 @@ impl App {
             tui_settings_category: 0,
             tui_settings_item: 0,
             tui_settings_in_items: false,
+            tui_settings_backup: None,
             list_chars_config,
 
             active_theme,
@@ -757,6 +778,51 @@ impl App {
         crate::tui::event::execute_ex_command(self, cmd);
     }
 
+    /// 指定されたクリップボードプロバイダを注入した [`App`] を初期化します。
+    pub fn with_clipboard_provider(
+        initial_text: &str,
+        file_path: Option<PathBuf>,
+        encoding: CharEncoding,
+        newline: NewlineType,
+        provider: std::sync::Arc<std::sync::Mutex<dyn vivivi_vi::ClipboardProvider>>,
+    ) -> Self {
+        let mut app = Self::new(initial_text, file_path, encoding, newline);
+        app.vi.set_clipboard_provider(provider);
+        app
+    }
+
+    /// テスト用のインメモリ [`crate::tui::clipboard::MockClipboard`] を注入した [`App`] を初期化します。
+    pub fn with_mock_clipboard(
+        initial_text: &str,
+        file_path: Option<PathBuf>,
+        encoding: CharEncoding,
+        newline: NewlineType,
+    ) -> Self {
+        Self::with_clipboard_provider(
+            initial_text,
+            file_path,
+            encoding,
+            newline,
+            crate::tui::clipboard::MockClipboard::new_shared(),
+        )
+    }
+
+    /// TUI 設定ダイアログを開き、現在の設定をバックアップに退避します。
+    pub fn open_preferences_dialog(&mut self) {
+        self.sync_runtime_to_config();
+        self.tui_settings_backup = Some(self.config.clone());
+        self.show_preferences_dialog = true;
+    }
+
+    /// TUI 設定ダイアログをキャンセルして閉じ、開く直前の設定に安全にロールバックします。
+    pub fn cancel_preferences_dialog(&mut self) {
+        if let Some(backup) = self.tui_settings_backup.take() {
+            self.apply_config(&backup);
+        }
+        self.show_preferences_dialog = false;
+        self.status_message = Some("設定変更を破棄して設定画面を閉じました".to_string());
+    }
+
     /// 外部設定構造体 [`crate::config::AppConfig`] を現在の実行時状態に適用します。
     pub fn apply_config(&mut self, cfg: &crate::config::AppConfig) {
         self.show_line_numbers = cfg.appearance.line_number;
@@ -765,8 +831,7 @@ impl App {
         self.wrap = cfg.appearance.wrap;
         self.change_tracker.enabled = cfg.appearance.gutter_markers;
         self.list_chars_config.enabled = cfg.invisibles.enabled;
-        self.list_chars_config.zenkaku_space =
-            Box::leak(cfg.invisibles.zenkaku_space.clone().into_boxed_str());
+        self.list_chars_config.zenkaku_space = cfg.invisibles.zenkaku_space.clone().into();
         self.list_chars_config.space = cfg.invisibles.space;
         self.list_chars_config.eol = cfg.invisibles.eol;
         let cb_opt = vivivi_vi::ClipboardOption::parse(&cfg.general.clipboard);

@@ -1,4 +1,4 @@
-﻿//! エディタ設定およびオプション切替コマンド処理モジュール (`:set`, `:colorscheme`, `:mkvivivirc`, `:source` など)。
+//! エディタ設定およびオプション切替コマンド処理モジュール (`:set`, `:colorscheme`, `:mkvivivirc`, `:source` など)。
 
 use crate::tui::app::App;
 use std::path::PathBuf;
@@ -414,7 +414,7 @@ pub(crate) fn handle_settings_command(app: &mut App, trimmed: &str) -> bool {
 
         // --- 設定画面・ダイアログ表示 (:preferences, :pref, :settings, :dialog) ---
         "preferences" | "pref" | "settings" | "dialog" => {
-            app.show_preferences_dialog = true;
+            app.open_preferences_dialog();
             app.status_message = Some("設定画面を開きます".to_string());
             true
         }
@@ -488,8 +488,7 @@ pub(crate) fn handle_settings_command(app: &mut App, trimmed: &str) -> bool {
                         }
                         "zenkaku" => {
                             app.config.invisibles.zenkaku_space = v.to_string();
-                            app.list_chars_config.zenkaku_space =
-                                Box::leak(v.to_string().into_boxed_str());
+                            app.list_chars_config.zenkaku_space = v.to_string().into();
                         }
                         "space" => {
                             if let Some(ch) = v.chars().next() {

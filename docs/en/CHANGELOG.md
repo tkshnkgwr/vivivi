@@ -4,7 +4,113 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
-## [0.9.9-beta] - 2026-10-29
+## [0.9.12-beta] - 2026-11-02
+
+### Added / Improved
+- **GUI Preferences Dialog Ergonomics & Layout Overhaul (`settings_dialog.rs`, `input.rs`, `canvas.rs`)**:
+  - **Compact & Vertical Proportions**: Optimized dialog dimensions to `580x620` (max width `660px`), eliminating screen overflow and replacing horizontal stretch with clean top-to-bottom layout.
+  - **Modal Dimming & Complete Editor Input Blocking**: Added semi-transparent dark backdrop overlay and input blocker intercepting 100% of background keystrokes (`j`/`k` motions, etc.) and mouse clicks while dialog is open.
+  - **Reliable Cancel Restoration**: Fixed Cancel button and top-right close "×" button to reliably restore pre-modal backup settings upon dismissal.
+  - **Hover Pointer Hand Cursor**: Enabled `.on_hover_cursor(PointingHand)` across left sidebar categories and dialog action buttons; automatically suppresses editor canvas I-beam cursor during modal display.
+  - **Streamlined Category Layout**: Replaced redundant search input with clean, direct list matching the 6 core setting categories.
+- **TUI Settings Modal Strict Vertical Alignment (`settings.rs`)**:
+  - **Left Pane Number (`1.`–`6.`), Icon, and Label Alignment**: Placed category numbers flush left, guaranteeing consistent 2nd-column alignment regardless of terminal font or environment.
+  - **Single-Width Symbol Icons (`eaw=N`)**: Replaced full-width emoji with clean half-width glyphs (`2:☼` appearance/theme, `5:⚒` tools) to prevent column jitter across varied terminals.
+  - **Right Pane Column Vertical Alignment**: Formatted labels to 30 columns and active values to 22 columns with updated padding logic, aligning values and descriptions strictly in vertical columns.
+- **Documentation**:
+  - Added `cargo install` (local source & direct GitHub) instructions to `README.md` and `README_JA.md`.
+
+---
+
+## [0.9.11-beta] - 2026-11-01
+
+### Added / Improved
+- **Phase 5 (Phase 1–3) Parity Features & Seamless UX Integration**:
+  - **Coexistence of Windows-Style Editing and Modal Vi Commands (`windows_keys.rs`)**:
+    - `Shift + Arrow keys (←/→/↑/↓)`: Begins visual selection anchoring at cursor and intuitively expands/shrinks selection across modes.
+    - `Ctrl+C`: Copies (yanks) visual selection to system clipboard and safely returns to Normal mode.
+    - `Ctrl+X`: Cuts visual selection to system clipboard.
+    - `Ctrl+V`: Pastes clipboard content in Insert mode and Windows preset.
+    - `Ctrl+A`: Selects entire buffer in Visual Line mode.
+    - `Ctrl+Z` / `Ctrl+Y`: Undo and Redo across Insert and Normal modes.
+    - `Ctrl+S`: Instant buffer write (`:w`).
+  - **Selected Text Execution & External Process Piping (`process.rs`, `tools.rs`)**:
+    - `App::execute_selected_text()` / `App::pipe_selected_text()`: Execute selected buffer text directly via OS shell (`cmd /C` or `sh -c`), or pipe text to external process via stdin and capture stdout.
+    - Ex commands `:!` (execute command, feed selection as stdin when active) and `:w !<cmd>` (pipe buffer or visual selection to external command).
+  - **Dynamic Theme Synchronization to Terminal TUI (`editor.rs`, `status.rs`, `tab_bar.rs`)**:
+    - Coupled `active_theme` into `App` core; `:colorscheme` commands and preferences modal instantly synchronize syntax colors, statusline, tab bar, and visual selection in TUI.
+  - **Flat Design, I-Beam Hover Cursor & Reactive Repaint (`canvas.rs`, `theme.rs`, `panels.rs`)**:
+    - Editor canvas hover switches cursor to I-beam (`CursorIcon::Text`).
+    - Unified button, tab, and dialog corner rounding to `2.0px` (`CornerRadius::same(2)`), enforcing modern flat styling with sub-1px borders.
+    - Preserved 1.4x line-height padding with strictly reactive repainting on input/event (0% idle CPU).
+  - **Dedicated Theme Documentation (`doc/help/theme.md`, `doc/help/index.md`)**:
+    - Added comprehensive offline help covering 5 standard themes, TOML schema, `:colorscheme` syntax, and configuration integration.
+  - **Offline Help System Overhaul (`doc/help/*.md`)**:
+    - Updated `config.md` (6-category TOML schema, dialogs, `:preferences`, `:mkvivivirc`, `:source`, ephemeral mutation rule).
+    - Updated `basic.md` (Windows-style keys, `Ctrl+,` preferences trigger).
+    - Updated `tools.md` (external process execution and piping `:!`, `:w !`).
+    - Updated `visual.md` (minimap and gravity-drop deletion animation).
+    - Updated `index.md` (quick reference command tables with strict vertical alignment).
+- **TUI Settings Modal (Ratatui Floating Modal & Vi Navigation) (`settings.rs`, `event/mod.rs`)**:
+  - **Centered 2-Column Floating Window**: 76% × 76% centered box with full wide-character boundary clearing (`clear_modal_area`) to prevent ghosting. Left column (24 cols) houses categories; right column displays options.
+  - **Full Vi Key Navigation**:
+    - `j` / `k` / `↓` / `↑`: Move between categories or items.
+    - `h` / `l` / `Tab`: Switch focus between category list and item list.
+    - `Space` / `Enter`: Toggle options or cycle values (encoding, newline, line numbers, wrap, tab width, invisibles, theme, keisen protection) with live editor update.
+    - `s`: Save in-memory settings to `%USERPROFILE%\.vivivi\config.toml` and close.
+    - `Esc` / `q`: Dismiss modal.
+  - **Ex Command Integration**: Open via `:preferences`, `:pref`, `:settings`, or `:dialog`.
+- **GUI Preferences Dialog (2-Pane Modal Dialog) (`settings_dialog.rs`)**:
+  - Left pane features 6 core categories (General, Appearance, Invisibles, Editing, Tools, Keymap); right pane hosts granular interactive controls.
+  - Provides "Apply" (live preview), "Reset to Defaults", "Cancel" (restore backup), and "Save & Close" (persist to `%USERPROFILE%\.vivivi\config.toml`).
+  - Multi-trigger activation via menu bar (Edit → Preferences), shortcut (`Ctrl+,`), and Ex commands (`:preferences`).
+- **Comprehensive Ex Commands for Configuration & Appearance (`settings.rs`)**:
+  - **Theme Control (`:colorscheme <name>` / `:colo <name>`)**: Dynamic theme switching, query current theme with `?`, and E185 error handling for unknown themes adhering to in-memory ephemeral mutation rule.
+  - **One-Touch Persistence (`:mkvivivirc [path]` / `:wconfig [path]`)**: Writes active in-memory settings to `%USERPROFILE%\.vivivi\config.toml` or target path.
+  - **Live Reload & Script Execution (`:source [path]` / `:so [path]`)**: Reloads TOML configuration from disk or executes line-by-line Ex command scripts.
+  - **Appearance Options (`:set`)**: `:set minimap` / `:set nominimap`, `:set particles` / `:set noparticles`, `:set bg=dark|light`, `:set listchars=...`, and `:set all`.
+  - **GUI Real-Time Sync**: Bi-directional sync ensuring Ex command updates immediately reflect in `vivivi-gui` styles and panels.
+
+### Fixed / Improved
+- **Minimap Linear Sampling & Drag-to-Scroll Overhaul (`canvas.rs`)**:
+  - Replaced floor division with float linear interpolation for accurate line sampling from first to last line across full minimap height.
+  - Bi-directionally synchronized viewport rectangle with buffer scroll geometry.
+  - Implemented smooth real-time drag-to-scroll tracking on left mouse button hold.
+- **External Theme TOML Separation & Bundled Presets (`theme.rs`)**:
+  - Defined `Theme` / `ThemeColor` structures with TrueColor 24-bit RGB schema.
+  - Shipped 5 standard presets: *Tokyo Night*, *OpenViVi*, *ViVi Classic*, *vivivi Dark*, *vivivi Light*.
+  - Auto-deploys to `%USERPROFILE%\.vivivi\themes\` and supports GUI menu switching.
+- **6-Category Configuration Architecture & Auto-Bootstrap (`config.rs`)**:
+  - Overhauled `AppConfig` matching `config_spec.md` (`general`, `appearance`, `invisibles`, `editing`, `tools`, `keymap`).
+  - Automatically initializes `%USERPROFILE%\.vivivi\`, `cache/`, `themes/`, and annotated `config.toml` on first launch.
+  - Preserved backward compatibility for legacy sections (`[editor]`, `[gutter]`, `[invisible]`).
+- **GUI Window State Persistence & Off-Screen Safeguard (`window_state.rs`)**:
+  - Tracks and persists window position, size, and maximized state to `%USERPROFILE%\.vivivi\cache\window_state.json`.
+  - Employs Windows API virtual screen intersection checks to restore windows safely to primary monitor if disconnected or >80% off-screen.
+- **Compiler Warnings & Clippy Lint Elimination**:
+  - Fixed `Stroke::new` float literal fallback in `canvas.rs` (`2.0_f32`).
+  - Updated `text_object.rs` slice chunks to `as_chunks::<2>().0` for zero Clippy lints.
+  - Formatted entire workspace with `cargo fmt`.
+- **Settings Architecture Documentation**:
+  - Restructured `SETTINGS_DESIGN.md` into hub navigation and documented 4 specification areas under `docs/ja/settings/`.
+  - Mapped historical ViVi 3 / 4 properties to modern settings.
+
+---
+
+## [0.9.10-beta] - 2026-10-30
+
+### Added / Improved
+- **Large-File Performance & Boundary Optimization**:
+  - Added line boundary index caching (`line_starts`) in `TextBuffer` for $O(1)$ line offset lookups.
+  - Optimized `ChangeTracker` initialization with batch `all_lines` query for instant startup on large files (30MB+).
+  - Refined EUC-JP 2-byte boundary detection to prevent misclassification against Shift_JIS.
+- **GUI Usability**:
+  - Supported OS Drag & Drop file opening with visual overlay feedback.
+  - Adjusted hover cursors on tab bar and file tree to pointer/arrow.
+- **Settings Design**:
+  - Authored initial settings architectural design document (`SETTINGS_DESIGN.md`).
+
+---
 
 ### Fixed / Improved
 - **Comprehensive Workspace Bug Fixes, Robustness & Edge-Case Safeguards (34+ issues resolved)**:

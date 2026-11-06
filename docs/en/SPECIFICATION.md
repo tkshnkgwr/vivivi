@@ -559,3 +559,69 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
   - **Full-Width, Tab & Horizontal Scroll-Aware Char Indexing**: Employs hit-testing that precisely maps mouse click columns to buffer character indices accounting for CJK full-width glyphs (width 2), tab expansions (`\t`), and horizontal scroll offsets.
   - **Unsaved Changes Safeguard (E37)**: Intercepts close button events on inactive tabs as well as OS window close requests with unsaved prompts.
   - **Modal Navigation Priority**: Blocks underlying editor key pass-through during modal dialog presentations, strictly prioritizing modal navigation (selection, scrolling, Escape).
+
+---
+
+## 16. Configuration Infrastructure, Themes & Modal Settings Specifications (Phase 5 Expansion)
+
+### 16.1 External TOML Themes & 5 Built-in Presets (`theme.rs`)
+- **Theme Data Model (`Theme`, `ThemeColor`)**:
+  - Defines a 24-bit RGB TrueColor color model managing color properties across editor canvas, sidebars, statusline, line numbers, cursor, and lexical syntax tokens (keywords, types, strings, numbers, comments, symbols).
+- **5 Standard Presets**:
+  - `TokyoNight`: High-contrast dark theme based on modern navy blue with cyan and magenta accents.
+  - `OpenViVi`: Classic dark theme paying homage to OpenViVi (Qt).
+  - `ViViClassic`: Vintage retro styling inspired by Windows 9x/2000 era ViVi 3/4.
+  - `ViviviDark`: Clean, eye-friendly neutral dark theme.
+  - `ViviviLight`: High-visibility daylight light theme.
+- **TOML Decoupling & Bootstrap**:
+  - Dynamically loads themes from `%USERPROFILE%\.vivivi\themes\<name>.toml`.
+  - Automatically deploys bundled standard themes into `%USERPROFILE%\.vivivi\themes\` upon first run.
+  - Supports live switching via `:colorscheme <name>` (or `:colo <name>`) and GUI/TUI settings dialogs.
+
+### 16.2 6-Category Configuration Schema & Ephemeral Mutation Rule (`config.rs`, `settings.rs`)
+- **6 Core Categories (`AppConfig`)**:
+  1. `[general]`: System clipboard integration, auto-save interval, and update check settings.
+  2. `[appearance]`: Color theme, line numbers, relative numbers, line wrap, minimap, particle drops, and gutter markers.
+  3. `[invisibles]`: Full-width space highlights, tab symbols, newline glyphs, and trailing space markers.
+  4. `[editing]`: Tab stop width, soft tabs, auto-indent, and keisen border protection mode.
+  5. `[tools]`: External Grep engine, diff comparison, DiffLog backups, and template expansion.
+  6. `[keymap]`: Custom key remapping dictionaries for Normal, Insert, and Visual modes.
+- **In-Memory Ephemeral Mutation Rule**:
+  - Ex commands like `:set` and `:colorscheme` only mutate active in-memory settings without automatically overwriting `config.toml` on disk.
+  - To persist the active in-memory configuration to disk, users explicitly run **`:mkvivivirc [path]`** (or `:wconfig`).
+  - To reload configuration live from disk, users run **`:source [path]`** (or `:so`).
+
+### 16.3 Coexistence of Windows-Style Editing and Modal Vi Commands (`windows_keys.rs`)
+- **Hybrid Input Handling**:
+  - `Shift + Arrow keys (←/→/↑/↓)`: Anchors at cursor and seamlessly initiates Visual mode, expanding/shrinking selection intuitively across all modes.
+  - `Ctrl+C`: Copies (yanks) visual selection to OS clipboard and safely resets to Normal mode.
+  - `Ctrl+X`: Cuts visual selection to OS clipboard.
+  - `Ctrl+V`: Pastes clipboard content in Insert mode and Windows preset.
+  - `Ctrl+A`: Selects entire buffer in Visual Line mode.
+  - `Ctrl+Z` / `Ctrl+Y`: Undo and Redo across Insert and Normal modes.
+  - `Ctrl+S`: Instant buffer write (`:w`).
+
+### 16.4 Selected Text Execution & External Process Piping (`process.rs`, `tools.rs`)
+- **Partial Execution & Process Piping**:
+  - `App::execute_selected_text()` / `App::pipe_selected_text()`: Passes selected text directly to the OS shell (`cmd /C` or `sh -c`) for execution, or pipes selection to an external process via stdin, replacing or inserting stdout into the buffer.
+- **Ex Command Integration**:
+  - `:!<command>`: Executes command; feeds active visual selection as stdin when selected.
+  - `:w !<command>`: Pipes buffer content or visual selection into external command stdin.
+
+### 16.5 GUI / TUI Preferences Dialog Specifications (`settings_dialog.rs`, `settings.rs`)
+- **GUI Preferences Dialog (`580x620`, max `660px`)**:
+  - Dimmed modal backdrop and 100% editor input blocking.
+  - 2-pane layout separating 6-category sidebar from interactive controls.
+  - "Apply" (live preview), "Reset to Defaults", "Cancel" (restore backup), and "Save & Close" buttons.
+  - Triggered via menu bar (Edit → Preferences), `Ctrl+,`, or `:preferences`.
+- **TUI Preferences Modal (Ratatui Centered `76% x 76%`)**:
+  - Bordered floating modal with wide-character boundary clearing (`clear_modal_area`).
+  - 2-column layout; focus switched via `h` / `l` / `Tab`.
+  - Navigate with `j` / `k`, toggle options or cycle values with `Space` / `Enter` (live editor reflection).
+  - Save to `%USERPROFILE%\.vivivi\config.toml` with `s`, dismiss modal with `Esc` / `q`.
+
+### 16.6 Window State Persistence & Multi-Monitor Off-Screen Safeguard (`window_state.rs`)
+- **State Tracking**: Automatically tracks and persists window position (X, Y), size (width, height), and maximized state to `%USERPROFILE%\.vivivi\cache\window_state.json` upon exit.
+- **Off-Screen Safeguard**:
+  - Checks intersection with virtual screen rectangles (`SM_XVIRTUALSCREEN`, `SM_CXVIRTUALSCREEN`).
+  - If disconnected displays leave the window entirely outside or >80% clipped, safely clamps coordinates to the center of the primary display.

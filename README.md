@@ -93,10 +93,14 @@ It faithfully ports the core Vi editing mechanics and data structures while inte
 - 🌐 **Early Charset & Newline Auto-Detection**:
   - Instant early-return detection for UTF-8, UTF-8 BOM, Shift_JIS (CP932), EUC-JP, UTF-16LE/BE, and CRLF / LF / CR (resolving on first signature byte and 3 consecutive line endings), preserving original formatting on save.
 - 🖥️ **Native Desktop GUI (`vivivi-gui` via `egui` / `eframe`)**:
-  - **Tokyo Night 3-Tier Contrast Theme**: Eye-friendly dark palette (`#1A1B26` editor, `#16161E` panels, `#292E42` statusline) with 4px rounded corners.
+  - **Tokyo Night 3-Tier Contrast Theme**: Eye-friendly dark palette (`#1A1B26` editor, `#16161E` panels, `#292E42` statusline) with 2.0px flat design rounded corners.
   - **PlemolJP Monospace Priority Loader**: Automatically discovers bundled or system-installed PlemolJP fonts with BIZ UD Gothic / Consolas fallback.
   - **Custom `ui.painter()` Grid & Inline Japanese IME**: Renders crisp CJK/ASCII 2:1 columns, underlined IME preedit strings, mode-aware cursors, and OS IME candidate window tracking without using `egui::TextEdit`.
   - **Gravity-Drop Character Deletion Animation & 0% CPU Idle**: Deleted characters fall with 2D gravity and fade out over 0.5s, returning immediately to 0% CPU reactive idle once animations finish.
+- 🪟 **Windows-Style Editing & External Process Piping (`Shift+Arrows`, `Ctrl+C/V`, `:!`, `:w !`)**:
+  - `Shift+Arrow` selection and `Ctrl+C/V/X/A/Z/Y/S` seamlessly coexist with Vi modes. Run shell commands directly (`:!<cmd>`) or stream buffers into external process stdin (`:w !<cmd>`).
+- ⚙️ **6-Category Configuration & GUI/TUI Preferences Modal (`Ctrl+,`, `:preferences`)**:
+  - Manage settings via `%USERPROFILE%\.vivivi\config.toml` across 6 categories with 5 bundled themes. Configure interactively via GUI dialog or centered floating TUI modal.
 
 ---
 

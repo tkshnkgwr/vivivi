@@ -22,6 +22,20 @@ This document provides a comprehensive operational guide for `vivivi`, covering 
 > The default mode is `:se nowrap` (horizontal scrolling). For lines exceeding screen width (e.g. > 80 columns), the viewport automatically and smoothly scrolls horizontally as the cursor moves or jumps to line ends (`$`). It computes true visual widths (Visual Column via `UnicodeWidthChar`) for multi-byte characters and tabs, clipping text cleanly without visual artifacts.
 > To toggle line wrapping at the screen edge on the fly, run `:se wrap` (`:set wrap`). Revert back to horizontal scrolling via `:se nowrap` (`:se wrap?` to query status).
 
+### 1.2 Coexistence with Windows-Style Editing
+Alongside modal Vi commands, familiar Windows shortcut keys operate transparently across all modes:
+
+| Shortcut Key            | Action                                                                              |
+| :---------------------- | :---------------------------------------------------------------------------------- |
+| `Shift + Arrow keys`    | Anchors at cursor and begins Visual mode, intuitively expanding/shrinking selection |
+| `Ctrl+C`                | Copies (yanks) selection to system clipboard and safely returns to Normal mode      |
+| `Ctrl+X`                | Cuts selection to system clipboard                                                  |
+| `Ctrl+V`                | Pastes system clipboard text in Insert mode and Windows key preset                 |
+| `Ctrl+A`                | Selects entire buffer in Visual Line mode                                           |
+| `Ctrl+Z` / `Ctrl+Y`     | Undo and Redo operations across Insert and Normal modes                             |
+| `Ctrl+S`                | Instant buffer write (equivalent to `:w`)                                           |
+| `Ctrl+,`                | Opens Preferences dialog (GUI: 2-pane modal / TUI: centered floating panel)         |
+
 ---
 
 ## 2. Advanced Modes & Navigation
@@ -160,6 +174,13 @@ This document provides a comprehensive operational guide for `vivivi`, covering 
   - **Line Number Prefixing**:
     `:%s/^/"Line " + $line + ": "/e`
 
+### (11) External Process Piping & Selected Text Execution (`:!`, `:w !`)
+- **Execute External Shell Commands (`:!<cmd>`)**:
+  - Run CLI commands directly (e.g. `:!cargo test`, `:!dir`) from the command line and view outputs.
+  - When visual selection is active, running `:!` feeds the selected lines directly into the command's standard input (stdin).
+- **Buffer Piping (`:w !<cmd>`)**:
+  - Run `:w !python` or `:w !clip` to pipe the entire buffer or active selection into the stdin of an external process without modifying or saving the file to disk.
+
 ---
 
 ## 4. AI Integration (`:ai`)
@@ -263,11 +284,25 @@ Perform multi-line columnar editing on `Ctrl-v` block selections:
 - `r<char>`: Fill entire block area with specified character.
 - `d` / `x`: Delete block columns and shift trailing text leftward.
 
-### (3) Configuration File & Customization (`config.toml`)
+### (3) Configuration File, Themes & Preferences (`config.toml`)
 Persist user preferences and key mappings in `%USERPROFILE%\.vivivi\config.toml` (or `~/.vivivi/config.toml`).
-- **Options**: `tab_stop`, `number`, `relative_number`, `wrap`, `gutter`, `hlsearch`, `clipboard`, `theme`, invisible symbols, and key mappings.
-- **Dynamic Reloading**: Run `:config` at any time to reload and apply changes without restarting.
-- **Runtime Set Options**: `:set number` / `:se nu` / `:se nonu` (line numbers), `:set wrap` / `:se wrap` / `:se nowrap` (line wrapping), `:set relativenumber` / `:se rnu`, `:set tabstop=4` (`:se ts=4`), `:set clipboard=unnamed`, etc. Query current values by appending `?` (e.g., `:se wrap?`).
+- **6 Core Setting Categories**:
+  - `[general]`: Clipboard sync, backup intervals, etc.
+  - `[appearance]`: Themes, line numbers, wrapping, minimap, particle drops, etc.
+  - `[invisibles]`: Full-width space highlights, tab symbols, newline glyphs, etc.
+  - `[editing]`: Tab stop width, soft tabs, keisen border protection, etc.
+  - `[tools]`: External Grep engine, diff viewer, DiffLog backups, etc.
+  - `[keymap]`: Custom key remapping definitions.
+- **Preferences Dialog**:
+  - Run `:preferences` (or `:pref`, `:settings`, `:dialog`, `Ctrl+,`) to open the interactive 2-pane GUI modal dialog or centered floating TUI preferences modal.
+- **Color Theme Switching (`:colorscheme`)**:
+  - Switch active themes dynamically via `:colorscheme <name>` (or `:colo <name>`) with built-in presets (`TokyoNight`, `OpenViVi`, `ViViClassic`, `ViviviDark`, `ViviviLight`). Query active theme with `:colo?`.
+- **In-Memory Ephemeral Mutation & Persistence**:
+  - Command-line `:set` and `:colorscheme` updates mutate only in-memory state during the session.
+  - To save active settings permanently, run **`:mkvivivirc`** (or `:wconfig`).
+  - To reload configuration from disk live, run **`:source`** (or `:so`).
+- **Dynamic Reloading**: Run `:source` (or `:so`, `:config`) to reload settings from disk on the fly.
+- **Runtime Set Options**: `:set number` / `:se nu` / `:se nonu` (line numbers), `:set wrap` / `:se wrap` / `:se nowrap` (line wrapping), `:set relativenumber` / `:se rnu`, `:set tabstop=4` (`:se ts=4`), `:set clipboard=unnamed`, `:set minimap` / `:set nominimap`, `:set particles` / `:set noparticles`, etc. Query current values by appending `?` (e.g. `:se wrap?`).
 
 ### (4) Early Encoding Auto-Detection & Format Conversion
 - **Ultra-Fast Early Detection**: Upon opening a file, BOM detection and exclusive signature bytes (Shift_JIS trails, EUC-JP kana, UTF-8 sequences) resolve character encoding on the very first character, while 3 consecutive identical endings resolve line format (CRLF / LF / CR) immediately. The active status appears in the bottom-right status bar (e.g. `[UTF-8/CRLF/...]`).
@@ -318,4 +353,11 @@ cargo run -p vivivi-gui -- path/to/file.rs
   - Uncommitted preedit text is rendered inline at the cursor with a cyan underline, and the OS candidate window tracks the exact cursor coordinates every frame.
 - **Gravity-Drop Character Deletion Animation**:
   - Deleting characters (`x`, `dd`, `dw`, `Backspace`) spawns 2D physics glyphs that fall and fade out over 0.5 seconds (toggleable via `View` -> `💧 Drop Animation`). Once all particles fade out, rendering automatically returns to `0% CPU` reactive idle mode.
+- **Flat Modern Design & I-Beam Cursor**:
+  - Buttons, tabs, and dialog corners feature unified 2.0px rounding (`CornerRadius::same(2)`). Hovering over the central editor canvas dynamically activates the text input I-beam cursor (`CursorIcon::Text`).
+- **2-Pane Preferences Modal Dialog**:
+  - Accessible via `Edit` -> `Preferences` (or `Ctrl+,`, `:preferences`), presenting a dimmed background overlay and input-blocking modal dialog.
+  - Interactively tune 6 core categories with "Apply" (live preview) and "Save & Close" (persist to `%USERPROFILE%\.vivivi\config.toml`).
+- **Window State Persistence & Multi-Monitor Safeguard**:
+  - Automatically records window position, size, and maximized state to `%USERPROFILE%\.vivivi\cache\window_state.json` on shutdown. If secondary monitors are disconnected, virtual screen intersection logic safely centers the window on the primary screen.
 

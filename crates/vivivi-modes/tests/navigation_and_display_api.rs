@@ -151,7 +151,7 @@ fn test_format_zenkaku_space_and_eol() {
     // カスタム指定時は指定記号
     let custom_config = ListCharsConfig {
         enabled: true,
-        zenkaku_space: "□",
+        zenkaku_space: std::borrow::Cow::Borrowed("□"),
         ..Default::default()
     };
     let custom_chars = format_line_invisibles("テスト　コード", 4, &custom_config);

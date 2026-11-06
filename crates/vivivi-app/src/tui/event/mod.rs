@@ -200,8 +200,8 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
     // TUI 設定ダイアログ表示中のキーハンドリング
     if app.show_preferences_dialog {
         if is_esc || key.code == KeyCode::Char('q') {
-            app.show_preferences_dialog = false;
-            app.status_message = Some("設定画面を閉じました".to_string());
+            app.cancel_preferences_dialog();
+
             return;
         }
 
@@ -218,6 +218,7 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
                         app.status_message = Some(format!("設定の保存に失敗しました: {e}"));
                     }
                 }
+                app.tui_settings_backup = None;
                 app.show_preferences_dialog = false;
             }
             KeyCode::Left | KeyCode::Char('h') => {
@@ -821,7 +822,7 @@ fn toggle_tui_settings_item(app: &mut App) {
                     app.config.invisibles.zenkaku_space = "□".to_string();
                 }
                 app.list_chars_config.zenkaku_space =
-                    Box::leak(app.config.invisibles.zenkaku_space.clone().into_boxed_str());
+                    app.config.invisibles.zenkaku_space.clone().into();
             }
             // 半角スペース
             2 => {
