@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [0.9.13-beta] - 2026-11-06
+
+### Added / Improved
+- **Benchmarking Suite Infrastructure (`benches/core_bench.rs`, `benches/modes_bench.rs`)**:
+  - **Criterion.rs Statistical Profiling**: Introduced `criterion = "0.5"` to scientifically measure and verify extreme performance and data structure characteristics.
+  - **Empirical GapBuffer O(1) Speedup Verification**: Benchmarking 1,000 continuous insertions at the center of a 100k-character document confirmed OpenViVi's `GapBuffer` (~362 µs) is **~8.3x faster** than standard `String` (~3.00 ms), outputting HTML & SVG statistical reports to `target/criterion/`.
+  - **Comprehensive Scenario Suite**: Added benchmarks for `UndoMgr` 1,000 operations, encoding detection, 1,000-line CSV column auto-alignment, Migemo Japanese romaji search, Unicode box-drawing cross-join, and whitespace trimming.
+- **Trailing Whitespace Trimming (`:trim`, ViVi 4 Parity)**:
+  - **Dedicated Trimming Module (`trim.rs`)**: Zero-copy stripping of half-width spaces (`' '`), tabs (`'\t'`), and full-width spaces (`'\u{3000}'`).
+  - **Versatile Ex Commands**: Implemented `:trim`, `:%trim`, `:'<,'>trim`, `:[range]trim`, with character target flags (`half`, `zenkaku`).
+  - **Trim On Save Integration**: Added `config.editing.trim_on_save` setting and `:set trim` / `:set notrim` commands to automatically clean trailing whitespace upon `:w` serialization.
+  - **Atomic Transactional Undo**: All line edits are recorded in a single `UndoMgr` block, reversible immediately via a single `u` keystroke.
+- **External Process Piping, Reading, Filtering & Execution Dialog (`cmdExecDlg`, ViVi 4 Parity)**:
+  - **Read Command Output into Buffer (`:r !<cmd>`, `:read !<cmd>`)**: Spawns external processes and directly inserts stdout below the cursor line with full Undo support.
+  - **Line Range Filter Replacement (`:[range]!<cmd>`, `:'<,'>!<cmd>`)**: Feeds designated lines to process stdin and atomically replaces the range with stdout.
+  - **Interactive Execution Dialog (`cmdExecDlg` / `:cmdexec`, `:cmd`)**: Built a centered TUI floating modal with `Tab`-based mode switching ("1. Run only", "2. Insert into buffer", "3. Filter range") and live output preview.
+- **Test Robustness & Memory Safety Objectives**:
+  - **Prevent Windows Clipboard API Concurrency Crash**: Resolved `STATUS_HEAP_CORRUPTION: 0xc0000374` by introducing an in-memory `MockClipboard` automatically injected during test execution.
+  - **Eliminate `Box::leak` Memory Leak**: Converted `zenkaku_space` to `Cow<'static, str>`, fully removing `Box::leak` from the codebase.
+  - **Sandbox User Configuration in Automated Tests**: Isolated real `%USERPROFILE%\.vivivi` file I/O during tests.
+  - **Ensure TUI Settings Modal Rollback on Cancel**: Guaranteed complete configuration rollback when dismissing TUI preferences with `Esc` or `q`.
+
+---
+
 ## [0.9.12-beta] - 2026-11-02
 
 ### Added / Improved

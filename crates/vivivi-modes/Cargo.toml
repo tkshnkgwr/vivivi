@@ -13,3 +13,8 @@ regex.workspace = true
 
 
 [dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "modes_bench"
+harness = false

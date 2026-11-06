@@ -383,7 +383,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - **4. Package Manager (Scoop / Winget) Coexistence & Detection**:
     - Detect executable path (e.g. within `scoop\apps\vivivi\` or `WindowsApps`) to determine if installed via a package manager.
     - When managed by a package manager, inhibit in-app binary overwrites and guide users to execute `scoop update vivivi` or `winget upgrade vivivi`.
-- [ ] **[Quality & Extreme Performance] Benchmarking Suite (`benches/`) (Medium priority)**
+- [x] **[Quality & Extreme Performance] Benchmarking Suite (`benches/`) (Medium priority)**
   - Establish statistical benchmarking harness and HTML report generation using `criterion`.
   - Measure $O(1)$ vs $O(N)$ insertion/deletion speedup comparing GapBuffer against standard Vec on 1M chars.
   - Latency profiling for inline CSV/TSV width calculation and Migemo incremental search on 100k lines.
@@ -413,7 +413,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 ## 6. Phase 7: Candidate Features from ViVi 3 / ViVi 4 Help & Asset Analysis (Staging Pool)
 *(※Extracted from analysis of ViVi 3 & 4 distribution bundles, CHM help contents, and built-in symbol definitions. To be re-categorized into respective phases later.)*
 
-- [ ] **[ViVi 3 / ViVi 4] External Command Execution Dialog & Process Piping (`cmdExecDlg` / `:!`, `:r!`)**
+- [x] **[ViVi 3 / ViVi 4] External Command Execution Dialog & Process Piping (`cmdExecDlg` / `:!`, `:r!`)**
   - Execute external CLI commands, pipe selected text into standard input, and directly capture stdout back into the editor view.
 - [ ] **[ViVi 3 / ViVi 4] Document Encryption & Decryption (`cryptDlg` / Password-Protected Editing)**
   - Symmetric password encryption/decryption of document buffers for secure storage of confidential notes and credentials.
@@ -421,7 +421,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - Define macro symbol configurations to automatically dim or format inactive `#ifdef` / `#if 0` preprocessor code blocks.
 - [ ] **[ViVi 3 / ViVi 4] C/C++ Member Completion on Object/Pointer (`cpp.html` / `.` and `->` trigger)**
   - Scope and type-aware dynamic member completion triggered immediately after `.` or `->`.
-- [ ] **[ViVi 3 / ViVi 4] Trailing Whitespace Trimming (`trimming.html` / `:trim`)**
+- [x] **[ViVi 3 / ViVi 4] Trailing Whitespace Trimming (`trimming.html` / `:trim`)**
   - Automated or command-invoked removal of redundant trailing spaces and full-width whitespaces upon file saving or explicit call.
 - [ ] **[ViVi 3 / ViVi 4] Aggregate Crash Dump File (`crashFile.html` / `vivicrsh.out` format)**
   - Save all open unsaved buffers into a structured fallback crash dump file (`■ <path>` + line indent) upon fatal termination.

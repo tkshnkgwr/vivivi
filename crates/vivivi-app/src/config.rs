@@ -232,6 +232,9 @@ pub struct EditingConfig {
     /// 対応括弧の強調表示 (%)
     #[serde(default = "default_true")]
     pub match_paren: bool,
+    /// ファイル保存時の行末空白自動削除 (:set trim / :set notrim)
+    #[serde(default)]
+    pub trim_on_save: bool,
 }
 
 impl Default for EditingConfig {
@@ -244,6 +247,7 @@ impl Default for EditingConfig {
             keisen_protect: true,
             dabbrev_ignorecase: true,
             match_paren: true,
+            trim_on_save: false,
         }
     }
 }
@@ -325,6 +329,8 @@ pub struct EditorConfig {
     pub smartcase: bool,
     #[serde(default)]
     pub wrap: bool,
+    #[serde(default)]
+    pub trim_on_save: bool,
 }
 
 impl Default for EditorConfig {
@@ -339,6 +345,7 @@ impl Default for EditorConfig {
             ignorecase: true,
             smartcase: true,
             wrap: false,
+            trim_on_save: false,
         }
     }
 }
@@ -462,6 +469,7 @@ impl AppConfig {
             ignorecase: self.editing.ignorecase,
             smartcase: self.editing.smartcase,
             wrap: self.appearance.wrap,
+            trim_on_save: self.editing.trim_on_save,
         }
     }
 

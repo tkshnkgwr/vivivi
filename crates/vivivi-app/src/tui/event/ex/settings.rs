@@ -301,6 +301,36 @@ pub(crate) fn handle_settings_command(app: &mut App, trimmed: &str) -> bool {
         }
 
         // --- 行番号表示切替 (:set number / :set nonumber / :set nu / :set nonu / :se nu / :se nonu) ---
+        // --- 保存時末尾空白自動削除切替 (:set trim / :set notrim / :set trim_on_save / :set notrim_on_save) ---
+        "trim" | "set trim" | "se trim" | "trim_on_save" | "set trim_on_save"
+        | "se trim_on_save" => {
+            app.config.editing.trim_on_save = true;
+            app.status_message = Some("保存時行末空白自動削除: ON (:set trim)".to_string());
+            true
+        }
+        "notrim" | "set notrim" | "se notrim" | "notrim_on_save" | "set notrim_on_save"
+        | "se notrim_on_save" => {
+            app.config.editing.trim_on_save = false;
+            app.status_message = Some("保存時行末空白自動削除: OFF (:set notrim)".to_string());
+            true
+        }
+        "trim?" | "set trim?" | "se trim?" | "trim_on_save?" | "set trim_on_save?"
+        | "se trim_on_save?" => {
+            let state = if app.config.editing.trim_on_save {
+                "trim"
+            } else {
+                "notrim"
+            };
+            app.status_message = Some(format!(
+                "{state} (保存時行末空白自動削除: {})",
+                if app.config.editing.trim_on_save {
+                    "ON"
+                } else {
+                    "OFF"
+                }
+            ));
+            true
+        }
         "number" | "set number" | "se number" | "nu" | "set nu" | "se nu" => {
             app.show_line_numbers = true;
             app.status_message = Some("行番号表示: ON (:set number)".to_string());

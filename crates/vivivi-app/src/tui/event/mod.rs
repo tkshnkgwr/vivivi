@@ -197,6 +197,84 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
         return;
     }
 
+    // 外部コマンド実行ダイアログ (cmdExecDlg) 表示中のキーハンドリング
+    if app.show_cmd_exec_dialog {
+        if is_esc {
+            app.close_cmd_exec_dialog();
+            return;
+        }
+
+        match key.code {
+            KeyCode::Tab => {
+                app.cmd_exec_mode = (app.cmd_exec_mode + 1) % 3;
+            }
+            KeyCode::Backspace => {
+                app.cmd_exec_input.pop();
+            }
+            KeyCode::Enter => {
+                let cmd = app.cmd_exec_input.trim().to_string();
+                if !cmd.is_empty() {
+                    match app.cmd_exec_mode {
+                        0 => {
+                            // 実行のみ (結果プレビュー)
+                            match app.execute_shell_command(&cmd) {
+                                Ok(out) => {
+                                    app.cmd_exec_output_preview = Some(out);
+                                    app.status_message = Some(format!("!{cmd} ➔ 実行完了"));
+                                }
+                                Err(e) => {
+                                    app.cmd_exec_output_preview = Some(format!("エラー: {e}"));
+                                    app.status_message = Some(format!("コマンド実行エラー: {e}"));
+                                }
+                            }
+                        }
+                        1 => {
+                            // バッファ挿入 (:r !)
+                            match app.read_command_into_buffer(&cmd, None) {
+                                Ok(count) => {
+                                    app.status_message =
+                                        Some(format!(":r !{cmd} ➔ {count} 行を挿入しました"));
+                                    app.close_cmd_exec_dialog();
+                                }
+                                Err(e) => {
+                                    app.cmd_exec_output_preview = Some(format!("エラー: {e}"));
+                                    app.status_message = Some(format!("コマンド読込エラー: {e}"));
+                                }
+                            }
+                        }
+                        2 => {
+                            // 選択行置換 (:[range]!)
+                            let (start, end) = match app.cursor.anchor {
+                                Some(anchor) => (
+                                    anchor.line.min(app.cursor.pos.line),
+                                    anchor.line.max(app.cursor.pos.line),
+                                ),
+                                None => (app.cursor.pos.line, app.cursor.pos.line),
+                            };
+                            match app.filter_range_with_command(&cmd, start, end) {
+                                Ok(count) => {
+                                    app.status_message =
+                                        Some(format!(":[range]!{cmd} ➔ {count} 行に置換しました"));
+                                    app.close_cmd_exec_dialog();
+                                }
+                                Err(e) => {
+                                    app.cmd_exec_output_preview = Some(format!("エラー: {e}"));
+                                    app.status_message = Some(format!("置換エラー: {e}"));
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            KeyCode::Char(c) => {
+                app.cmd_exec_input.push(c);
+            }
+            _ => {}
+        }
+        return;
+    }
+
     // TUI 設定ダイアログ表示中のキーハンドリング
     if app.show_preferences_dialog {
         if is_esc || key.code == KeyCode::Char('q') {

@@ -601,12 +601,16 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
   - `Ctrl+Z` / `Ctrl+Y`: Undo and Redo across Insert and Normal modes.
   - `Ctrl+S`: Instant buffer write (`:w`).
 
-### 16.4 Selected Text Execution & External Process Piping (`process.rs`, `tools.rs`)
+### 16.4 Selected Text Execution, Process Piping & Execution Dialog (`process.rs`, `tools.rs`)
 - **Partial Execution & Process Piping**:
   - `App::execute_selected_text()` / `App::pipe_selected_text()`: Passes selected text directly to the OS shell (`cmd /C` or `sh -c`) for execution, or pipes selection to an external process via stdin, replacing or inserting stdout into the buffer.
 - **Ex Command Integration**:
   - `:!<command>`: Executes command; feeds active visual selection as stdin when selected.
   - `:w !<command>`: Pipes buffer content or visual selection into external command stdin.
+  - `:r !<command>` / `:read !<command>`: Executes external command and reads its stdout directly into the buffer immediately below the cursor line (or specified line). Fully undoable via a single transaction block.
+  - `:[range]!<command>` / `:'<,'>!<command>`: Pipes line range or visual selection into external command stdin, replacing the target lines with process stdout (ideal for sorting, formatting, or filtering).
+- **External Command Execution Dialog (`cmdExecDlg` / `:cmdexec`, `:cmd`)**:
+  - Floating dialog allowing users to enter shell commands interactively, choosing execution mode ("Run only", "Read into buffer `:r !`", or "Filter range `:[range]!`").
 
 ### 16.5 GUI / TUI Preferences Dialog Specifications (`settings_dialog.rs`, `settings.rs`)
 - **GUI Preferences Dialog (`580x620`, max `660px`)**:
@@ -625,3 +629,35 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
 - **Off-Screen Safeguard**:
   - Checks intersection with virtual screen rectangles (`SM_XVIRTUALSCREEN`, `SM_CXVIRTUALSCREEN`).
   - If disconnected displays leave the window entirely outside or >80% clipped, safely clamps coordinates to the center of the primary display.
+
+---
+
+## 17. Trailing Whitespace Trimming Specification (`:trim`, ViVi 4 Parity)
+
+### 17.1 Overview & Target Characters
+- **Functional Overview**:
+  Scans all lines across the buffer (or a designated range / visual selection) and strips trailing whitespace.
+- **Target Characters**:
+  - Half-width space (`' '`, `\u{0020}`)
+  - Tab character (`'\t'`, `\u{0009}`)
+  - Full-width space (`'　'`, `\u{3000}`)
+- **Trimming Modes & Arguments**:
+  - `:trim` or `:%trim`: Trims half-width spaces, tabs, and full-width spaces across the entire buffer.
+  - `:trim half`: Trims half-width spaces and tabs only (preserves full-width spaces).
+  - `:trim zenkaku`: Trims full-width spaces only.
+  - `:'<,'>trim`: Trims within the active visual line range.
+  - `:[start],[end]trim`: Trims within the specified line range (e.g., `:10,25trim`).
+
+### 17.2 Transactional Undo & Feedback
+- **Strict Undo Atomicity**:
+  All line modifications are contained within a single `UndoMgr` transaction block, allowing an immediate rollback with a single `u` keystroke.
+- **Status Feedback**:
+  - On modifications: `Trim: {N} line(s) trimmed (total: {Total} lines)`
+  - When clean: `Trim: No trailing whitespace detected`
+
+### 17.3 Trim On Save (`trim_on_save`)
+- **Configuration Key**: `AppConfig.editor.trim_on_save` (boolean, default: `false`)
+- **Interactive Commands**:
+  - `:set trim` or `:set trim_on_save`: Enables automated trimming on buffer write.
+  - `:set notrim` or `:set notrim_on_save`: Disables automated trimming on buffer write.
+- **Write Integration**: Executing `:w` automatically trims the buffer prior to serialization if `trim_on_save` is enabled, recording the edit in undo history and saving clean text.

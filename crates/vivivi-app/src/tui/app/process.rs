@@ -222,4 +222,112 @@ impl App {
             })
         }
     }
+
+    /// 外部コマンドを実行し、その標準出力を指定行（またはカレント行の次行）へ直接挿入します (`:r !<cmd>`)。
+    ///
+    /// 単一の Undo トランザクションとして記録されるため、`u` キー1回で完全復元可能です。
+    /// 戻り値として、挿入された行数を返します。
+    pub fn read_command_into_buffer(
+        &mut self,
+        cmd: &str,
+        target_line: Option<usize>,
+    ) -> Result<usize, String> {
+        let output = self.execute_shell_command(cmd)?;
+        if output.is_empty() {
+            return Ok(0);
+        }
+
+        let line_count = self.buffer.line_count();
+        let insert_line = target_line.unwrap_or_else(|| {
+            if line_count == 0 {
+                0
+            } else {
+                (self.cursor.pos.line + 1).min(line_count)
+            }
+        });
+
+        let mut text_to_insert = output;
+        if !text_to_insert.ends_with('\n') {
+            text_to_insert.push('\n');
+        }
+        let inserted_lines = text_to_insert.lines().count();
+
+        self.buffer.open_undo_block();
+
+        let insert_offset = if insert_line < line_count {
+            self.buffer
+                .cursor_to_position(vivivi_core::CursorPosition::new(insert_line, 0))
+        } else {
+            self.buffer.len()
+        };
+
+        self.buffer.insert_text(insert_offset, &text_to_insert);
+        self.buffer.close_undo_block();
+
+        self.cursor.pos = vivivi_core::CursorPosition::new(
+            insert_line.min(self.buffer.line_count().saturating_sub(1)),
+            0,
+        );
+        self.clamp_cursor();
+
+        Ok(inserted_lines)
+    }
+
+    /// 指定行範囲のテキストを外部コマンドの標準入力へパイプ送信し、
+    /// その標準出力で対象範囲を一括置換します (`:[range]!<cmd>`)。
+    pub fn filter_range_with_command(
+        &mut self,
+        cmd: &str,
+        start_line: usize,
+        end_line: usize,
+    ) -> Result<usize, String> {
+        let line_count = self.buffer.line_count();
+        if line_count == 0 {
+            return Err("バッファが空です".to_string());
+        }
+
+        let start = start_line.min(line_count.saturating_sub(1));
+        let end = end_line.min(line_count.saturating_sub(1)).max(start);
+
+        let mut input_text = String::new();
+        for l in start..=end {
+            if let Some(line) = self.buffer.get_line(l) {
+                input_text.push_str(&line);
+                input_text.push('\n');
+            }
+        }
+
+        let output = self.pipe_command_with_input(cmd, &input_text)?;
+
+        let mut replacement = output;
+        if !replacement.ends_with('\n') && (end + 1 < line_count || replacement.lines().count() > 1)
+        {
+            replacement.push('\n');
+        }
+        let new_line_count = replacement.lines().count();
+
+        self.buffer.open_undo_block();
+
+        let start_offset = self
+            .buffer
+            .cursor_to_position(vivivi_core::CursorPosition::new(start, 0));
+        let end_offset = if end + 1 < line_count {
+            self.buffer
+                .cursor_to_position(vivivi_core::CursorPosition::new(end + 1, 0))
+        } else {
+            self.buffer.len()
+        };
+
+        self.buffer.delete_range(start_offset, end_offset);
+        self.buffer.insert_text(start_offset, &replacement);
+        self.buffer.close_undo_block();
+
+        self.cursor.pos = vivivi_core::CursorPosition::new(
+            start.min(self.buffer.line_count().saturating_sub(1)),
+            0,
+        );
+        self.clamp_cursor();
+
+        Ok(new_line_count)
+    }
 }

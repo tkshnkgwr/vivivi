@@ -174,12 +174,32 @@ Alongside modal Vi commands, familiar Windows shortcut keys operate transparentl
   - **Line Number Prefixing**:
     `:%s/^/"Line " + $line + ": "/e`
 
-### (11) External Process Piping & Selected Text Execution (`:!`, `:w !`)
+### (11) External Process Piping, Reading, Filtering & Execution Dialog (`:!`, `:w !`, `:r !`, `:[range]!`, `:cmdexec`)
 - **Execute External Shell Commands (`:!<cmd>`)**:
   - Run CLI commands directly (e.g. `:!cargo test`, `:!dir`) from the command line and view outputs.
   - When visual selection is active, running `:!` feeds the selected lines directly into the command's standard input (stdin).
 - **Buffer Piping (`:w !<cmd>`)**:
   - Run `:w !python` or `:w !clip` to pipe the entire buffer or active selection into the stdin of an external process without modifying or saving the file to disk.
+- **Read Command Output into Buffer (`:r !<cmd>`)**:
+  - Execute `:r !dir /b` or `:r !date /t` to run an external command and directly insert its stdout below the current cursor line.
+- **Line Range Filter Replacement (`:[range]!<cmd>` / `:'<,'>!<cmd>`)**:
+  - Run `:%!sort` or visual selection `:'<,'>!sort` to pass target lines to external stdin and replace the range with process stdout.
+- **External Command Execution Dialog (`:cmdexec`, `:cmd`)**:
+  - Interactive modal dialog to execute commands, preview outputs, and insert/replace buffer content conveniently.
+
+### (12) Trailing Whitespace Trimming (`:trim`)
+- **Trim All Trailing Whitespace (`:trim` / `:%trim`)**:
+  - Automatically identifies and strips trailing half-width spaces, tabs, and full-width spaces (`\u{3000}`) across the entire buffer.
+  - Fully undoable via a single `u` keystroke.
+- **Target Mode Arguments**:
+  - `:trim half`: Strips half-width spaces and tabs only (preserves full-width spaces).
+  - `:trim zenkaku`: Strips full-width spaces only.
+- **Range Trimming**:
+  - `:'<,'>trim`: Trims lines within the active visual selection.
+  - `:10,30trim`: Trims lines within the specified line range.
+- **Automatic Trimming on Save (`trim_on_save`)**:
+  - `:set trim` (or `:set trim_on_save`): Automatically strips trailing whitespace prior to saving the buffer on `:w`.
+  - `:set notrim` (or `:set notrim_on_save`): Disables automated trimming on save.
 
 ---
 

@@ -66,6 +66,10 @@ impl App {
     /// let _ = app.save_file();
     /// ```
     pub fn save_file(&mut self) -> Result<(), std::io::Error> {
+        if self.config.editing.trim_on_save {
+            let _ = self.trim_trailing_whitespace(None, vivivi_modes::trim::TrimKind::All);
+        }
+
         if let Some(path) = self.file_path.clone() {
             let content = self.buffer.to_string();
 

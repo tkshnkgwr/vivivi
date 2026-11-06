@@ -149,6 +149,15 @@ pub struct App {
     /// TUI 設定ダイアログを開いた時点の設定バックアップ（キャンセル・ロールバック用）
     pub tui_settings_backup: Option<crate::config::AppConfig>,
 
+    /// 外部コマンド実行ダイアログ (cmdExecDlg) の表示フラグ
+    pub show_cmd_exec_dialog: bool,
+    /// 外部コマンド実行ダイアログの入力文字列
+    pub cmd_exec_input: String,
+    /// 外部コマンド実行ダイアログの実行モード (0: 実行のみ, 1: バッファ挿入 :r!, 2: 選択行置換 :[range]!)
+    pub cmd_exec_mode: usize,
+    /// 外部コマンド実行結果のプレビュー
+    pub cmd_exec_output_preview: Option<String>,
+
     // --- 不可視文字可視化 (:set list / :set nolist) ---
     pub list_chars_config: ListCharsConfig,
 
@@ -376,6 +385,10 @@ impl App {
             tui_settings_item: 0,
             tui_settings_in_items: false,
             tui_settings_backup: None,
+            show_cmd_exec_dialog: false,
+            cmd_exec_input: String::new(),
+            cmd_exec_mode: 0,
+            cmd_exec_output_preview: None,
             list_chars_config,
 
             active_theme,
@@ -855,6 +868,70 @@ impl App {
             vivivi_vi::ClipboardOption::Unnamed => "unnamed".to_string(),
             vivivi_vi::ClipboardOption::UnnamedPlus => "unnamedplus".to_string(),
         };
+    }
+
+    /// バッファの指定範囲（または全体）の末尾空白を一括削除します (`:trim`)。
+    ///
+    /// 単一の Undo トランザクションとして記録されるため、`u` キー1回で完全復元可能です。
+    /// 戻り値として、末尾空白が削除された行数を返します。
+    pub fn trim_trailing_whitespace(
+        &mut self,
+        range: Option<(usize, usize)>,
+        kind: vivivi_modes::trim::TrimKind,
+    ) -> usize {
+        let line_count = self.buffer.line_count();
+        if line_count == 0 {
+            return 0;
+        }
+
+        let (start_line, end_line) = match range {
+            Some((s, e)) => (
+                s.min(line_count.saturating_sub(1)),
+                e.min(line_count.saturating_sub(1)),
+            ),
+            None => (0, line_count.saturating_sub(1)),
+        };
+
+        let mut lines = Vec::with_capacity(line_count);
+        for l in 0..line_count {
+            lines.push(self.buffer.get_line(l).unwrap_or_default());
+        }
+
+        let modified_lines = vivivi_modes::trim::trim_lines(&lines, start_line, end_line, kind);
+        if modified_lines.is_empty() {
+            return 0;
+        }
+
+        let modified_count = modified_lines.len();
+
+        self.buffer.open_undo_block();
+
+        for (line_idx, new_line_str) in modified_lines.into_iter().rev() {
+            let start_offset = self
+                .buffer
+                .cursor_to_position(CursorPosition::new(line_idx, 0));
+            let old_line_len = lines[line_idx].chars().count();
+            let end_offset = start_offset + old_line_len;
+            self.buffer.delete_range(start_offset, end_offset);
+            self.buffer.insert_text(start_offset, &new_line_str);
+        }
+
+        self.buffer.close_undo_block();
+        self.clamp_cursor();
+
+        modified_count
+    }
+
+    /// 外部コマンド実行ダイアログ (cmdExecDlg) を開きます。
+    pub fn open_cmd_exec_dialog(&mut self) {
+        self.show_cmd_exec_dialog = true;
+        self.cmd_exec_output_preview = None;
+    }
+
+    /// 外部コマンド実行ダイアログ (cmdExecDlg) を閉じます。
+    pub fn close_cmd_exec_dialog(&mut self) {
+        self.show_cmd_exec_dialog = false;
+        self.cmd_exec_output_preview = None;
     }
 }
 

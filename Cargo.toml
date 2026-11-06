@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.9.12-beta"
+version = "0.9.13-beta"
 edition = "2024"
 authors = ["vivivi developers"]
 license = "GPL-3.0-or-later"
@@ -32,6 +32,7 @@ arboard = "3.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8"
+criterion = "0.5"
 
 # --- ビルドプロファイル最適化設定 ---
 # 開発・デバッグ実行時（cargo run）でも、GUI描画・グラフィックス・フォント等の外部依存クレートをフル最適化

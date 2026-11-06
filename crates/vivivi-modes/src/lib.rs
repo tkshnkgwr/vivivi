@@ -26,6 +26,7 @@ pub mod line_edit;
 pub mod migemo;
 pub mod outline;
 pub mod syntax;
+pub mod trim;
 pub mod zen_coding;
 
 pub mod expr_subst;

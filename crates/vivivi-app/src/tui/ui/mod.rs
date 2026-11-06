@@ -1,8 +1,9 @@
-﻿//! TUI 画面描画モジュール。
+//! TUI 画面描画モジュール。
 //!
 //! 各領域（エディタ、アウトライン、ステータスバー）のレイアウト計算と描画ディスパッチを担当します。
 
 pub mod clipboard_hist;
+pub mod cmd_exec;
 pub mod editor;
 pub mod filer;
 pub mod help;
@@ -193,6 +194,11 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     // 8.5 TUI 設定ダイアログの描画（表示中のみ最前面に重ねて描画）
     if app.show_preferences_dialog {
         settings::render_settings_modal(frame, app, size);
+    }
+
+    // 8.6 外部コマンド実行ダイアログの描画
+    if app.show_cmd_exec_dialog {
+        cmd_exec::render_cmd_exec_modal(frame, app, size);
     }
 
     // 9. カーソルの画面配置

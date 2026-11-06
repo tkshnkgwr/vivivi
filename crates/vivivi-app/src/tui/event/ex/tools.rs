@@ -6,6 +6,119 @@ use crate::tui::app::App;
 ///
 /// コマンドを処理した場合は `true`、合致しなかった場合は `false` を返します。
 pub(crate) fn handle_tools_command(app: &mut App, trimmed: &str) -> bool {
+    // :r !<cmd> または :read !<cmd>
+    if let Some(cmd) = trimmed
+        .strip_prefix("r !")
+        .or_else(|| trimmed.strip_prefix("read !"))
+    {
+        let cmd = cmd.trim();
+        match app.read_command_into_buffer(cmd, None) {
+            Ok(count) => {
+                app.status_message = Some(format!(":r !{cmd} ➔ {count} 行を挿入しました"));
+            }
+            Err(e) => {
+                app.status_message = Some(format!("コマンド読込エラー: {e}"));
+            }
+        }
+        return true;
+    }
+
+    // :%!sort などのバッファ全体外部コマンドフィルター置換
+    if let Some(cmd) = trimmed.strip_prefix("%!") {
+        let cmd = cmd.trim();
+        let line_count = app.buffer.line_count();
+        match app.filter_range_with_command(cmd, 0, line_count.saturating_sub(1)) {
+            Ok(count) => {
+                app.status_message = Some(format!(":%!{cmd} ➔ {count} 行に置換しました"));
+            }
+            Err(e) => {
+                app.status_message = Some(format!("フィルターエラー: {e}"));
+            }
+        }
+        return true;
+    }
+
+    // :'<,'>!sort などの選択範囲外部コマンドフィルター置換
+    if let Some(cmd) = trimmed.strip_prefix("'<,'>!") {
+        let cmd = cmd.trim();
+        let (start, end) = match app.cursor.anchor {
+            Some(anchor) => (
+                anchor.line.min(app.cursor.pos.line),
+                anchor.line.max(app.cursor.pos.line),
+            ),
+            None => (app.cursor.pos.line, app.cursor.pos.line),
+        };
+        match app.filter_range_with_command(cmd, start, end) {
+            Ok(count) => {
+                app.status_message = Some(format!(":'<,'>!{cmd} ➔ {count} 行に置換しました"));
+            }
+            Err(e) => {
+                app.status_message = Some(format!("フィルターエラー: {e}"));
+            }
+        }
+        return true;
+    }
+
+    // :cmdexec / :cmd (外部コマンド実行ダイアログ起動)
+    if trimmed == "cmdexec" || trimmed == "cmd" {
+        app.open_cmd_exec_dialog();
+        app.status_message = Some("外部コマンド実行ダイアログを開きました".to_string());
+        return true;
+    }
+
+    // --- 末尾空白一括削除 (:trim, :%trim, :'<,'>trim, :10,20trim) ---
+    if trimmed.starts_with("trim")
+        || trimmed.starts_with("%trim")
+        || trimmed.starts_with("'<,'>trim")
+        || (trimmed.ends_with("trim") && trimmed.contains(','))
+    {
+        let (range_opt, rest) = if let Some(r) = trimmed.strip_prefix("%trim") {
+            (None, r.trim())
+        } else if let Some(r) = trimmed.strip_prefix("'<,'>trim") {
+            let (start, end) = match app.cursor.anchor {
+                Some(anchor) => (
+                    anchor.line.min(app.cursor.pos.line),
+                    anchor.line.max(app.cursor.pos.line),
+                ),
+                None => (app.cursor.pos.line, app.cursor.pos.line),
+            };
+            (Some((start, end)), r.trim())
+        } else if let Some(r) = trimmed.strip_prefix("trim") {
+            (None, r.trim())
+        } else if let Some((range_part, r)) = trimmed.split_once("trim") {
+            if let Some((s_str, e_str)) = range_part.split_once(',') {
+                let s = s_str.trim().parse::<usize>().unwrap_or(1).saturating_sub(1);
+                let e = e_str
+                    .trim()
+                    .parse::<usize>()
+                    .unwrap_or(s + 1)
+                    .saturating_sub(1);
+                (Some((s, e)), r.trim())
+            } else {
+                (None, r.trim())
+            }
+        } else {
+            (None, "")
+        };
+
+        let kind = match rest {
+            "half" => vivivi_modes::trim::TrimKind::Half,
+            "zenkaku" => vivivi_modes::trim::TrimKind::Zenkaku,
+            _ => vivivi_modes::trim::TrimKind::All,
+        };
+
+        let total_lines = app.buffer.line_count();
+        let modified = app.trim_trailing_whitespace(range_opt, kind);
+        if modified > 0 {
+            app.status_message = Some(format!(
+                "Trim: {} 行の末尾空白を削除しました (全 {} 行)",
+                modified, total_lines
+            ));
+        } else {
+            app.status_message = Some("Trim: 末尾空白はありませんでした".to_string());
+        }
+        return true;
+    }
     // --- 外部コマンド実行・選択テキストパイプ連携 (:!, :w !) ---
     if let Some(cmd) = trimmed.strip_prefix("w !") {
         let cmd = cmd.trim();
