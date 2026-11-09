@@ -167,6 +167,20 @@ impl ViviviGuiApp {
                             ui.close_menu();
                         }
                         ui.separator();
+                        if ui.button("Check for Updates...  (:checkupdate)").clicked() {
+                            self.core.check_for_updates(true);
+                            ui.close_menu();
+                        }
+                        if let moult_update::UpdateStatus::ReadyToApply { ref release, .. } =
+                            self.core.update_status()
+                            && ui
+                                .button(format!("✨ Restart to Update (v{})", release.version))
+                                .clicked()
+                        {
+                            let _ = self.core.apply_update_and_restart();
+                            ui.close_menu();
+                        }
+                        ui.separator();
                         ui.label("vivivi - Vi-like Editor in Rust");
                     });
 
@@ -617,6 +631,76 @@ impl ViviviGuiApp {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
+                                    // 自動アップデートバッジ (moult-update)
+                                    match self.core.update_status() {
+                                        moult_update::UpdateStatus::UpdateAvailable(ref rel) => {
+                                            let label = format!("⬆ v{} 利用可能", rel.version);
+                                            let btn = egui::Button::new(
+                                                egui::RichText::new(label)
+                                                    .color(colors::BG_PANEL)
+                                                    .strong()
+                                                    .size(11.0),
+                                            )
+                                            .fill(colors::ACCENT_CYAN);
+                                            if ui
+                                                .add(btn)
+                                                .on_hover_text(
+                                                    "クリックして新バージョンをダウンロード",
+                                                )
+                                                .clicked()
+                                            {
+                                                self.core.download_update();
+                                            }
+                                            ui.separator();
+                                        }
+                                        moult_update::UpdateStatus::Downloading {
+                                            downloaded,
+                                            total,
+                                        } => {
+                                            let text = if let Some(tot) = total {
+                                                let pct = (downloaded * 100)
+                                                    .checked_div(tot)
+                                                    .unwrap_or(0);
+                                                format!("🔄 DL中... {pct}%")
+                                            } else {
+                                                "🔄 DL中...".to_string()
+                                            };
+                                            ui.label(
+                                                egui::RichText::new(text)
+                                                    .color(colors::ACCENT_YELLOW)
+                                                    .size(11.0),
+                                            );
+                                            ui.separator();
+                                        }
+                                        moult_update::UpdateStatus::ReadyToApply {
+                                            ref release,
+                                            ..
+                                        } => {
+                                            let label = format!(
+                                                "✨ v{} 準備完了 [再起動]",
+                                                release.version
+                                            );
+                                            let btn = egui::Button::new(
+                                                egui::RichText::new(label)
+                                                    .color(colors::BG_PANEL)
+                                                    .strong()
+                                                    .size(11.0),
+                                            )
+                                            .fill(colors::ACCENT_GREEN);
+                                            if ui
+                                                .add(btn)
+                                                .on_hover_text(
+                                                    "クリックして新バージョンを反映し再起動",
+                                                )
+                                                .clicked()
+                                            {
+                                                let _ = self.core.apply_update_and_restart();
+                                            }
+                                            ui.separator();
+                                        }
+                                        _ => {}
+                                    }
+
                                     let lang_str = format!("{:?}", self.core.syntax_lang);
                                     ui.label(
                                         egui::RichText::new(lang_str)

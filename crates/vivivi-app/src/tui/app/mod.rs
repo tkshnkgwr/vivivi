@@ -33,6 +33,16 @@ mod windows;
 #[cfg(test)]
 mod tests;
 
+/// ダウンロード対象のリリース情報・アセット情報のタプル
+pub type UpdateTargetInfo = (
+    moult_update::ReleaseInfo,
+    moult_update::AssetInfo,
+    Option<moult_update::AssetInfo>,
+);
+
+/// アップデート対象情報のスレッド間共有ハンドル型
+pub type SharedUpdateTarget = std::sync::Arc<std::sync::Mutex<Option<UpdateTargetInfo>>>;
+
 pub struct App {
     /// 編集中のテキストバッファ
     pub buffer: TextBuffer,
@@ -183,6 +193,14 @@ pub struct App {
     pub tabs: Vec<crate::tui::tab::TabPage>,
     pub active_tab: usize,
     pub next_tab_id: usize,
+
+    // --- 自動アップデート (moult-update) ---
+    /// アップデート管理エンジン
+    pub update_manager: std::sync::Arc<moult_update::UpdateManager>,
+    /// ダウンロード対象のリリース情報キャッシュ
+    pub update_target: SharedUpdateTarget,
+    /// ダウンロード・解凍済みステージングディレクトリ（適用準備完了時）
+    pub update_staging_dir: std::sync::Arc<std::sync::Mutex<Option<PathBuf>>>,
 }
 
 impl App {
@@ -309,6 +327,55 @@ impl App {
             );
         }
 
+        // --- 自動アップデート (moult-update) マネージャー初期化 ---
+        let current_exe_name = std::env::current_exe()
+            .ok()
+            .and_then(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.to_string())
+            })
+            .unwrap_or_else(|| "vivivi.exe".to_string());
+
+        let (target_bin, pair_bin) = if current_exe_name.to_lowercase().contains("gui") {
+            ("vivivi-gui.exe".to_string(), "vivivi.exe".to_string())
+        } else {
+            ("vivivi.exe".to_string(), "vivivi-gui.exe".to_string())
+        };
+
+        let update_config = moult_update::UpdateConfig::new(
+            "tkshnkgwr",
+            "vivivi",
+            env!("CARGO_PKG_VERSION"),
+            target_bin,
+        )
+        .with_pair_bin(pair_bin)
+        .with_asset_filter("windows-x86_64");
+
+        let update_manager = std::sync::Arc::new(moult_update::UpdateManager::new(update_config));
+        let update_target = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let update_staging_dir = std::sync::Arc::new(std::sync::Mutex::new(None));
+
+        #[cfg(not(test))]
+        if config.general.check_update {
+            let mgr = std::sync::Arc::clone(&update_manager);
+            let target_lock = std::sync::Arc::clone(&update_target);
+            let _ = std::thread::Builder::new()
+                .name("vivivi-update-check".to_string())
+                .spawn(move || {
+                    if let Ok(moult_update::UpdateCheckResult::UpdateAvailable {
+                        latest_release,
+                        target_asset,
+                        sha256_asset,
+                        ..
+                    }) = mgr.check(false)
+                    {
+                        *target_lock.lock().unwrap() =
+                            Some((*latest_release, target_asset, sha256_asset));
+                    }
+                });
+        }
+
         let initial_tab = crate::tui::tab::TabPage {
             id: 1,
             buffer: buffer.clone(),
@@ -410,7 +477,69 @@ impl App {
             tabs: vec![initial_tab],
             active_tab: 0,
             next_tab_id: 2,
+
+            update_manager,
+            update_target,
+            update_staging_dir,
         }
+    }
+
+    /// 更新があるかバックグラウンドで照会
+    pub fn check_for_updates(&self, force: bool) {
+        let mgr = std::sync::Arc::clone(&self.update_manager);
+        let target_lock = std::sync::Arc::clone(&self.update_target);
+        let _ = std::thread::Builder::new()
+            .name("vivivi-update-check".to_string())
+            .spawn(move || {
+                if let Ok(moult_update::UpdateCheckResult::UpdateAvailable {
+                    latest_release,
+                    target_asset,
+                    sha256_asset,
+                    ..
+                }) = mgr.check(force)
+                {
+                    *target_lock.lock().unwrap() =
+                        Some((*latest_release, target_asset, sha256_asset));
+                }
+            });
+    }
+
+    /// 新バージョンのダウンロード＆展開をバックグラウンドで開始
+    pub fn download_update(&self) -> bool {
+        let target = self.update_target.lock().unwrap().clone();
+        if let Some((release, target_asset, sha256_asset)) = target {
+            let mgr = std::sync::Arc::clone(&self.update_manager);
+            let staging_lock = std::sync::Arc::clone(&self.update_staging_dir);
+            let _ = std::thread::Builder::new()
+                .name("vivivi-update-download".to_string())
+                .spawn(move || {
+                    if let Ok(extracted) =
+                        mgr.download(&release, &target_asset, sha256_asset.as_ref(), None)
+                    {
+                        *staging_lock.lock().unwrap() = Some(extracted);
+                    }
+                });
+            true
+        } else {
+            false
+        }
+    }
+
+    /// ダウンロード完了した新バイナリをスワップ適用して即時再起動
+    pub fn apply_update_and_restart(&self) -> Result<(), String> {
+        let staging = self.update_staging_dir.lock().unwrap().clone();
+        if let Some(staging_dir) = staging {
+            self.update_manager
+                .apply_and_restart(&staging_dir)
+                .map_err(|e| e.to_string())
+        } else {
+            Err("更新バイナリがまだ準備できていません".to_string())
+        }
+    }
+
+    /// 現在のアップデートステータスを取得
+    pub fn update_status(&self) -> moult_update::UpdateStatus {
+        self.update_manager.status()
     }
 
     /// アクティブウィンドウにおける現在のカーソル座標を取得します。

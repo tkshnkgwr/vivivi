@@ -118,8 +118,30 @@ pub fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         lang_str
     );
 
+    let update_badge = match app.update_status() {
+        moult_update::UpdateStatus::UpdateAvailable(ref rel) => {
+            format!(" [⬆ v{}利用可能 (:update)]", rel.version)
+        }
+        moult_update::UpdateStatus::Downloading { downloaded, total } => {
+            if let Some(tot) = total {
+                let pct = (downloaded * 100).checked_div(tot).unwrap_or(0);
+                format!(" [🔄 {pct}% (:update)]")
+            } else {
+                " [🔄 DL中...]".to_string()
+            }
+        }
+        moult_update::UpdateStatus::ReadyToApply { ref release, .. } => {
+            format!(" [✨ v{}準備完了 (:restart)]", release.version)
+        }
+        _ => String::new(),
+    };
+
     let left_info = format!("{mode_str}{keisen_badge}{csv_badge} {file_name}{modified_badge}");
-    let right_info = format!("{enc_info} {}:{} | {percent}% ", cur.line + 1, cur.col + 1);
+    let right_info = format!(
+        "{update_badge}{enc_info} {}:{} | {percent}% ",
+        cur.line + 1,
+        cur.col + 1
+    );
 
     // 一時通知メッセージがある場合は上書き表示（エラー時は赤背景で警告強調）
     let (display_left, is_error) = if let Some(msg) = &app.status_message {

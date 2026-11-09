@@ -6,10 +6,11 @@ members = [
     "crates/vivivi-modes",
     "crates/vivivi-app",
     "crates/vivivi-gui",
+    "crates/moult-update",
 ]
 
 [workspace.package]
-version = "0.9.14-beta"
+version = "0.9.15-beta"
 edition = "2024"
 authors = ["vivivi developers"]
 license = "GPL-3.0-or-later"
@@ -20,6 +21,7 @@ vivivi-core = { path = "crates/vivivi-core" }
 vivivi-vi = { path = "crates/vivivi-vi" }
 vivivi-modes = { path = "crates/vivivi-modes" }
 vivivi-app = { path = "crates/vivivi-app" }
+moult-update = { path = "crates/moult-update" }
 
 thiserror = "2.0"
 anyhow = "1.0"

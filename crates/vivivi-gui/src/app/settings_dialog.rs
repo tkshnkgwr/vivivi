@@ -332,6 +332,58 @@ impl ViviviGuiApp {
             &mut self.settings_dialog.draft_config.general.check_update,
             "起動時の更新確認 (Check for Updates)",
         );
+
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            if ui.button("🔄 今すぐ更新を確認 (:checkupdate)").clicked() {
+                self.core.check_for_updates(true);
+            }
+
+            match self.core.update_status() {
+                moult_update::UpdateStatus::UpdateAvailable(ref rel) => {
+                    ui.label(
+                        egui::RichText::new(format!("⬆ v{} が利用可能です", rel.version))
+                            .color(colors::ACCENT_CYAN)
+                            .strong(),
+                    );
+                    if ui.button("ダウンロード").clicked() {
+                        self.core.download_update();
+                    }
+                }
+                moult_update::UpdateStatus::Downloading { downloaded, total } => {
+                    let text = if let Some(tot) = total {
+                        let pct = (downloaded * 100).checked_div(tot).unwrap_or(0);
+                        format!("ダウンロード中... {pct}%")
+                    } else {
+                        "ダウンロード中...".to_string()
+                    };
+                    ui.label(egui::RichText::new(text).color(colors::ACCENT_YELLOW));
+                }
+                moult_update::UpdateStatus::ReadyToApply { ref release, .. } => {
+                    ui.label(
+                        egui::RichText::new(format!("✨ v{} 準備完了", release.version))
+                            .color(colors::ACCENT_GREEN)
+                            .strong(),
+                    );
+                    if ui.button("反映して再起動").clicked() {
+                        let _ = self.core.apply_update_and_restart();
+                    }
+                }
+                moult_update::UpdateStatus::UpToDate => {
+                    ui.label(
+                        egui::RichText::new("✓ 最新バージョンを利用中です")
+                            .color(colors::FG_DIMMED),
+                    );
+                }
+                moult_update::UpdateStatus::Checking => {
+                    ui.label(egui::RichText::new("照会中...").color(colors::ACCENT_BLUE));
+                }
+                moult_update::UpdateStatus::Failed(ref err) => {
+                    ui.label(egui::RichText::new(format!("⚠️ {err}")).color(colors::ACCENT_RED));
+                }
+                _ => {}
+            }
+        });
     }
 
     /// 2. 表示・外観 (Appearance)

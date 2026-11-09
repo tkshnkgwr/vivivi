@@ -1,0 +1,20 @@
+[package]
+name = "moult-update"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Lightweight, application-agnostic self-update and synchronized in-place swap engine for Rust applications"
+
+[dependencies]
+ureq = { version = "2.10", features = ["json"] }
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
+sha2 = "0.10"
+semver = "1.0"
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.14"

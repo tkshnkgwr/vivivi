@@ -596,6 +596,45 @@ pub(crate) fn handle_tools_command(app: &mut App, trimmed: &str) -> bool {
             true
         }
 
+        // --- 自動アップデート (:checkupdate, :update, :restart) ---
+        "checkupdate" | "checkup" => {
+            app.status_message = Some("🔄 アップデートを確認中...".to_string());
+            app.check_for_updates(true);
+            true
+        }
+        "update" | "upgrade" => {
+            if app.download_update() {
+                app.status_message =
+                    Some("🔄 新バージョンのダウンロードを開始しました...".to_string());
+            } else {
+                match app.update_status() {
+                    moult_update::UpdateStatus::ReadyToApply { ref release, .. } => {
+                        app.status_message = Some(format!(
+                            "✨ v{} はダウンロード済みです。反映するには ':restart' を実行してください",
+                            release.version
+                        ));
+                    }
+                    moult_update::UpdateStatus::Downloading { .. } => {
+                        app.status_message = Some("🔄 現在ダウンロード中です...".to_string());
+                    }
+                    _ => {
+                        app.status_message = Some(
+                            "利用可能な更新がありません。':checkupdate' で確認してください"
+                                .to_string(),
+                        );
+                    }
+                }
+            }
+            true
+        }
+        "restart" => match app.apply_update_and_restart() {
+            Ok(_) => true,
+            Err(e) => {
+                app.status_message = Some(format!("再起動エラー: {e}"));
+                true
+            }
+        },
+
         _ => false,
     }
 }

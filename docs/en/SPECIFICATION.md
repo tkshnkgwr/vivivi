@@ -705,3 +705,76 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
   - **Zoom & Pan**: Smooth mouse wheel zooming and right-click canvas panning.
 - **Commands**:
   - Toggled via `:visualize`, `:graph`, or menu bar View → Visualize (Project Graph).
+
+---
+
+## 20. Application Icon & Visual Identity Specification (`assets/icons/`)
+
+### 20.1 Design Concept: "Neo-Triple V (Dynamic Asymmetric Neon)"
+- **Symbol Geometry**:
+  - Three sharp chevrons (the letter "V") in an offset, layered neon structure.
+  - Symbolizes the project name "vivivi" (V-V-V), ultra-fast editing performance, and multi-layered architecture (tabs, window splits, project graph).
+- **Color Palette (Tokyo Night Colors)**:
+  - Vibrant cyan (`#7dcfff`), neon purple (`#bb9af7`), and sunset orange (`#ff9e64`) glows.
+  - Set against a deep titanium navy background (`#1a1b26`), providing high contrast and clarity even at 16x16 / 32x32 system tray dimensions.
+
+### 20.2 Asset Architecture (`assets/icons/`)
+- `icon.png`: 1024x1024 high-resolution master PNG.
+- `icon_{size}x{size}.png`: Standalone PNG files for 16x16, 24x24, 32x32, 48x48, 64x64, 128x128, 256x256, and 512x512.
+- `icon.ico`: Multi-size Windows ICO container encapsulating 16x16, 24x24, 32x32, 48x48, 64x64, 128x128, and 256x256 resolutions.
+- `icon_256.rgba`: 256x256 raw RGBA binary stream (262,144 bytes) for zero-cost instant runtime GUI window icon mapping.
+
+### 20.3 Integration Specification
+- **GUI Window & Taskbar (`vivivi-gui`)**:
+  - Bound via `egui::ViewportBuilder::with_icon` using 256x256 RGBA data, providing official branding in window headers and OS taskbars.
+- **Windows Executable (`.exe`) PE Resource Embedding**:
+  - Embedded into Windows binaries using `winres` to display the official icon in Windows Explorer, task managers, and desktop shortcuts.
+
+---
+
+## 21. AntiGravity-Style Auto-Update & Synchronized Pair Binary Swap Specification (`moult-update`, Phase 5)
+
+### 21.1 Core Architecture & Design Philosophy
+- **Reusable Independent Crate (`crates/moult-update`)**:
+  - Designed as an application-agnostic, standalone library free of `vivivi`-specific domain logic. Directly reusable across any custom Rust applications (CLI/GUI/TUI) via `moult-update = { git = "...", ... }` or path dependencies.
+  - Named after the biological process of shedding an exoskeleton ("moult" + "update"), symbolizing an active process shedding its old shell and cleanly emerging as the updated binary.
+- **Seamless AntiGravity Experience**:
+  - Background asynchronous version checking upon launch without intrusive popups.
+  - Silent streaming download & SHA-256 integrity validation without blocking the editor UI thread.
+  - Instant in-place binary swap & restart upon one click or `:restart` command.
+- **Synchronized Pair Binary Updates**:
+  - Distributes a unified archive (`vivivi-windows-x86_64.zip`) containing both `vivivi-gui.exe` (GUI) and `vivivi.exe` (TUI).
+  - Updating from either frontend atomically upgrades both executables simultaneously, eliminating version drift across the CLI and GUI tools.
+
+### 21.2 Network & Verification Architecture (`moult_update::check`, `moult_update::download`)
+- **Lightweight HTTP Client (`ureq`)**:
+  - Avoids heavyweight asynchronous runtimes (tokio) by using minimal synchronous `ureq` running inside dedicated background worker threads (`std::thread::Builder`).
+  - Checks GitHub Releases API (`/releases/latest`) and compares `tag_name` with `CARGO_PKG_VERSION` via `semver`.
+  - Rate-limit protection via TTL caching (4h–24h) and configuration toggles (`config.general.auto_update_check`).
+- **Integrity & Extraction (`sha2`, `zip`)**:
+  - Verifies SHA-256 checksums prior to binary deployment.
+  - Safely extracts into an isolated temporary folder (`%TEMP%\vivivi_update\`).
+
+### 21.3 Windows In-place Rename & Swap Mechanism (`moult_update::swap`)
+- **Bypassing OS File Locks (Rename & Swap)**:
+  1. Rename running active binary (e.g. `vivivi-gui.exe`) to `vivivi-gui.exe.old` (permitted by Windows kernel).
+  2. Copy extracted new executable to the canonical path (`vivivi-gui.exe`).
+  3. Atomically overwrite the inactive sibling binary (e.g. `vivivi.exe`).
+  4. Spawn the new binary process forwarding runtime command-line arguments (`std::process::Command::spawn`).
+  5. Terminate the active legacy process immediately (`std::process::exit(0)`).
+- **Startup Cleanup (`moult_update::cleanup`)**:
+  - At the very beginning of `main()`, locate and silently purge any lingering `*.old` binaries.
+
+### 21.4 User Interface & Ex Commands
+- **GUI Frontend (`vivivi-gui`)**:
+  - Live statusline progress indicator (`🔄 v0.9.15 (45%)`) and restart pill (`✨ v0.9.15 Ready [Restart]`).
+  - Settings dialog General tab manual check button and automated check toggle.
+- **TUI Frontend (`vivivi-app`)**:
+  - Non-intrusive notification in statusline. Update command `:update` for download and installation.
+- **Ex Commands**:
+  - `:checkupdate` / `:checkup`: Manual query for newer releases.
+  - `:update` / `:upgrade`: Download and prepare deployment.
+  - `:restart`: Execute binary swap and restart into latest version.
+
+### 21.5 Testability & Mock Architecture (`moult_update::mock`)
+- Full in-memory and local temporary directory test fixtures ensuring complete coverage of query, download, swap, and cleanup cycles without external network calls.

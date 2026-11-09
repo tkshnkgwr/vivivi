@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [0.9.15-beta] - 2026-11-09
+
+### Added / Improved
+- **Official Application Icon Selection, Deployment & Native Embedding (`assets/icons/`)**:
+  - **Visual Identity**: Established official "Neo-Triple V (Dynamic Asymmetric Neon)" icon with Tokyo Night colors (cyan `#7dcfff`, purple `#bb9af7`, orange `#ff9e64`).
+  - **Multi-Resolution Assets**: Deployed 1024x1024 master `icon.png`, 8 standalone PNG resolutions (16–512px), multi-size Windows container `icon.ico` (16–256px), and zero-copy raw RGBA binary `icon_256.rgba`.
+  - **Native Desktop GUI Branding (`crates/vivivi-gui`)**: Embedded raw RGBA via `include_bytes!` and applied via `egui::ViewportBuilder::with_icon` for titlebar and taskbar branding.
+  - **Windows PE Executable Embedding (`crates/vivivi-gui/build.rs`, `winres`)**: Embedded `icon.ico` into Windows `.exe` PE resource tables for Explorer thumbnail and shortcut display.
+- **Standalone Self-Update & Swap Engine `moult-update` (`crates/moult-update/`, Phase 5)**:
+  - **Application-Agnostic Crate**: Designed as a standalone library completely free of `vivivi` domain dependencies, directly reusable across any custom Rust applications.
+  - **Lightweight Networking & Caching**: Tokio-free synchronous `ureq` running inside background worker threads with 0ms UI impact; GitHub Releases API query with 24-hour rate-limit TTL caching and `semver` comparisons.
+  - **Streaming Verification & Extraction**: Streaming SHA-256 integrity verification with Zip Slip path-traversal prevention.
+  - **Windows In-Place Rename & Swap**: Bypasses Windows file locks via atomic rename to `.old` ➔ canonical placement ➔ subprocess spawning ➔ clean process termination.
+  - **Complete Mock Suite**: Full in-memory/local filesystem mock generator (`MockReleaseBuilder`) and automated tests covering query, download, swap, and cleanup cycles.
+- **Full GUI & TUI Integration with Synchronized Pair Binary Updates**:
+  - **Startup Old Binary Cleanup (`cleanup_old_binaries`)**: Silently purges legacy `*.old` executables at application startup.
+  - **Synchronized Pair Binary Upgrades**: Simultaneously swaps both `vivivi-gui.exe` and `vivivi.exe` from the unified zip bundle to eliminate frontend version drift.
+  - **TUI Frontend (`vivivi-app`)**: Background launch query, non-intrusive statusline notification badges (`[⬆ v... Available]`, `[🔄 ...%]`, `[✨ ... Ready]`), and `:checkupdate`, `:update`, `:restart` Ex commands.
+  - **GUI Frontend (`vivivi-gui`)**: Interactive statusline pills, menu bar Help actions, and Settings dialog General tab update center.
+
+---
+
 ## [0.9.14-beta] - 2026-11-06
 
 ### Added / Improved

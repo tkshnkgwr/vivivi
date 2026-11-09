@@ -11,7 +11,13 @@ use vivivi_app::App;
 use vivivi_core::{CharEncoding, NewlineType};
 use vivivi_gui::{ViviviGuiApp, fonts, theme};
 
+/// 公式アプリアイコン（256x256 raw RGBA）
+const ICON_RGBA_256: &[u8] = include_bytes!("../../../assets/icons/icon_256.rgba");
+
 fn main() -> eframe::Result {
+    // 前回アップデート時に残存した旧バイナリ (*.old) を自動消去
+    moult_update::cleanup_old_binaries();
+
     // コマンドライン引数から開くファイルパスを取得
     let args: Vec<String> = std::env::args().collect();
     let file_path = args.get(1).map(PathBuf::from);
@@ -47,6 +53,12 @@ fn main() -> eframe::Result {
     // ウィンドウ表示状態を読み込み、マルチモニタ切断等の画面外脱出安全ガードを適用
     let window_state = vivivi_gui::WindowState::load_and_validate();
 
+    let icon_data = egui::IconData {
+        rgba: ICON_RGBA_256.to_vec(),
+        width: 256,
+        height: 256,
+    };
+
     let mut viewport = egui::ViewportBuilder::default()
         .with_inner_size([window_state.width, window_state.height])
         .with_min_inner_size([
@@ -55,6 +67,7 @@ fn main() -> eframe::Result {
         ])
         .with_active(true)
         .with_drag_and_drop(true)
+        .with_icon(icon_data)
         .with_title("vivivi");
 
     if window_state.custom_position {

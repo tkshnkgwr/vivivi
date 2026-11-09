@@ -21,6 +21,9 @@ use vivivi_vi::ViEngine;
 /// # Errors
 /// ターミナルの初期化失敗やファイル読み込みエラーが発生した場合に [`anyhow::Error`] を返します。
 fn main() -> anyhow::Result<()> {
+    // 前回アップデート時に残存した旧バイナリ (*.old) を自動消去
+    moult_update::cleanup_old_binaries();
+
     let args: Vec<String> = env::args().collect();
 
     // --demo フラグが渡された場合はコンソールデモを実行

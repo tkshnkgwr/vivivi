@@ -515,3 +515,40 @@ fn test_vi_folding_commands_and_render() {
     app.feed_vi_char('R');
     assert!(app.vi.fold_manager.folds[0].is_open);
 }
+
+#[test]
+fn test_ex_update_commands() {
+    let mut app = App::new("test content", None, Default::default(), Default::default());
+
+    // 1. :checkupdate コマンドのディスパッチ
+    crate::tui::event::ex::execute_ex_command(&mut app, "checkupdate");
+    assert!(app.status_message.as_ref().unwrap().contains("確認中"));
+
+    // 2. :update (利用可能な更新がない場合)
+    crate::tui::event::ex::execute_ex_command(&mut app, "update");
+    assert!(
+        app.status_message
+            .as_ref()
+            .unwrap()
+            .contains("利用可能な更新がありません")
+            || app
+                .status_message
+                .as_ref()
+                .unwrap()
+                .contains("ダウンロード")
+    );
+
+    // 3. :restart (未準備の場合のエラーハンドリング)
+    crate::tui::event::ex::execute_ex_command(&mut app, "restart");
+    assert!(
+        app.status_message
+            .as_ref()
+            .unwrap()
+            .contains("再起動エラー")
+            || app
+                .status_message
+                .as_ref()
+                .unwrap()
+                .contains("準備できていません")
+    );
+}

@@ -25,6 +25,7 @@ unicode-width.workspace = true
 arboard.workspace = true
 serde.workspace = true
 toml.workspace = true
+moult-update.workspace = true
 
 
 [dev-dependencies]
