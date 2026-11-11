@@ -23,6 +23,14 @@ pub enum PendingLspRequest {
 }
 
 /// LSP マネージャー
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::lsp::LspManager;
+///
+/// let mgr = LspManager::new();
+/// assert!(!mgr.is_running());
+/// ```
 pub struct LspManager {
     /// 起動中の LSP クライアント
     client: Option<LspClient>,

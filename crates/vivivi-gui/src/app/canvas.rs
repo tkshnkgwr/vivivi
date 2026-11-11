@@ -375,6 +375,13 @@ impl ViviviGuiApp {
                                 text: display_line.clone(),
                                 token_type: TokenType::Text,
                             }]
+                        } else if let Some(ref ts) = self.core.treesitter {
+                            let ast_tokens = ts.highlight_syntax_tokens(line_idx, &display_line);
+                            if !ast_tokens.is_empty() {
+                                ast_tokens
+                            } else {
+                                vivivi_modes::tokenize_line(&display_line, self.core.syntax_lang)
+                            }
                         } else {
                             let key = compute_line_syntax_key(&display_line, self.core.syntax_lang);
                             if let Some(cached) = self.syntax_cache.get(&key) {

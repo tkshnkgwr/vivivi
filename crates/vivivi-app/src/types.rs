@@ -61,7 +61,7 @@ impl From<LogicalRect> for ratatui::layout::Rect {
 
 /// フロントエンド非依存の論理キーイベント表現。
 ///
-/// GUI（egui）やTUIからのキー入力・テキスト入力を統一的に [`App`] のイベントハンドラへ渡すための構造体です。
+/// GUI（egui）やTUIからのキー入力・テキスト入力を統一的に [`App`](crate::tui::App) のイベントハンドラへ渡すための構造体です。
 ///
 /// # Examples
 /// ```

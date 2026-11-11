@@ -6,13 +6,13 @@ This document provides a comprehensive operational guide for `vivivi`, covering 
 
 ## 1. Basic Operations & Modes
 
-| Mode Name   | Switch Key           | Cursor Shape  | Responsibilities & Actions                                                           |                                                                                |
-| :---------- | :------------------- | :-----------: | :----------------------------------------------------------------------------------- | :----------------------------------------------------------------------------- |
-| **Normal**  | `Escape`             |   Block (█)   | Navigation, deletion, yanking, and command entry                                     |                                                                                |
-| **Insert**  | `i`, `a`, `o`, `O`   |    Bar (\     | )                                                                                    | Regular typing & Tab key insertion (continuous typing merged into single undo) |
-| **Replace** | `R`                  | Underline (_) | In-place character overwrite (Tab key replaces with tab, returns to Normal on `Esc`) |                                                                                |
-| **Visual**  | `v` / `V` / `Ctrl-v` |   Block (█)   | Character-wise / Line-wise / Rectangular block selection                             |                                                                                |
-| **Command** | `:`                  |   Block (█)   | Save (`:w`), quit (`:q`), substitute (`:s`), ex commands                             |                                                                                |
+| Mode Name   | Switch Key           | Cursor Shape  | Responsibilities & Actions                                                           |
+| :---------- | :------------------- | :-----------: | :----------------------------------------------------------------------------------- |
+| **Normal**  | `Escape`             |     Block     | Navigation, deletion, yanking, and command entry                                     |
+| **Insert**  | `i`, `a`, `o`, `O`   |   Bar (\|)    | Regular typing & Tab key insertion (continuous typing merged into single undo)       |
+| **Replace** | `R`                  | Underline (_) | In-place character overwrite (Tab key replaces with tab, returns to Normal on `Esc`) |
+| **Visual**  | `v` / `V` / `Ctrl-v` |     Block     | Character-wise / Line-wise / Rectangular block selection                             |
+| **Command** | `:`                  |     Block     | Save (`:w`), quit (`:q`), substitute (`:s`), ex commands                             |
 
 > [!NOTE]
 > **Dynamic Terminal Cursor Synchronization**: Following Vim/Gvim tradition, the native terminal cursor shape automatically changes (Block, Bar, or Underline) based on the active editing mode. It reliably resets to your terminal's default shape upon exit or abnormal termination.
@@ -25,16 +25,16 @@ This document provides a comprehensive operational guide for `vivivi`, covering 
 ### 1.2 Coexistence with Windows-Style Editing
 Alongside modal Vi commands, familiar Windows shortcut keys operate transparently across all modes:
 
-| Shortcut Key            | Action                                                                              |
-| :---------------------- | :---------------------------------------------------------------------------------- |
-| `Shift + Arrow keys`    | Anchors at cursor and begins Visual mode, intuitively expanding/shrinking selection |
-| `Ctrl+C`                | Copies (yanks) selection to system clipboard and safely returns to Normal mode      |
-| `Ctrl+X`                | Cuts selection to system clipboard                                                  |
-| `Ctrl+V`                | Pastes system clipboard text in Insert mode and Windows key preset                 |
-| `Ctrl+A`                | Selects entire buffer in Visual Line mode                                           |
-| `Ctrl+Z` / `Ctrl+Y`     | Undo and Redo operations across Insert and Normal modes                             |
-| `Ctrl+S`                | Instant buffer write (equivalent to `:w`)                                           |
-| `Ctrl+,`                | Opens Preferences dialog (GUI: 2-pane modal / TUI: centered floating panel)         |
+| Shortcut Key         | Action                                                                              |
+| :------------------- | :---------------------------------------------------------------------------------- |
+| `Shift + Arrow keys` | Anchors at cursor and begins Visual mode, intuitively expanding/shrinking selection |
+| `Ctrl+C`             | Copies (yanks) selection to system clipboard and safely returns to Normal mode      |
+| `Ctrl+X`             | Cuts selection to system clipboard                                                  |
+| `Ctrl+V`             | Pastes system clipboard text in Insert mode and Windows key preset                  |
+| `Ctrl+A`             | Selects entire buffer in Visual Line mode                                           |
+| `Ctrl+Z` / `Ctrl+Y`  | Undo and Redo operations across Insert and Normal modes                             |
+| `Ctrl+S`             | Instant buffer write (equivalent to `:w`)                                           |
+| `Ctrl+,`             | Opens Preferences dialog (GUI: 2-pane modal / TUI: centered floating panel)         |
 
 ---
 
@@ -384,4 +384,31 @@ cargo run -p vivivi-gui -- path/to/file.rs
   - Interactively tune 6 core categories with "Apply" (live preview) and "Save & Close" (persist to `%USERPROFILE%\.vivivi\config.toml`).
 - **Window State Persistence & Multi-Monitor Safeguard**:
   - Automatically records window position, size, and maximized state to `%USERPROFILE%\.vivivi\cache\window_state.json` on shutdown. If secondary monitors are disconnected, virtual screen intersection logic safely centers the window on the primary screen.
+
+---
+
+## 8. Binary Mode, LSP, Tree-sitter & Self-Update (Phase 5 / 6)
+
+### (1) Binary Mode (Hex Editor / `:hex`, `:binary`, `:text`)
+- Run `:hex` or `:binary` to switch into a synchronized 3-column grid displaying address offsets, 16-byte hex dumps, and printable ASCII characters (`:text` returns to normal text editing).
+- Press `Tab` to toggle focus between the Hex pane and ASCII pane. Type `0`-`9` / `a`-`f` in the Hex pane to overwrite high/low nibbles, or type characters in the ASCII pane for direct byte replacement.
+- Supports `x` to delete a byte and `u` / `Ctrl-r` for Undo / Redo.
+
+### (2) LSP (Language Server Protocol) Client Integration
+- `:lsp start [cmd]`: Launches the language server for the active file in the background (e.g. `rust-analyzer`, `clangd`, `pylsp`).
+- `K` or `:lsp hover`: Displays hover documentation and type signatures at the cursor position.
+- `gd` or `:lsp def`: Jumps directly to the symbol definition.
+- `:lsp diag`: Toggles the real-time diagnostics (errors/warnings) panel.
+- `:lsp stop`: Stops the running language server.
+
+### (3) Tree-sitter AST Highlighting & Smart Selection
+- Applies accurate multi-layered AST syntax highlighting for supported languages.
+- **Smart Selection Expand / Shrink**: Press `Alt+Up` (or `Alt++`, `:smartselect expand`) to progressively expand visual selection along AST nodes (identifier ➔ expression ➔ statement ➔ block ➔ function), and `Alt+Down` (or `Alt+-`, `:smartselect shrink`) to shrink back.
+- `:ast`: Opens a preview window inspecting the buffer's Tree-sitter S-expression AST.
+
+### (4) Self-Update Engine (`moult-update`)
+- `:checkupdate`: Queries GitHub Releases in the background for newer versions.
+- `:update`: Downloads, verifies SHA-256 checksums, and stages the update archive.
+- `:restart`: Performs an in-place binary swap (synchronizing both GUI and TUI binaries) and restarts immediately.
+
 

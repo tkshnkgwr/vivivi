@@ -30,19 +30,19 @@ Summary of build and execution commands for development and production. No manua
 
 ### 2.1 GUI Edition (vivivi-gui)
 
-| Target / Purpose                 | Command                                    | Characteristics & Performance                                      |
-| :------------------------------- | :----------------------------------------- | :----------------------------------------------------------------- |
-| **Daily Dev & Debug**            | `cargo run -p vivivi-gui`                  | Fast incremental compilation (few seconds); dependencies optimized.|
-| **Launch with a File**           | `cargo run -p vivivi-gui -- <file_path>`   | Opens file with auto-detected encoding and newline format.         |
-| **Release Verification**         | `cargo run -p vivivi-gui --release`        | Runs fully optimized executable (LTO, SIMD, stripped symbols).     |
-| **Build Standalone Binary**      | `cargo build -p vivivi-gui --release`      | Outputs single executable at `target/release/vivivi-gui.exe`.      |
+| Target / Purpose            | Command                                  | Characteristics & Performance                                       |
+| :-------------------------- | :--------------------------------------- | :------------------------------------------------------------------ |
+| **Daily Dev & Debug**       | `cargo run -p vivivi-gui`                | Fast incremental compilation (few seconds); dependencies optimized. |
+| **Launch with a File**      | `cargo run -p vivivi-gui -- <file_path>` | Opens file with auto-detected encoding and newline format.          |
+| **Release Verification**    | `cargo run -p vivivi-gui --release`      | Runs fully optimized executable (LTO, SIMD, stripped symbols).      |
+| **Build Standalone Binary** | `cargo build -p vivivi-gui --release`    | Outputs single executable at `target/release/vivivi-gui.exe`.       |
 
 ### 2.2 TUI Edition (vivivi)
 
-| Target / Purpose                 | Command                                    | Characteristics & Performance                                      |
-| :------------------------------- | :----------------------------------------- | :----------------------------------------------------------------- |
-| **Daily Dev & Debug**            | `cargo run` or `cargo run -p vivivi`       | Runs terminal UI editor via Crossterm and Ratatui.                 |
-| **Release Standalone Binary**    | `cargo build --release`                    | Outputs single executable at `target/release/vivivi.exe`.          |
+| Target / Purpose              | Command                              | Characteristics & Performance                             |
+| :---------------------------- | :----------------------------------- | :-------------------------------------------------------- |
+| **Daily Dev & Debug**         | `cargo run` or `cargo run -p vivivi` | Runs terminal UI editor via Crossterm and Ratatui.        |
+| **Release Standalone Binary** | `cargo build --release`              | Outputs single executable at `target/release/vivivi.exe`. |
 
 ---
 
@@ -73,14 +73,14 @@ strip = true
 
 ### 3.2 Optimization Flags Overview
 
-| Configuration Key                | Scope                | Technical Purpose & Benefits                                                      |
-| :------------------------------- | :------------------- | :-------------------------------------------------------------------------------- |
-| `[profile.dev.package."*"] = 3`  | External crates      | Fully optimizes egui/epaint/wgpu vertex generation & glyph caching. Eliminates lag.|
-| `[profile.dev] = 1`              | Local crates         | Applies minimal inlining while maintaining fast 1-3 second incremental builds.    |
-| `[profile.release] = 3`          | Entire workspace     | Aggressive inlining, loop unrolling, and SIMD vectorization across all functions. |
-| `lto = "thin"`                   | Release linking      | Cross-crate ThinLTO for dead code elimination and inter-procedural optimizations. |
-| `codegen-units = 1`              | Release codegen      | Single compilation unit for maximum LLVM optimization coverage and binary size reduction. |
-| `strip = true`                   | Release executable   | Removes debug symbols and symbol tables to minimize binary footprint.            |
+| Configuration Key               | Scope              | Technical Purpose & Benefits                                                              |
+| :------------------------------ | :----------------- | :---------------------------------------------------------------------------------------- |
+| `[profile.dev.package."*"] = 3` | External crates    | Fully optimizes egui/epaint/wgpu vertex generation & glyph caching. Eliminates lag.       |
+| `[profile.dev] = 1`             | Local crates       | Applies minimal inlining while maintaining fast 1-3 second incremental builds.            |
+| `[profile.release] = 3`         | Entire workspace   | Aggressive inlining, loop unrolling, and SIMD vectorization across all functions.         |
+| `lto = "thin"`                  | Release linking    | Cross-crate ThinLTO for dead code elimination and inter-procedural optimizations.         |
+| `codegen-units = 1`             | Release codegen    | Single compilation unit for maximum LLVM optimization coverage and binary size reduction. |
+| `strip = true`                  | Release executable | Removes debug symbols and symbol tables to minimize binary footprint.                     |
 
 ### 3.3 Why First Build Takes Longer, But Subsequent Builds Are Instant
 - **Initial Build**: Takes several minutes as LLVM solves heavy optimization math for dozens of external GUI crates.

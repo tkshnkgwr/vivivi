@@ -6,7 +6,7 @@
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024%20Edition-orange.svg)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/version-v0.9.12--beta-brightgreen.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/version-v0.9.16--beta-brightgreen.svg)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/tkshnkgwr/vivivi)
 
 [English](./README.md) | [日本語](./README_JA.md)
@@ -27,7 +27,7 @@ It would be a privilege if former ViVi or OpenViVi users find a home here, thoug
 * **Development Approach**:  
   The Rust implementation is developed in active collaboration with AI (Gemini). As I am relatively new to GitHub and open-source workflows, I appreciate your patience and understanding.
 * **Current Status**:  
-  Currently in Beta (`v0.9.12-beta`). Both the full-featured terminal TUI (`vivivi`) and the native desktop GUI (`vivivi-gui`) powered by `egui` / `eframe` are implemented and share a unified headless core.
+  Currently in Beta (`v0.9.17-beta`). Both the full-featured terminal TUI (`vivivi`) and the native desktop GUI (`vivivi-gui`) powered by `egui` / `eframe` are implemented and share a unified headless core.
 * **GUI & TUI Dual Architecture**:  
   Use `vivivi` for ultra-fast terminal/SSH workflows, or launch `vivivi-gui` for a modern Tokyo Night desktop experience with PlemolJP typography, inline Japanese IME, minimap, and gravity-drop deletion animations.
 
@@ -101,6 +101,14 @@ It faithfully ports the core Vi editing mechanics and data structures while inte
   - `Shift+Arrow` selection and `Ctrl+C/V/X/A/Z/Y/S` seamlessly coexist with Vi modes. Run shell commands directly (`:!<cmd>`) or stream buffers into external process stdin (`:w !<cmd>`).
 - ⚙️ **6-Category Configuration & GUI/TUI Preferences Modal (`Ctrl+,`, `:preferences`)**:
   - Manage settings via `%USERPROFILE%\.vivivi\config.toml` across 6 categories with 5 bundled themes. Configure interactively via GUI dialog or centered floating TUI modal.
+- 🔢 **Binary Mode / Hex Editor (`:hex`, `:binary`, `:text`, ViVi 3 / ViVi 4 Compatible)**:
+  - Synchronized 3-column grid displaying address offsets, 16-byte hex dumps, and printable ASCII characters. Supports high/low nibble editing, direct ASCII replacement, byte search, and Undo/Redo.
+- 🧠 **LSP (Language Server Protocol) Client & Tree-sitter AST Integration**:
+  - Asynchronous stdio communication with language servers (`rust-analyzer`, `clangd`, `pylsp`), delivering real-time diagnostics (`:lsp diag`), hover info (`K`), and go-to-definition (`gd`).
+  - Integrates `tree-sitter` for multi-layered AST highlighting and syntax node-based smart selection (`Alt+Up` / `Alt+Down`, `:smartselect`, `:ast`).
+- 🌐 **2D Force-Directed Project Visualizer (`:visualize`, `:graph`) & Self-Update (`moult-update`)**:
+  - Visualizes file sizes, edit freshness, and include dependencies as an interactive 2D physics graph.
+  - Background GitHub Releases update checking, SHA-256 verification, and Windows lock-free in-place binary swapping (`:checkupdate`, `:update`, `:restart`).
 
 ---
 
@@ -112,26 +120,30 @@ graph TD
     App["vivivi-app (Headless Core Library & TUI Entrypoint)"]
     Core["vivivi-core (GapBuffer, UndoMgr, Cursor, Encodings)"]
     Vi["vivivi-vi (Vi State Machine, Command Parser, Registers, Ex)"]
-    Modes["vivivi-modes (CSV, Keisen, Outline, Conversions, Syntax)"]
+    Modes["vivivi-modes (CSV, Keisen, Outline, Hex, LSP, Tree-sitter)"]
+    Moult["moult-update (In-Place Self-Update Engine)"]
 
     Gui --> App
     Gui --> Vi
     Gui --> Modes
     Gui --> Core
+    Gui --> Moult
     App --> Vi
     App --> Modes
     App --> Core
+    App --> Moult
     Vi --> Core
     Modes --> Core
 ```
 
-| Crate Name     | Responsibilities & Roles                                                      | Dependencies      |
-| :------------- | :---------------------------------------------------------------------------- | :---------------- |
-| `vivivi-core`  | GapBuffer, line manager, cursor, Undo/Redo, early charset & newline detection | None              |
-| `vivivi-vi`    | Vi state machine, command parser, registers, block editing, ex commands       | `vivivi-core`     |
-| `vivivi-modes` | CSV/TSV mode, Unicode box drawing, outline parser, conversions, syntax        | `vivivi-core`     |
-| `vivivi-app`   | Headless editor session library (`App`, `Tab`, `WindowTreeNode`) & TUI binary | Core / Vi / Modes |
-| `vivivi-gui`   | Native desktop GUI (`egui` / `eframe`), inline IME, minimap, particle physics | All crates        |
+| Crate Name     | Responsibilities & Roles                                                       | Dependencies              |
+| :------------- | :----------------------------------------------------------------------------- | :------------------------ |
+| `vivivi-core`  | GapBuffer, line manager, cursor, Undo/Redo, early charset & newline detection  | None                      |
+| `vivivi-vi`    | Vi state machine, command parser, registers, block editing, ex commands        | `vivivi-core`             |
+| `vivivi-modes` | CSV/TSV, Unicode box drawing, outline, conversions, Hex, LSP, Tree-sitter      | `vivivi-core`             |
+| `moult-update` | GitHub Releases query, SHA-256 verification, Windows in-place binary swap      | None (Standalone crate)   |
+| `vivivi-app`   | Headless editor session library (`App`, `Tab`, `WindowTreeNode`) & TUI binary  | Core / Vi / Modes / Moult |
+| `vivivi-gui`   | Native desktop GUI (`egui` / `eframe`), inline IME, minimap, 2D graph, physics | All crates                |
 
 ---
 

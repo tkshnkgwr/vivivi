@@ -26,6 +26,16 @@ pub enum Nibble {
 }
 
 /// バイナリエディタのカーソル位置
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::hex::{HexCursor, HexPane, Nibble};
+///
+/// let mut cur = HexCursor::new();
+/// assert_eq!(cur.pane, HexPane::Hex);
+/// cur.toggle_pane();
+/// assert_eq!(cur.pane, HexPane::Ascii);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HexCursor {
     /// 全体データにおけるバイト単位のオフセット
@@ -81,6 +91,19 @@ pub enum HexAction {
 }
 
 /// バイナリドキュメント（生バイト列とUndo履歴の管理）
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::hex::{HexDocument, Nibble};
+///
+/// let mut doc = HexDocument::from_bytes(b"Hello".to_vec());
+/// assert_eq!(doc.len(), 5);
+/// doc.set_nibble(0, Nibble::High, 0x4);
+/// doc.set_nibble(0, Nibble::Low, 0x1);
+/// assert_eq!(doc.get_byte(0), Some(b'A'));
+/// assert!(doc.undo());
+/// assert_eq!(doc.get_byte(0), Some(b'H'));
+/// ```
 #[derive(Debug, Clone)]
 pub struct HexDocument {
     /// 生バイナリデータ
@@ -414,6 +437,15 @@ pub fn format_hex_row(data: &[u8], row_index: usize) -> Option<HexRow> {
 }
 
 /// 全データの総行数（16バイト単位）を計算します。
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::hex::calculate_row_count;
+///
+/// assert_eq!(calculate_row_count(0), 1);
+/// assert_eq!(calculate_row_count(16), 1);
+/// assert_eq!(calculate_row_count(17), 2);
+/// ```
 pub fn calculate_row_count(len: usize) -> usize {
     if len == 0 {
         1

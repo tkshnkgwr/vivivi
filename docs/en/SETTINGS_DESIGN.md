@@ -190,20 +190,20 @@ operator = "#89ddff"
 +--------------------------------------------------------------------------+
 |  Preferences - [Tokyo Night]                                    [X] Close|
 +-------------------+------------------------------------------------------+
-| [Search: _______] | [Appearance & Themes]                                |
-|                   |                                                      |
-| ▶ 1. General      |  Color Theme                   : [Tokyo Night       ▼]|
-| ▼ 2. Appearance   |  Line Numbers                  : [x] Enabled         |
-|    - Themes       |  Relative Line Numbers         : [ ] Disabled        |
-|    - Gutter       |  Word Wrap                     : [ ] Disabled        |
-| ▶ 3. Invisibles   |  Change Gutter Markers         : [x] Enabled         |
-| ▶ 4. Editing      |                                                      |
-| ▶ 5. Tools & Views| [GUI & Fonts]                                        |
-| ▶ 6. Keymaps      |  Font Family                   : [PlemolJP Console NF▼|
-|                   |  Font Size                     : [ 15.0 ] [▲][▼]     |
-|                   |  Gravity-Drop Particle FX      : [x] Enabled         |
-|                   |  Minimap Overview              : [x] Enabled (90px)  |
-|                   |                                                      |
+| [Search: _______]  | [Appearance & Themes]                                 |
+| :----------------- | :---------------------------------------------------- |
+| ▶ 1. General       | Color Theme                   : [Tokyo Night       ▼] |
+| ▼ 2. Appearance    | Line Numbers                  : [x] Enabled           |
+| - Themes           | Relative Line Numbers         : [ ] Disabled          |
+| - Gutter           | Word Wrap                     : [ ] Disabled          |
+| ▶ 3. Invisibles    | Change Gutter Markers         : [x] Enabled           |
+| ▶ 4. Editing       |                                                       |
+| ▶ 5. Tools & Views | [GUI & Fonts]                                         |
+| ▶ 6. Keymaps       | Font Family                   : [PlemolJP Console NF▼ |
+|                    | Font Size                     : [ 15.0 ] [▲][▼]       |
+|                    | Gravity-Drop Particle FX      : [x] Enabled           |
+|                    | Minimap Overview              : [x] Enabled (90px)    |
+|                    |                                                       |
 +-------------------+------------------------------------------------------+
 | [Reset to Defaults]                         [Cancel]  [Apply]  [Save & Close]|
 +--------------------------------------------------------------------------+

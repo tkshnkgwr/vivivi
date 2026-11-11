@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [0.9.17-beta] - 2026-11-11
+
+### Added / Improved
+- **Full GUI (`vivivi-gui`) Parity for Phase 5 / 6 Features**:
+  - Connected `poll_lsp()` inside `ViviviGuiApp::update()` for real-time asynchronous LSP notifications and responses in the desktop GUI.
+  - Integrated Tree-sitter AST multi-layer syntax highlighting into the GUI editor canvas (`canvas.rs`).
+  - Added a dedicated `Tools` menu (Hex Mode, LSP Start/Stop/Hover/Goto Definition/Diagnostics, Tree-sitter Smart Select Expand/Shrink/AST View, Line Trim) and `[HEX]` / `[LSP E:x W:y]` status bar badges.
+  - Added floating `LSP Hover (K)` window and click-to-jump `LSP Diagnostics (:lsp diag)` window.
+- **Zero RustDoc Warnings & Expanded Doc-Tests (`# Examples`)**:
+  - Resolved all intra-doc link warnings in `vivivi-app`, achieving zero warnings on `cargo doc --workspace --no-deps`.
+  - Added executable `# Examples` doc-tests across `vivivi-modes` (`hex`, `treesitter`, `lsp`) and `moult-update`.
+- **Strict Test Separation & Expanded Integration Tests**:
+  - Extracted public API tests of `moult-update` into `crates/moult-update/tests/update_api.rs`.
+  - Added GUI integration tests for Hex Editor, LSP, and Tree-sitter in `crates/vivivi-gui/tests/gui_api.rs`.
+- **Comprehensive Offline Help (`doc/help/*`) & Documentation Overhaul**:
+  - Updated built-in `:help` topics (`index.md`, `tools.md`, `syntax.md`, `basic.md`) with all Phase 5 / 6 features.
+  - Fixed escaped-pipe (`\|`) cell splitting in `scripts/align_table.py` and re-aligned all Markdown tables across the repository.
+  - Updated `benches/README.md`, `ARCHITECTURE.md`, `TODO.md`, `TEST_REPORT.md`, and `FOOTPRINTS.md` for the 6-crate workspace and fixed broken relative links.
+
+---
+
+## [0.9.16-beta] - 2026-11-11
+
+### Added / Improved
+- **Executable Feature Examples (`examples/`, Phase 5)**:
+  - `examples/gap_buffer_demo.rs`: Real-time visualization of `GapBuffer` physical memory layout and gap movement.
+  - `examples/keisen_combine.rs`: Standalone Unicode box-drawing intersection and corner auto-joining tool.
+  - `examples/inline_csv_align.rs`: Inline RFC 4180 CSV/TSV columnar alignment CLI tool.
+  - `examples/dabbrev_runner.rs`: Dynamic word completion (`dabbrev`) verification runner.
+- **Binary / Hex Editor Mode (`vivivi-modes::hex`, ViVi 3 / ViVi 4 Compatible)**:
+  - Synchronized 3-column grid rendering address offsets, 16-byte hex dumps, and printable ASCII strings.
+  - Integrated `:hex`, `:binary`, `:text` Ex commands, `Tab` pane switching, high/low nibble editing, direct ASCII replacement, Undo/Redo, and byte search across both TUI and GUI.
+- **LSP (Language Server Protocol) Client Integration (`vivivi-modes::lsp`, Phase 6)**:
+  - Implemented LSP v3.17 JSON-RPC 2.0 / `Content-Length` asynchronous stdio client.
+  - Integrated external language servers (`rust-analyzer`, `clangd`, `pylsp`), real-time diagnostics (`:lsp diag`), hover popups (`K` / `:lsp hover`), and go-to-definition (`gd` / `:lsp def`) across TUI and GUI.
+- **Tree-sitter AST Highlighting & Smart Selection (`vivivi-modes::treesitter`, Phase 5)**:
+  - Integrated `tree-sitter` (0.24) and `tree-sitter-rust` (0.23) with incremental parsing (`edit` API).
+  - Layered AST syntax highlighting in both TUI (`editor.rs`) and GUI (`canvas.rs`).
+  - Added syntax node-based smart selection expand/shrink (`Alt+Up` / `Alt+Down`, `:smartselect [expand|shrink]`) and S-expression AST preview (`:ast`).
+
+---
+
 ## [0.9.15-beta] - 2026-11-09
 
 ### Added / Improved

@@ -631,3 +631,56 @@ fn test_public_gui_async_tree_and_visualize_graph_scenario() {
         ":visualize でフラグがトグルして閉じること"
     );
 }
+
+/// シナリオ 11: GUI におけるバイナリモード (Hex Editor)、Tree-sitter スマート選択、LSP パネル/ホバー統合検証。
+#[test]
+fn test_public_gui_hex_lsp_treesitter_integration() {
+    let code = "fn main() {\n    let answer = 42;\n}\n";
+    let core = App::new(code, None, CharEncoding::Utf8, NewlineType::Lf);
+    let mut gui = ViviviGuiApp::from_core(core);
+
+    // 1. Tree-sitter のセットアップと GUI キーイベント (Alt+Up) でのスマート選択拡大
+    gui.core.syntax_lang = vivivi_modes::SyntaxLang::Rust;
+    let mut ts = vivivi_modes::TreeSitterEngine::new();
+    assert!(ts.set_language(vivivi_modes::SyntaxLang::Rust));
+    ts.parse(code);
+    gui.core.treesitter = Some(ts);
+
+    gui.core.cursor.pos.line = 1;
+    gui.core.cursor.pos.col = 8;
+    gui.process_egui_events(
+        &[Event::Key {
+            key: Key::ArrowUp,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::ALT,
+        }],
+        Modifiers::ALT,
+    );
+    assert_eq!(gui.core.mode(), ViMode::Visual);
+    assert!(gui.core.current_smart_selection.is_some());
+
+    // 2. Escape でノーマルモードへ戻し、:hex でバイナリモードへ遷移
+    gui.process_egui_events(
+        &[Event::Key {
+            key: Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        }],
+        Modifiers::NONE,
+    );
+    gui.core.execute_ex("hex");
+    assert!(gui.core.is_hex_mode);
+    gui.core.execute_ex("text");
+    assert!(!gui.core.is_hex_mode);
+
+    // 3. LSP 診断パネルとホバーポップアップのモーダル連携
+    gui.core.execute_ex("lsp diag");
+    assert!(gui.core.lsp_show_diagnostics_panel);
+    gui.core.lsp_hover_text = Some("fn main()".to_string());
+    gui.close_all_modals();
+    assert!(gui.core.lsp_hover_text.is_none());
+}

@@ -319,10 +319,10 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - **Step 2**: 4-pane skeletal layout (top menu & multi-tab bar, collapsible left sidebar, 2-row bottom status bar & ex command line, central nested split canvas + right-side minimap).
   - **Step 3**: Shared `App` core coupling, custom `ui.painter()` monospaced grid rendering, inline Japanese IME integration (underlined preedit & OS candidate window rect sync), and floating modal windows.
   - **Step 4**: Gravity-drop character deletion physics animation (0.5s fade-out) & 0% CPU reactive idle hybrid loop (`particles.rs`).
-  - *(※For detailed evaluation, framework comparison, theme styling, and prompt templates, see [GUI_DESIGN.md](file:///docs/en/GUI_DESIGN.md))*
+  - *(※For detailed evaluation, framework comparison, theme styling, and prompt templates, see [GUI_DESIGN.md](./GUI_DESIGN.md))*
 
 - [x] **[egui GUI Roadmap] Aesthetic Maturation & ViVi-Native UX Evolution (Phase 5 Expansion)**
-  - *(※Design specs: see [SETTINGS_DESIGN.md](file:///docs/en/SETTINGS_DESIGN.md) & [GUI_DESIGN.md](file:///docs/en/GUI_DESIGN.md))*
+  - *(※Design specs: see [SETTINGS_DESIGN.md](./SETTINGS_DESIGN.md) & [GUI_DESIGN.md](./GUI_DESIGN.md))*
   - **Phase 1: Aesthetic & Thematic Foundations (External TOML Themes & High-Contrast Support)**:
     - [x] Standalone external theme TOML separation (`%USERPROFILE%\.vivivi\themes\<name>.toml`)
     - [x] Standard presets implementation & dynamic menu switching (`TokyoNight`, `OpenViVi`, `ViViClassic`, `ViviviDark`, `ViviviLight`)

@@ -23,6 +23,7 @@ impl ViviviGuiApp {
         self.core.show_preview = false;
         self.core.show_clipboard_hist = false;
         self.core.show_recent_modal = false;
+        self.core.lsp_hover_text = None;
         if self.core.show_filer {
             self.core.close_filer();
         }
@@ -233,6 +234,100 @@ impl ViviviGuiApp {
             if !open {
                 self.core.close_filer();
             }
+        }
+
+        // 5.6 LSP ホバーポップアップ (K / :lsp hover)
+        if let Some(hover_text) = self.core.lsp_hover_text.clone() {
+            let mut open = true;
+            egui::Window::new("LSP Hover (K)")
+                .open(&mut open)
+                .default_size([480.0, 220.0])
+                .show(ctx, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        for line in hover_text.lines() {
+                            ui.label(
+                                egui::RichText::new(line)
+                                    .color(colors::FG_TEXT)
+                                    .family(egui::FontFamily::Monospace),
+                            );
+                        }
+                    });
+                });
+            if !open {
+                self.core.lsp_hover_text = None;
+            }
+        }
+
+        // 5.7 LSP 診断情報パネル (:lsp diag)
+        if self.core.lsp_show_diagnostics_panel {
+            let mut open = self.core.lsp_show_diagnostics_panel;
+            egui::Window::new("LSP Diagnostics (:lsp diag)")
+                .open(&mut open)
+                .default_size([560.0, 240.0])
+                .show(ctx, |ui| {
+                    let mut jump_to: Option<(usize, usize)> = None;
+                    {
+                        let diags = if let (Some(mgr), Some(path)) =
+                            (&self.core.lsp_manager, &self.core.file_path)
+                        {
+                            let uri =
+                                format!("file:///{}", path.to_string_lossy().replace('\\', "/"));
+                            mgr.get_diagnostics(&uri).unwrap_or(&[])
+                        } else {
+                            &[]
+                        };
+
+                        if diags.is_empty() {
+                            ui.label(
+                                egui::RichText::new("(診断エラー・警告はありません)")
+                                    .color(colors::FG_DIMMED),
+                            );
+                        } else {
+                            egui::ScrollArea::vertical().show(ui, |ui| {
+                                for diag in diags {
+                                    let (prefix, col) = match diag.severity {
+                                        Some(vivivi_modes::lsp::DiagnosticSeverity::Error) => {
+                                            ("[ERR]", colors::ACCENT_RED)
+                                        }
+                                        Some(vivivi_modes::lsp::DiagnosticSeverity::Warning) => {
+                                            ("[WRN]", colors::ACCENT_YELLOW)
+                                        }
+                                        _ => ("[INF]", colors::ACCENT_CYAN),
+                                    };
+                                    let line_no = diag.range.start.line as usize;
+                                    let char_no = diag.range.start.character as usize;
+                                    let label = format!(
+                                        "{} Ln {}, Col {}: {}",
+                                        prefix,
+                                        line_no + 1,
+                                        char_no + 1,
+                                        diag.message
+                                    );
+                                    if ui
+                                        .add(
+                                            egui::Label::new(
+                                                egui::RichText::new(label)
+                                                    .color(col)
+                                                    .family(egui::FontFamily::Monospace),
+                                            )
+                                            .sense(egui::Sense::click()),
+                                        )
+                                        .on_hover_text("クリックして該当行へジャンプ")
+                                        .clicked()
+                                    {
+                                        jump_to = Some((line_no, char_no));
+                                    }
+                                }
+                            });
+                        }
+                    }
+                    if let Some((l, c)) = jump_to {
+                        self.core.cursor.pos.line = l;
+                        self.core.cursor.pos.col = c;
+                        self.core.clamp_cursor();
+                    }
+                });
+            self.core.lsp_show_diagnostics_panel = open;
         }
     }
 }

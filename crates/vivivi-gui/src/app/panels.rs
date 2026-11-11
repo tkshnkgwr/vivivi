@@ -165,6 +165,58 @@ impl ViviviGuiApp {
                         }
                     });
 
+                    ui.menu_button("Tools", |ui| {
+                        if ui.button("🚀 LSP Start  (:lsp start)").clicked() {
+                            self.core.start_lsp(None);
+                            ui.close_menu();
+                        }
+                        if ui.button("⏹ LSP Stop  (:lsp stop)").clicked() {
+                            self.core.stop_lsp();
+                            ui.close_menu();
+                        }
+                        if ui.button("💬 LSP Hover  (K / :lsp hover)").clicked() {
+                            self.core.request_lsp_hover();
+                            ui.close_menu();
+                        }
+                        if ui.button("🎯 Go to Definition  (gd / :lsp def)").clicked() {
+                            self.core.request_lsp_definition();
+                            ui.close_menu();
+                        }
+                        if ui
+                            .checkbox(
+                                &mut self.core.lsp_show_diagnostics_panel,
+                                "LSP Diagnostics Panel (:lsp diag)",
+                            )
+                            .clicked()
+                        {
+                            ui.close_menu();
+                        }
+                        ui.separator();
+                        if ui
+                            .button("🌳 Smart Select Expand  (Alt+Up / :smartselect)")
+                            .clicked()
+                        {
+                            self.core.expand_smart_selection();
+                            ui.close_menu();
+                        }
+                        if ui
+                            .button("🌱 Smart Select Shrink  (Alt+Down / :smartselect shrink)")
+                            .clicked()
+                        {
+                            self.core.shrink_smart_selection();
+                            ui.close_menu();
+                        }
+                        if ui.button("🔍 View Tree-sitter AST  (:ast)").clicked() {
+                            self.core.execute_ex("ast");
+                            ui.close_menu();
+                        }
+                        ui.separator();
+                        if ui.button("✂ Trim Trailing Whitespace  (:trim)").clicked() {
+                            self.core.execute_ex("trim");
+                            ui.close_menu();
+                        }
+                    });
+
                     ui.menu_button("Help", |ui| {
                         if ui.button("Vi Cheatsheet  (:help)").clicked() {
                             self.core.execute_ex("help");
@@ -596,6 +648,66 @@ impl ViviviGuiApp {
                                 ui.label(
                                     egui::RichText::new("[CSV]")
                                         .color(colors::ACCENT_GREEN)
+                                        .strong()
+                                        .size(11.0),
+                                );
+                            }
+
+                            if self.core.is_hex_mode {
+                                ui.add_space(4.0);
+                                ui.label(
+                                    egui::RichText::new("[HEX]")
+                                        .color(colors::ACCENT_YELLOW)
+                                        .strong()
+                                        .size(11.0),
+                                );
+                            }
+
+                            if let Some(ref mgr) = self.core.lsp_manager {
+                                let (errs, warns) = if let Some(ref path) = self.core.file_path {
+                                    let uri = format!(
+                                        "file:///{}",
+                                        path.to_string_lossy().replace('\\', "/")
+                                    );
+                                    let diags = mgr.get_diagnostics(&uri).unwrap_or(&[]);
+                                    let e = diags
+                                        .iter()
+                                        .filter(|d| {
+                                            d.severity
+                                                == Some(
+                                                    vivivi_modes::lsp::DiagnosticSeverity::Error,
+                                                )
+                                        })
+                                        .count();
+                                    let w = diags
+                                        .iter()
+                                        .filter(|d| {
+                                            d.severity
+                                                == Some(
+                                                    vivivi_modes::lsp::DiagnosticSeverity::Warning,
+                                                )
+                                        })
+                                        .count();
+                                    (e, w)
+                                } else {
+                                    (0, 0)
+                                };
+                                let lsp_text = if errs > 0 || warns > 0 {
+                                    format!("[LSP E:{errs} W:{warns}]")
+                                } else {
+                                    "[LSP]".to_string()
+                                };
+                                let lsp_color = if errs > 0 {
+                                    colors::ACCENT_RED
+                                } else if warns > 0 {
+                                    colors::ACCENT_YELLOW
+                                } else {
+                                    colors::ACCENT_CYAN
+                                };
+                                ui.add_space(4.0);
+                                ui.label(
+                                    egui::RichText::new(lsp_text)
+                                        .color(lsp_color)
                                         .strong()
                                         .size(11.0),
                                 );

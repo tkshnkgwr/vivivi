@@ -66,6 +66,19 @@ impl AstSelectionRange {
 }
 
 /// Tree-sitter 構文解析エンジン
+///
+/// # Examples
+/// ```
+/// use vivivi_modes::{SyntaxLang, TreeSitterEngine};
+///
+/// let mut engine = TreeSitterEngine::new();
+/// assert!(engine.set_language(SyntaxLang::Rust));
+/// assert!(engine.parse("fn main() { let x = 42; }"));
+/// assert!(engine.has_tree());
+///
+/// let tokens = engine.highlight_line(0, "fn main() { let x = 42; }");
+/// assert!(!tokens.is_empty());
+/// ```
 pub struct TreeSitterEngine {
     /// Tree-sitter パーサーインスタンス
     parser: Parser,

@@ -253,6 +253,9 @@ impl eframe::App for ViviviGuiApp {
             ctx.request_repaint();
         }
 
+        // LSP バックグラウンドメッセージのポーリング
+        self.core.poll_lsp();
+
         // Exコマンド (:tree, :explore) によるサイドバートグル
         if self.core.toggle_tree_request {
             self.sidebar_open = !self.sidebar_open;

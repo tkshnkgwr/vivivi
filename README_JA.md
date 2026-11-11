@@ -6,7 +6,7 @@
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024%20Edition-orange.svg)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/version-v0.9.12--beta-brightgreen.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/version-v0.9.16--beta-brightgreen.svg)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/tkshnkgwr/vivivi)
 
 [English](./README.md) | [日本語](./README_JA.md)
@@ -27,7 +27,7 @@
 * **開発体制**:  
   Rustによるコード実装は、AI（Gemini）と相談しながら進めています。また、筆者自身GitHubの運用全般に不慣れな点が多く、至らない点があるかと思いますがご容赦ください。
 * **現在のステータス**:  
-  現在はβ版（`v0.9.12-beta`）です。共通のヘッドレスコア（`vivivi-app`）を基盤として、ターミナルTUI版（`vivivi`）とデスクトップGUI版（`vivivi-gui` / `egui` + `eframe`）の両方が動作します。
+  現在はβ版（`v0.9.17-beta`）です。共通のヘッドレスコア（`vivivi-app`）を基盤として、ターミナルTUI版（`vivivi`）とデスクトップGUI版（`vivivi-gui` / `egui` + `eframe`）の両方が動作します。
 * **TUI ＆ GUI ハイブリッド構成**:  
   コンソールやSSH環境では超軽量な `vivivi`（TUI）、デスクトップ環境では Tokyo Night テーマ・PlemolJP 等幅フォント・日本語IMEインライン変換・削除文字落下アニメーションを備えた `vivivi-gui`（GUI）をシームレスに使い分けられます。
 
@@ -102,6 +102,14 @@ Unicode罫線の自動結合、インラインCSV/TSV高速整列・編集、Mig
   - `Shift+矢印` での範囲選択や `Ctrl+C/V/X/A/Z/Y/S` が Vi モードとシームレスに共存。外部シェルコマンド実行（`:!<cmd>`）やバッファ流し込み（`:w !<cmd>`）にも対応。
 - ⚙️ **6大カテゴリ設定基盤 ＆ GUI/TUI 設定ダイアログ (`Ctrl+,`, `:preferences`)**:
   - `%USERPROFILE%\.vivivi\config.toml` による6大カテゴリ設定管理と5大ビルトインテーマ。GUI設定ダイアログおよび TUI フローティング設定パネルからキーボード／マウスで直感的に変更可能。
+- 🔢 **バイナリモード / Hex Editor (`:hex`, `:binary`, `:text`, ViVi 3 / ViVi 4 準拠)**:
+  - アドレスオフセット・16進ダンプ・ASCII文字列の3列同期グリッド表示。上位/下位ニブル単位の16進直接編集、ASCII直接置換、Undo/Redoに対応。
+- 🧠 **LSP (Language Server Protocol) クライアント ＆ Tree-sitter 構文木統合**:
+  - `rust-analyzer` 等の外部言語サーバーと非同期通信し、リアルタイム診断（`:lsp diag`）、ホバー（`K`）、定義ジャンプ（`gd`）を提供。
+  - `tree-sitter` による抽象構文木（AST）多層ハイライト、および構文ノード単位のスマート選択拡大・縮小（`Alt+Up` / `Alt+Down`, `:smartselect`, `:ast`）を搭載。
+- 🌐 **プロジェクト 2D 力学可視化グラフ (`:visualize`, `:graph`) ＆ 脱皮型自己更新 (`moult-update`)**:
+  - ファイルサイズ・更新鮮度・インクルード依存関係を物理力学モデルで 2D グラフ描画。
+  - GitHub Releases からのバックグラウンド更新確認、SHA-256 検証、Windows ファイルロックを回避したインプレース・スワップ自己更新（`:checkupdate`, `:update`, `:restart`）を完備。
 
 ---
 
@@ -113,26 +121,30 @@ graph TD
     App["vivivi-app (ヘッドレス共通コア & TUI エントリポイント)"]
     Core["vivivi-core (GapBuffer・UndoMgr・カーソル・エンコーディング)"]
     Vi["vivivi-vi (Vi状態機械・コマンドパーサー・レジスタ・ex)"]
-    Modes["vivivi-modes (CSV・罫線・アウトライン・文字変換・シンタックス)"]
+    Modes["vivivi-modes (CSV・罫線・アウトライン・Hex・LSP・Tree-sitter)"]
+    Moult["moult-update (脱皮型インプレース自己更新エンジン)"]
 
     Gui --> App
     Gui --> Vi
     Gui --> Modes
     Gui --> Core
+    Gui --> Moult
     App --> Vi
     App --> Modes
     App --> Core
+    App --> Moult
     Vi --> Core
     Modes --> Core
 ```
 
-| クレート名     | 役割・責務                                                               | 依存クレート      |
-| :------------- | :----------------------------------------------------------------------- | :---------------- |
-| `vivivi-core`  | テキストバッファ、行管理、カーソル、Undo/Redo、文字コード・改行早期判別  | なし              |
-| `vivivi-vi`    | Vi状態機械、コマンドパーサー、レジスタ、矩形編集、exコマンド             | `vivivi-core`     |
-| `vivivi-modes` | CSV/TSVモード、Unicode罫線描画、アウトライン解析、文字変換、シンタックス | `vivivi-core`     |
-| `vivivi-app`   | ヘッドレス共通セッション基盤 (`App`, `Tab`, `WindowTreeNode`) ＆ TUI本体 | Core / Vi / Modes |
-| `vivivi-gui`   | デスクトップGUI (`egui` / `eframe`)、日本語IME統合、ミニマップ、落下演出 | 全クレート        |
+| クレート名     | 役割・責務                                                                         | 依存クレート              |
+| :------------- | :--------------------------------------------------------------------------------- | :------------------------ |
+| `vivivi-core`  | テキストバッファ、行管理、カーソル、Undo/Redo、文字コード・改行早期判別            | なし                      |
+| `vivivi-vi`    | Vi状態機械、コマンドパーサー、レジスタ、矩形編集、exコマンド                       | `vivivi-core`             |
+| `vivivi-modes` | CSV/TSV、Unicode罫線、アウトライン、文字変換、Hex、LSP、Tree-sitter                | `vivivi-core`             |
+| `moult-update` | GitHub Releases 照会、SHA-256検証、Windowsインプレース・スワップ自己更新           | なし (独立汎用クレート)   |
+| `vivivi-app`   | ヘッドレス共通セッション基盤 (`App`, `Tab`, `WindowTreeNode`) ＆ TUI本体           | Core / Vi / Modes / Moult |
+| `vivivi-gui`   | デスクトップGUI (`egui` / `eframe`)、日本語IME統合、ミニマップ、2Dグラフ、落下演出 | 全クレート                |
 
 ---
 

@@ -169,7 +169,7 @@ pub struct App {
     pub show_cmd_exec_dialog: bool,
     /// 外部コマンド実行ダイアログの入力文字列
     pub cmd_exec_input: String,
-    /// 外部コマンド実行ダイアログの実行モード (0: 実行のみ, 1: バッファ挿入 :r!, 2: 選択行置換 :[range]!)
+    /// 外部コマンド実行ダイアログの実行モード (0: 実行のみ, 1: バッファ挿入 `:r!`, 2: 選択行置換 `:[range]!`)
     pub cmd_exec_mode: usize,
     /// 外部コマンド実行結果のプレビュー
     pub cmd_exec_output_preview: Option<String>,

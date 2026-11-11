@@ -32,12 +32,41 @@ def pad_cell(text: str, target_width: int, align: str) -> str:
         return text + " " * diff
 
 
+def split_table_cells(inner: str) -> list[str]:
+    """エスケープされたパイプ (\\|) やバッククォート内のパイプ (`|`) を無視してセル分割します。"""
+    cells = []
+    cur = []
+    in_code = False
+    i = 0
+    n = len(inner)
+    while i < n:
+        ch = inner[i]
+        if ch == "\\" and i + 1 < n and inner[i + 1] == "|":
+            cur.append("\\|")
+            i += 2
+            continue
+        if ch == "`":
+            in_code = not in_code
+            cur.append(ch)
+            i += 1
+            continue
+        if ch == "|" and not in_code:
+            cells.append("".join(cur).strip())
+            cur = []
+            i += 1
+            continue
+        cur.append(ch)
+        i += 1
+    cells.append("".join(cur).strip())
+    return cells
+
+
 def align_table_block(table_lines: list[str]) -> list[str]:
     rows = []
     for line in table_lines:
         trimmed = line.strip()
         if trimmed.startswith("|") and trimmed.endswith("|"):
-            parts = [p.strip() for p in trimmed[1:-1].split("|")]
+            parts = split_table_cells(trimmed[1:-1])
             rows.append(parts)
         else:
             rows.append([line])

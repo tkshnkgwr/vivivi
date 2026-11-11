@@ -4,6 +4,48 @@
 
 ---
 
+## [0.9.17-beta] - 2026-11-11
+
+### Added / Improved
+- **GUI (`vivivi-gui`) における Phase 5 / 6 機能の完全パリティ統合**:
+  - `ViviviGuiApp::update()` ループ内で `poll_lsp()` を毎フレーム駆動し、LSP 非同期通知・レスポンスの自動反映を実現。
+  - GUI エディタキャンバス（`canvas.rs`）に Tree-sitter AST トークンの多層レイヤリングハイライトを接続。
+  - メニューバーに `Tools` メニュー（Hex Mode、LSP Start/Stop/Hover/Goto Definition/Diagnostics、Tree-sitter Smart Select Expand/Shrink/AST View、行トリム）を新設し、ステータスバーに `[HEX]` / `[LSP E:x W:y]` バッジを追加。
+  - `LSP Hover (K)` フローティングウィンドウおよびクリックジャンプ対応の `LSP Diagnostics (:lsp diag)` パネルを追加。
+- **RustDoc 警告ゼロ化 & Doc-test (`# Examples`) 全面拡充**:
+  - `vivivi-app` の intra-doc link 警告を解消し、`cargo doc --workspace --no-deps` の警告 0 件を達成。
+  - `vivivi-modes`（`hex`, `treesitter`, `lsp`）および `moult-update` の公開 API に実行可能な `# Examples` (Doc-test) を追加。
+- **テストコード分離規約の徹底 & 統合テスト拡充**:
+  - `moult-update` の公開 API テストを `crates/moult-update/tests/update_api.rs` へ分離配置。
+  - `vivivi-gui/tests/gui_api.rs` に Hex Editor / LSP / Tree-sitter の GUI 統合テストを追加。
+- **オフラインヘルプ (`doc/help/*`) & 全ドキュメント総点検・最新化**:
+  - `:help` 用の内蔵ヘルプ（`index.md`, `tools.md`, `syntax.md`, `basic.md`）に Phase 5 / 6 の全機能を網羅。
+  - `scripts/align_table.py` のエスケープパイプ（`\|`）分割バグを修正し、プロジェクト内の全 Markdown テーブルを垂直再整列。
+  - `benches/README.md`, `ARCHITECTURE.md`, `TODO.md`, `TEST_REPORT.md`, `FOOTPRINTS.md` のリンク切れ修正および 6 クレート構成への完全同期。
+
+---
+
+## [0.9.16-beta] - 2026-11-11
+
+### Added / Improved
+- **単体機能の実行可能サンプルコード整備 (`examples/`, Phase 5)**:
+  - `examples/gap_buffer_demo.rs`: `GapBuffer` の局所編集と物理メモリ・ギャップ移動のリアルタイム可視化デモ。
+  - `examples/keisen_combine.rs`: Unicode 罫線十字・T字・角自動結合ミニツール。
+  - `examples/inline_csv_align.rs`: RFC 4180 CSV/TSV のインライン即時整列 CLI ツール。
+  - `examples/dabbrev_runner.rs`: 動的単語補完（dabbrev）単体動作検証ランナー。
+- **バイナリモード / Hex Editor 統合 (`vivivi-modes::hex`, ViVi 3 / ViVi 4 準拠)**:
+  - 16バイト/行単位のアドレスオフセット、16進ダンプ列、印字可能ASCII文字列の3列同期グリッド表示。
+  - `:hex`, `:binary`, `:text` Exコマンド、`Tab` ペイン切替、上位/下位ニブル直接編集、ASCII直接置換、Undo/Redo、バイト検索を TUI および GUI の双方へ統合。
+- **LSP (Language Server Protocol) クライアント統合 (`vivivi-modes::lsp`, Phase 6)**:
+  - LSP v3.17 準拠の JSON-RPC 2.0 / `Content-Length` 非同期 stdio 通信クライアントを実装。
+  - 外部言語サーバー（`rust-analyzer`, `clangd`, `pylsp` 等）との連携、リアルタイム診断（`:lsp diag`）、ホバー表示（`K` / `:lsp hover`）、定義元ジャンプ（`gd` / `:lsp def`）を TUI / GUI に統合。
+- **Tree-sitter 構文木ハイライト & スマート選択統合 (`vivivi-modes::treesitter`, Phase 5)**:
+  - `tree-sitter` (0.24) および `tree-sitter-rust` (0.23) による抽象構文木（AST）解析とインクリメンタルパース（`edit` API）を統合。
+  - エディタ描画（TUI `editor.rs` / GUI `canvas.rs`）における AST 多層レイヤリングハイライト連携。
+  - 構文木ノード階層に沿ったスマート選択拡大・縮小（`Alt+Up` / `Alt+Down`, `:smartselect [expand|shrink]`）および AST S式プレビュー（`:ast`）を実装。
+
+---
+
 ## [0.9.15-beta] - 2026-11-09
 
 ### Added / Improved
@@ -132,7 +174,8 @@
   - **現在設定のワンタッチ永続化 (:mkvivivirc [path] / :wconfig [path])**: 現在のインメモリ設定値（一時変更内容を含む）を %USERPROFILE%\.vivivi\config.toml または指定ファイルへ即座に書き出すコマンドを実装。
   - **外部設定再読込・スクリプト実行 (:source [path] / :so [path])**: ディスク上の TOML 設定ファイルの即時再読込、および 1行1コマンドの Ex スクリプト順次実行（Vim互換の初期化スクリプト実行）に対応。
   - **表示・外観系オプション拡充 (:set)**: :set minimap / :set nominimap（ミニマップ表示）、:set particles / :set noparticles（文字削除落下演出）、:set bg=dark / light（背景明暗切替）、:set listchars=...（不可視文字記号カスタム設定）、:set all（全オプション一覧表示）を実装。
-  - **GUI 即時双方向同期**: Exコマンドによるテーマやミニマップの変更が ivivi-gui の描画スタイル・ペイン表示へリアルタイムに連動する双方向同期機構を配備。
+  - **GUI 即時双方向同期**: Exコマンドによるテーマやミニマップの変更が 
+ivivi-gui の描画スタイル・ペイン表示へリアルタイムに連動する双方向同期機構を配備。
 
 ### Fixed / Improved
 - **ミニマップ描画・操作性の完全線形同期＆ドラッグ追従改修 (`canvas.rs`)**:
@@ -189,7 +232,8 @@
   - **現在設定のワンタッチ永続化 (:mkvivivirc [path] / :wconfig [path])**: 現在のインメモリ設定値（一時変更内容を含む）を %USERPROFILE%\.vivivi\config.toml または指定ファイルへ即座に書き出すコマンドを実装。
   - **外部設定再読込・スクリプト実行 (:source [path] / :so [path])**: ディスク上の TOML 設定ファイルの即時再読込、および 1行1コマンドの Ex スクリプト順次実行（Vim互換の初期化スクリプト実行）に対応。
   - **表示・外観系オプション拡充 (:set)**: :set minimap / :set nominimap（ミニマップ表示）、:set particles / :set noparticles（文字削除落下演出）、:set bg=dark / light（背景明暗切替）、:set listchars=...（不可視文字記号カスタム設定）、:set all（全オプション一覧表示）を実装。
-  - **GUI 即時双方向同期**: Exコマンドによるテーマやミニマップの変更が ivivi-gui の描画スタイル・ペイン表示へリアルタイムに連動する双方向同期機構を配備。
+  - **GUI 即時双方向同期**: Exコマンドによるテーマやミニマップの変更が 
+ivivi-gui の描画スタイル・ペイン表示へリアルタイムに連動する双方向同期機構を配備。
 
 ### Fixed / Improved
 - **全域品質監査に基づく潜在バグ修正・エッジケース対応・堅牢化（計34件以上）**:
@@ -306,7 +350,8 @@
   - **現在設定のワンタッチ永続化 (:mkvivivirc [path] / :wconfig [path])**: 現在のインメモリ設定値（一時変更内容を含む）を %USERPROFILE%\.vivivi\config.toml または指定ファイルへ即座に書き出すコマンドを実装。
   - **外部設定再読込・スクリプト実行 (:source [path] / :so [path])**: ディスク上の TOML 設定ファイルの即時再読込、および 1行1コマンドの Ex スクリプト順次実行（Vim互換の初期化スクリプト実行）に対応。
   - **表示・外観系オプション拡充 (:set)**: :set minimap / :set nominimap（ミニマップ表示）、:set particles / :set noparticles（文字削除落下演出）、:set bg=dark / light（背景明暗切替）、:set listchars=...（不可視文字記号カスタム設定）、:set all（全オプション一覧表示）を実装。
-  - **GUI 即時双方向同期**: Exコマンドによるテーマやミニマップの変更が ivivi-gui の描画スタイル・ペイン表示へリアルタイムに連動する双方向同期機構を配備。
+  - **GUI 即時双方向同期**: Exコマンドによるテーマやミニマップの変更が 
+ivivi-gui の描画スタイル・ペイン表示へリアルタイムに連動する双方向同期機構を配備。
 
 ### Fixed / Improved
 - **PDF出力における日本語（CJK）文字化けの完全解消**:
@@ -356,7 +401,8 @@
   - **現在設定のワンタッチ永続化 (:mkvivivirc [path] / :wconfig [path])**: 現在のインメモリ設定値（一時変更内容を含む）を %USERPROFILE%\.vivivi\config.toml または指定ファイルへ即座に書き出すコマンドを実装。
   - **外部設定再読込・スクリプト実行 (:source [path] / :so [path])**: ディスク上の TOML 設定ファイルの即時再読込、および 1行1コマンドの Ex スクリプト順次実行（Vim互換の初期化スクリプト実行）に対応。
   - **表示・外観系オプション拡充 (:set)**: :set minimap / :set nominimap（ミニマップ表示）、:set particles / :set noparticles（文字削除落下演出）、:set bg=dark / light（背景明暗切替）、:set listchars=...（不可視文字記号カスタム設定）、:set all（全オプション一覧表示）を実装。
-  - **GUI 即時双方向同期**: Exコマンドによるテーマやミニマップの変更が ivivi-gui の描画スタイル・ペイン表示へリアルタイムに連動する双方向同期機構を配備。
+  - **GUI 即時双方向同期**: Exコマンドによるテーマやミニマップの変更が 
+ivivi-gui の描画スタイル・ペイン表示へリアルタイムに連動する双方向同期機構を配備。
 
 ### Fixed / Improved
 - **PDF出力連携の二重ファイル生成バグ修正**:
@@ -391,7 +437,8 @@
   - **現在設定のワンタッチ永続化 (:mkvivivirc [path] / :wconfig [path])**: 現在のインメモリ設定値（一時変更内容を含む）を %USERPROFILE%\.vivivi\config.toml または指定ファイルへ即座に書き出すコマンドを実装。
   - **外部設定再読込・スクリプト実行 (:source [path] / :so [path])**: ディスク上の TOML 設定ファイルの即時再読込、および 1行1コマンドの Ex スクリプト順次実行（Vim互換の初期化スクリプト実行）に対応。
   - **表示・外観系オプション拡充 (:set)**: :set minimap / :set nominimap（ミニマップ表示）、:set particles / :set noparticles（文字削除落下演出）、:set bg=dark / light（背景明暗切替）、:set listchars=...（不可視文字記号カスタム設定）、:set all（全オプション一覧表示）を実装。
-  - **GUI 即時双方向同期**: Exコマンドによるテーマやミニマップの変更が ivivi-gui の描画スタイル・ペイン表示へリアルタイムに連動する双方向同期機構を配備。
+  - **GUI 即時双方向同期**: Exコマンドによるテーマやミニマップの変更が 
+ivivi-gui の描画スタイル・ペイン表示へリアルタイムに連動する双方向同期機構を配備。
 
 ### Fixed / Improved
 - **全角スペースの可視化改善（幅2マス維持 ＆ 背景ハイライト）**:

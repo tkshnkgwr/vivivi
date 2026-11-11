@@ -318,10 +318,10 @@
   - **ステップ 2**: 4ペイン画面骨格（メニューバー＆マルチタブバー、左サイドバー、2段ステータスバー＆コマンドライン、中央分割ビュー＋右端ミニマップ）
   - **ステップ 3**: 共通 `App` コア接続、`ui.painter()` 等幅グリッド描画、日本語 IME インライン統合（Preedit 下線表示 ＆ OS 候補ウィンドウ座標同期）、フローティングモーダル統合
   - **ステップ 4**: 削除文字の重力落下パーティクルアニメーション（0.5秒フェードアウト）＆ アイドル時 CPU 0% の省電力ハイブリッド制御（`particles.rs`）
-  - *(※詳細な選定理由・フレームワーク比較・テーマ設計・実装プロンプトは [GUI_DESIGN.md](file:///docs/ja/GUI_DESIGN.md) 参照)*
+  - *(※詳細な選定理由・フレームワーク比較・テーマ設計・実装プロンプトは [GUI_DESIGN.md](./GUI_DESIGN.md) 参照)*
 
 - [x] **【egui GUIロードマップ】 テーマ・外観の確立とViVi固有UXの進化 (Phase 5 拡張)**
-  - *(※詳細設計書: [SETTINGS_DESIGN.md](file:///docs/ja/SETTINGS_DESIGN.md) および [GUI_DESIGN.md](file:///docs/ja/GUI_DESIGN.md) 参照)*
+  - *(※詳細設計書: [SETTINGS_DESIGN.md](./SETTINGS_DESIGN.md) および [GUI_DESIGN.md](./GUI_DESIGN.md) 参照)*
   - **Phase 1: テーマ・外観の確立（外部TOMLテーマ化 ＆ ハイコントラスト拡充）**:
     - [x] 外部テーマTOMLファイル分離管理（`%USERPROFILE%\.vivivi\themes\<name>.toml`）の実装
     - [x] 標準テーマの実装・メニュー動的切替（`TokyoNight`, `OpenViVi`, `ViViClassic`, `ViviviDark`, `ViviviLight`）

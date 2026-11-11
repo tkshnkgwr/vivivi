@@ -254,6 +254,18 @@ pub struct JsonRpcError {
 }
 
 /// メッセージを Content-Length 付き LSP ストリーム形式でエンコードします。
+///
+/// # Examples
+/// ```
+/// use serde_json::json;
+/// use vivivi_modes::lsp::{decode_lsp_payload, encode_lsp_payload};
+///
+/// let msg = json!({"jsonrpc": "2.0", "id": 1, "method": "shutdown"});
+/// let encoded = encode_lsp_payload(&msg);
+/// assert!(encoded.starts_with("Content-Length: "));
+/// let (decoded, _) = decode_lsp_payload(&encoded).unwrap();
+/// assert_eq!(decoded["method"], "shutdown");
+/// ```
 pub fn encode_lsp_payload(payload: &serde_json::Value) -> String {
     let json_text = serde_json::to_string(payload).unwrap_or_default();
     let content_len = json_text.len();
