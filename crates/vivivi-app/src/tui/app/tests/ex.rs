@@ -651,3 +651,92 @@ fn test_ex_treesitter_and_smartselect() {
     crate::tui::event::handle_key_event(&mut app, alt_down);
     assert!(app.current_smart_selection.is_some());
 }
+
+#[test]
+fn test_command_and_search_history_up_down_in_app() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let mut app = App::new(
+        "first line\nsecond line\nthird line\n",
+        None,
+        Default::default(),
+        Default::default(),
+    );
+
+    // 1. :se nu と :se nonu を順番に入力・実行
+    for cmd in [":se nu", ":se nonu"] {
+        for ch in cmd.chars() {
+            crate::tui::event::handle_key_event(
+                &mut app,
+                KeyEvent::new(KeyCode::Char(ch), KeyModifiers::empty()),
+            );
+        }
+        crate::tui::event::handle_key_event(
+            &mut app,
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+        );
+    }
+    assert!(!app.show_line_numbers);
+
+    // 2. ':' を押して Up キーを2回押し、過去の ":se nu" を呼び出して Enter で再実行
+    crate::tui::event::handle_key_event(
+        &mut app,
+        KeyEvent::new(KeyCode::Char(':'), KeyModifiers::empty()),
+    );
+    crate::tui::event::handle_key_event(
+        &mut app,
+        KeyEvent::new(KeyCode::Up, KeyModifiers::empty()),
+    );
+    assert_eq!(
+        app.vi.parser().command_line_buffer(),
+        Some((&':', "se nonu"))
+    );
+    crate::tui::event::handle_key_event(
+        &mut app,
+        KeyEvent::new(KeyCode::Up, KeyModifiers::empty()),
+    );
+    assert_eq!(app.vi.parser().command_line_buffer(), Some((&':', "se nu")));
+    crate::tui::event::handle_key_event(
+        &mut app,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+    );
+    assert!(app.show_line_numbers);
+
+    // 3. '/' 検索の履歴も Up / Down で選択できることを確認
+    for pat in ["/first", "/third"] {
+        for ch in pat.chars() {
+            crate::tui::event::handle_key_event(
+                &mut app,
+                KeyEvent::new(KeyCode::Char(ch), KeyModifiers::empty()),
+            );
+        }
+        crate::tui::event::handle_key_event(
+            &mut app,
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+        );
+    }
+    assert_eq!(app.cursor.pos.line, 2);
+
+    crate::tui::event::handle_key_event(
+        &mut app,
+        KeyEvent::new(KeyCode::Char('/'), KeyModifiers::empty()),
+    );
+    crate::tui::event::handle_key_event(
+        &mut app,
+        KeyEvent::new(KeyCode::Up, KeyModifiers::empty()),
+    );
+    assert_eq!(app.vi.parser().command_line_buffer(), Some((&'/', "third")));
+    crate::tui::event::handle_key_event(
+        &mut app,
+        KeyEvent::new(KeyCode::Up, KeyModifiers::empty()),
+    );
+    assert_eq!(app.vi.parser().command_line_buffer(), Some((&'/', "first")));
+    crate::tui::event::handle_key_event(
+        &mut app,
+        KeyEvent::new(KeyCode::Down, KeyModifiers::empty()),
+    );
+    assert_eq!(app.vi.parser().command_line_buffer(), Some((&'/', "third")));
+    crate::tui::event::handle_key_event(
+        &mut app,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+    );
+}

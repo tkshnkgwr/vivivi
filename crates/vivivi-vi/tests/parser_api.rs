@@ -142,3 +142,73 @@ fn test_goto_line_commands() {
         Some(ViCommand::Move(Motion::DocumentEnd(Some(100))))
     );
 }
+
+#[test]
+fn test_command_and_search_history_navigation() {
+    let mut parser = CommandParser::new();
+
+    // 1. Exコマンド履歴の記録 (:set nu, :w, :set wrap)
+    for cmd in ["set nu", "w", "set wrap"] {
+        parser.feed_char(':', ViMode::Normal);
+        for ch in cmd.chars() {
+            parser.feed_char(ch, ViMode::CommandLine);
+        }
+        parser.feed_char('\n', ViMode::CommandLine);
+    }
+    assert_eq!(
+        parser.ex_history(),
+        &[
+            "set nu".to_string(),
+            "w".to_string(),
+            "set wrap".to_string()
+        ]
+    );
+
+    // 2. 空の状態から上下キーで全履歴を巡回
+    parser.feed_char(':', ViMode::Normal);
+    assert!(parser.history_prev());
+    assert_eq!(parser.command_line_buffer(), Some((&':', "set wrap")));
+    assert!(parser.history_prev());
+    assert_eq!(parser.command_line_buffer(), Some((&':', "w")));
+    assert!(parser.history_prev());
+    assert_eq!(parser.command_line_buffer(), Some((&':', "set nu")));
+    assert!(!parser.history_prev()); // 最古で停止
+
+    assert!(parser.history_next());
+    assert_eq!(parser.command_line_buffer(), Some((&':', "w")));
+    assert!(parser.history_next());
+    assert_eq!(parser.command_line_buffer(), Some((&':', "set wrap")));
+    assert!(parser.history_next());
+    assert_eq!(parser.command_line_buffer(), Some((&':', ""))); // 元の空入力へ復帰
+    assert!(!parser.history_next());
+    parser.feed_char('\x1b', ViMode::CommandLine);
+
+    // 3. プレフィックス入力からの絞り込み履歴巡回 (:set + Up -> set wrap -> set nu)
+    parser.feed_char(':', ViMode::Normal);
+    for ch in "set".chars() {
+        parser.feed_char(ch, ViMode::CommandLine);
+    }
+    assert!(parser.history_prev());
+    assert_eq!(parser.command_line_buffer(), Some((&':', "set wrap")));
+    assert!(parser.history_prev());
+    assert_eq!(parser.command_line_buffer(), Some((&':', "set nu")));
+    assert!(parser.history_next());
+    assert_eq!(parser.command_line_buffer(), Some((&':', "set wrap")));
+    assert!(parser.history_next());
+    assert_eq!(parser.command_line_buffer(), Some((&':', "set"))); // 元のドラフト文字列へ復帰
+    parser.feed_char('\x1b', ViMode::CommandLine);
+
+    // 4. 検索履歴 (/ と ? で共通、Exコマンド履歴とは独立)
+    for pat in ["alpha", "beta"] {
+        parser.feed_char('/', ViMode::Normal);
+        for ch in pat.chars() {
+            parser.feed_char(ch, ViMode::CommandLine);
+        }
+        parser.feed_char('\n', ViMode::CommandLine);
+    }
+    parser.feed_char('/', ViMode::Normal);
+    assert!(parser.history_prev());
+    assert_eq!(parser.command_line_buffer(), Some((&'/', "beta")));
+    assert!(parser.history_prev());
+    assert_eq!(parser.command_line_buffer(), Some((&'/', "alpha")));
+}

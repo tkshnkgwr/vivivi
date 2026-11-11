@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [0.9.18-beta] - 2026-11-11
+
+### Added / Improved
+- **Command-Line (`:`) and Search (`/` / `?`) History Navigation (`vivivi-vi`, `vivivi-app`, `vivivi-gui`)**:
+  - Implemented independent history buffers (`ex_history` and `search_history`, up to 100 deduplicated entries each) in `CommandParser`.
+  - Added `Up` / `Down` arrow key (and `Ctrl+P` / `Ctrl+N`) navigation to recall previously entered Ex commands and search patterns.
+  - Added Vim-style prefix-filtered history recall (e.g., typing `:set` then pressing `Up` cycles matching `:set ...` commands) and automatic restoration of the in-progress draft when navigating back to the bottom.
+  - Added automatic `egui` widget focus surrender in `vivivi-gui` when dialogs are closed so arrow keys are never intercepted by widget focus cycling.
+
+---
+
 ## [0.9.17-beta] - 2026-11-11
 
 ### Added / Improved

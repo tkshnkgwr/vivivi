@@ -321,17 +321,25 @@ pub(crate) fn handle_command_line_mode(app: &mut App, key: KeyEvent) {
         return;
     }
 
+    // 上キー または Ctrl+p (1つ古いコマンド・検索履歴へ遡る)
+    if key.code == KeyCode::Up
+        || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('p'))
+    {
+        app.vi.command_history_prev();
+        return;
+    }
+
+    // 下キー または Ctrl+n (1つ新しいコマンド・検索履歴へ進む)
+    if key.code == KeyCode::Down
+        || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('n'))
+    {
+        app.vi.command_history_next();
+        return;
+    }
+
     // Ctrl+u (行クリア)
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('u') {
-        let len = app
-            .vi
-            .parser()
-            .command_line_buffer()
-            .map(|(_, s)| s.chars().count())
-            .unwrap_or(0);
-        for _ in 0..len {
-            app.feed_vi_char('\x08');
-        }
+        app.vi.parser_mut().set_command_line_buffer(String::new());
         return;
     }
 

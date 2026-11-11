@@ -227,6 +227,21 @@ impl ViEngine {
         &self.parser
     }
 
+    /// 内部のコマンドパーサー（[`CommandParser`]）への可変参照を取得します。
+    pub fn parser_mut(&mut self) -> &mut CommandParser {
+        &mut self.parser
+    }
+
+    /// コマンドライン入力中（`:`, `/`, `?`）に1つ古い履歴（上キー / `Ctrl+P`）へ遡ります。
+    pub fn command_history_prev(&mut self) -> bool {
+        self.parser.history_prev()
+    }
+
+    /// コマンドライン入力中（`:`, `/`, `?`）に1つ新しい履歴（下キー / `Ctrl+N`）へ進みます。
+    pub fn command_history_next(&mut self) -> bool {
+        self.parser.history_next()
+    }
+
     /// 直前に実行された検索パターン文字列を取得します。
     ///
     /// # Examples

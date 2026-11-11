@@ -296,6 +296,14 @@ impl eframe::App for ViviviGuiApp {
                 self.window_state.height = rect.height();
             }
         }
+        // 設定ダイアログが開いていない通常編集時は、egui ウィジェット（ボタン等）のフォーカスを解放し、
+        // 上下左右矢印キーや Tab キーが egui のウィジェット間移動に奪われるのを防止する
+        if !self.settings_dialog.is_open
+            && let Some(focused_id) = ctx.memory(|m| m.focused())
+        {
+            ctx.memory_mut(|m| m.surrender_focus(focused_id));
+        }
+
         // 1. トップパネル（メニューバー ＆ マルチタブバー）
         self.render_top_panel(ctx);
 

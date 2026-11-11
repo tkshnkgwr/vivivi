@@ -7,7 +7,7 @@ This document records the unit test, public API integration test, doctest, and s
 ## 1. Overall Summary
 
 - **Execution Date**: 2026-11-11
-- **Target Version**: `v0.9.17-beta`
+- **Target Version**: `v0.9.18-beta`
 - **Rust Version**: rustc 1.96.1 / Cargo 1.96.1 (2024 edition)
 - **Overall Result**: **All Tests Passed (724 passed, 0 failed) / Clippy 0 Warnings / Rustdoc 0 Warnings / rustfmt Passed**
 

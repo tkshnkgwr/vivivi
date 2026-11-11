@@ -16,7 +16,7 @@ This document defines resource consumption targets and measured benchmarks for `
 
 ---
 
-## 2. Measured Benchmark Status (v0.9.17-beta)
+## 2. Measured Benchmark Status (v0.9.18-beta)
 
 | Measurement Item                | Measured Value | Status | Notes                                                                      |
 | :------------------------------ | :------------: | :----: | :------------------------------------------------------------------------- |

@@ -73,6 +73,9 @@ pub enum ParserState {
     CommandLine { prefix: char, buffer: String },
 }
 
+/// コマンドラインおよび検索パターンの最大履歴保持件数
+pub const MAX_COMMAND_HISTORY: usize = 100;
+
 /// 多段階の Vi キー入力を解析して [`ViCommand`] を生成する状態機械パーサー。
 ///
 /// # Examples
@@ -93,6 +96,14 @@ pub struct CommandParser {
     pub(crate) selected_register: Option<char>,
     /// 現在キーボードマクロを記録中かどうか
     pub is_recording: bool,
+    /// `:` Exコマンドの入力履歴（古い順、末尾が最新）
+    pub(crate) ex_history: Vec<String>,
+    /// `/` および `?` 検索パターンの入力履歴（古い順、末尾が最新）
+    pub(crate) search_history: Vec<String>,
+    /// 履歴を上下キーで選択中の現在インデックス
+    pub(crate) history_index: Option<usize>,
+    /// 履歴選択を開始する前に入力していた途中の文字列
+    pub(crate) history_draft: String,
 }
 
 impl Default for CommandParser {
@@ -102,6 +113,10 @@ impl Default for CommandParser {
             count_buffer: None,
             selected_register: None,
             is_recording: false,
+            ex_history: Vec::new(),
+            search_history: Vec::new(),
+            history_index: None,
+            history_draft: String::new(),
         }
     }
 }
@@ -121,7 +136,7 @@ impl CommandParser {
         Self::default()
     }
 
-    /// パーサーの状態、カウントバッファ、レジスタ選択をすべてリセットします。
+    /// パーサーの状態、カウントバッファ、レジスタ選択をすべてリセットします（履歴は保持されます）。
     ///
     /// # Examples
     ///
@@ -139,6 +154,8 @@ impl CommandParser {
         self.state = ParserState::Idle;
         self.count_buffer = None;
         self.selected_register = None;
+        self.history_index = None;
+        self.history_draft.clear();
     }
 
     /// パーサーの現在の内部状態への参照を取得します。
@@ -195,6 +212,199 @@ impl CommandParser {
         }
     }
 
+    /// `:` Exコマンドの履歴一覧（古い順、末尾が最新）を取得します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{CommandParser, ViMode};
+    ///
+    /// let mut parser = CommandParser::new();
+    /// parser.feed_char(':', ViMode::Normal);
+    /// parser.feed_char('w', ViMode::CommandLine);
+    /// parser.feed_char('\n', ViMode::CommandLine);
+    /// assert_eq!(parser.ex_history(), &["w".to_string()]);
+    /// ```
+    pub fn ex_history(&self) -> &[String] {
+        &self.ex_history
+    }
+
+    /// `/` および `?` 検索パターンの履歴一覧（古い順、末尾が最新）を取得します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{CommandParser, ViMode};
+    ///
+    /// let mut parser = CommandParser::new();
+    /// parser.feed_char('/', ViMode::Normal);
+    /// parser.feed_char('a', ViMode::CommandLine);
+    /// parser.feed_char('\n', ViMode::CommandLine);
+    /// assert_eq!(parser.search_history(), &["a".to_string()]);
+    /// ```
+    pub fn search_history(&self) -> &[String] {
+        &self.search_history
+    }
+
+    /// 指定したプレフィックス（`:`, `/`, `?`）の履歴に文字列を追加します。
+    ///
+    /// 空文字列は無視され、既存の同一エントリがある場合は重複を排除して末尾（最新）へ移動します。
+    pub fn push_history(&mut self, prefix: char, entry: &str) {
+        if entry.is_empty() {
+            return;
+        }
+        let hist = match prefix {
+            ':' => &mut self.ex_history,
+            '/' | '?' => &mut self.search_history,
+            _ => return,
+        };
+        hist.retain(|s| s != entry);
+        hist.push(entry.to_string());
+        if hist.len() > MAX_COMMAND_HISTORY {
+            hist.remove(0);
+        }
+    }
+
+    /// 現在のコマンドライン入力バッファを直接置き換えます。
+    pub fn set_command_line_buffer(&mut self, new_buffer: String) {
+        if let ParserState::CommandLine { ref mut buffer, .. } = self.state {
+            *buffer = new_buffer.clone();
+            self.history_index = None;
+            self.history_draft = new_buffer;
+        }
+    }
+
+    /// コマンドライン入力中（`:`, `/`, `?`）に1つ古い履歴（上キー / `Ctrl+P`）へ遡ります。
+    ///
+    /// 履歴開始前に入力されていた文字列（プレフィックス）がある場合、その文字列で始まる履歴があれば
+    /// 前方一致で優先的に絞り込み、該当がない場合は全履歴を対象に遡ります。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{CommandParser, ViMode};
+    ///
+    /// let mut parser = CommandParser::new();
+    /// parser.push_history(':', "set nu");
+    /// parser.push_history(':', "w");
+    ///
+    /// parser.feed_char(':', ViMode::Normal);
+    /// assert!(parser.history_prev());
+    /// assert_eq!(parser.command_line_buffer(), Some((&':', "w")));
+    /// assert!(parser.history_prev());
+    /// assert_eq!(parser.command_line_buffer(), Some((&':', "set nu")));
+    /// ```
+    pub fn history_prev(&mut self) -> bool {
+        let ParserState::CommandLine {
+            prefix,
+            ref mut buffer,
+        } = self.state
+        else {
+            return false;
+        };
+
+        let hist = match prefix {
+            ':' => &self.ex_history,
+            '/' | '?' => &self.search_history,
+            _ => return false,
+        };
+
+        if hist.is_empty() {
+            return false;
+        }
+
+        if self.history_index.is_none() {
+            self.history_draft = buffer.clone();
+        }
+
+        let current_idx = self.history_index.unwrap_or(hist.len());
+        if current_idx == 0 {
+            return false;
+        }
+
+        let use_prefix_filter = !self.history_draft.is_empty()
+            && hist.iter().any(|s| s.starts_with(&self.history_draft));
+
+        if use_prefix_filter {
+            for i in (0..current_idx).rev() {
+                if hist[i].starts_with(&self.history_draft) {
+                    self.history_index = Some(i);
+                    *buffer = hist[i].clone();
+                    return true;
+                }
+            }
+            false
+        } else {
+            let new_idx = current_idx - 1;
+            self.history_index = Some(new_idx);
+            *buffer = hist[new_idx].clone();
+            true
+        }
+    }
+
+    /// コマンドライン入力中（`:`, `/`, `?`）に1つ新しい履歴（下キー / `Ctrl+N`）へ進みます。
+    ///
+    /// 最新履歴のさらに下へ進んだ場合は、履歴選択を始める前に入力していた文字列へ復帰します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_vi::{CommandParser, ViMode};
+    ///
+    /// let mut parser = CommandParser::new();
+    /// parser.push_history(':', "w");
+    ///
+    /// parser.feed_char(':', ViMode::Normal);
+    /// parser.history_prev();
+    /// assert_eq!(parser.command_line_buffer(), Some((&':', "w")));
+    /// parser.history_next();
+    /// assert_eq!(parser.command_line_buffer(), Some((&':', "")));
+    /// ```
+    pub fn history_next(&mut self) -> bool {
+        let ParserState::CommandLine {
+            prefix,
+            ref mut buffer,
+        } = self.state
+        else {
+            return false;
+        };
+
+        let Some(current_idx) = self.history_index else {
+            return false;
+        };
+
+        let hist = match prefix {
+            ':' => &self.ex_history,
+            '/' | '?' => &self.search_history,
+            _ => return false,
+        };
+
+        let use_prefix_filter = !self.history_draft.is_empty()
+            && hist.iter().any(|s| s.starts_with(&self.history_draft));
+
+        if use_prefix_filter {
+            for (i, item) in hist.iter().enumerate().skip(current_idx + 1) {
+                if item.starts_with(&self.history_draft) {
+                    self.history_index = Some(i);
+                    *buffer = item.clone();
+                    return true;
+                }
+            }
+            *buffer = self.history_draft.clone();
+            self.history_index = None;
+            true
+        } else if current_idx + 1 < hist.len() {
+            let new_idx = current_idx + 1;
+            self.history_index = Some(new_idx);
+            *buffer = hist[new_idx].clone();
+            true
+        } else {
+            *buffer = self.history_draft.clone();
+            self.history_index = None;
+            true
+        }
+    }
+
     /// 1文字のキー入力を処理し、コマンドが確定した場合は `Some(ViCommand)` を返します。
     ///
     /// カウント数値の入力や多打鍵コマンド（例: `gg`, `dw`）の入力途中では内部状態を更新して `None` を返します。
@@ -222,6 +432,9 @@ impl CommandParser {
                 '\n' | '\r' => {
                     let cmd_str = std::mem::take(buffer);
                     let pref = prefix;
+                    if !cmd_str.is_empty() {
+                        self.push_history(pref, &cmd_str);
+                    }
                     self.reset();
                     return match pref {
                         ':' => Some(ViCommand::ExCommand(cmd_str)),
@@ -242,11 +455,17 @@ impl CommandParser {
                         return Some(ViCommand::EnterMode(ViMode::Normal));
                     } else {
                         buffer.pop();
+                        let updated = buffer.clone();
+                        self.history_index = None;
+                        self.history_draft = updated;
                         return None;
                     }
                 }
                 _ => {
                     buffer.push(ch);
+                    let updated = buffer.clone();
+                    self.history_index = None;
+                    self.history_draft = updated;
                     return None;
                 }
             }
