@@ -46,7 +46,7 @@ impl ViviviGuiApp {
                 .default_size([620.0, 460.0])
                 .show(ctx, |ui| {
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        for line in self.core.help_lines.iter().skip(self.core.help_scroll) {
+                        for line in &self.core.help_lines {
                             ui.label(
                                 egui::RichText::new(line)
                                     .color(colors::FG_TEXT)
@@ -74,12 +74,7 @@ impl ViviviGuiApp {
                     });
                     ui.separator();
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        for line in self
-                            .core
-                            .preview_lines
-                            .iter()
-                            .skip(self.core.preview_scroll)
-                        {
+                        for line in &self.core.preview_lines {
                             ui.label(
                                 egui::RichText::new(line)
                                     .color(colors::FG_TEXT)

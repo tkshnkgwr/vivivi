@@ -26,7 +26,41 @@ impl ViEngine {
             .map(|(i, _)| i)
             .unwrap_or(full_text.len());
 
-        let re = regex::Regex::new(pat).ok();
+        let should_ignore = if self.smartcase && self.ignorecase {
+            !pat.chars().any(|c| c.is_uppercase())
+        } else {
+            self.ignorecase
+        };
+
+        let re = regex::RegexBuilder::new(pat)
+            .case_insensitive(should_ignore)
+            .build()
+            .ok()
+            .or_else(|| {
+                regex::RegexBuilder::new(&regex::escape(pat))
+                    .case_insensitive(should_ignore)
+                    .build()
+                    .ok()
+            });
+
+        let matches_pattern = |text_slice: &str| -> bool {
+            if should_ignore {
+                let mut text_chars = text_slice.chars();
+                for pc in pat.chars() {
+                    match text_chars.next() {
+                        Some(tc) => {
+                            if !tc.to_lowercase().eq(pc.to_lowercase()) {
+                                return false;
+                            }
+                        }
+                        None => return false,
+                    }
+                }
+                true
+            } else {
+                text_slice.starts_with(pat)
+            }
+        };
 
         if forward {
             let next_byte_offset = full_text
@@ -43,12 +77,12 @@ impl ViEngine {
                 full_text
                     .char_indices()
                     .filter(|(idx, _)| *idx >= next_byte_offset)
-                    .find(|(idx, _)| full_text[*idx..].starts_with(pat))
+                    .find(|(idx, _)| matches_pattern(&full_text[*idx..]))
                     .map(|(idx, _)| idx)
                     .or_else(|| {
                         full_text
                             .char_indices()
-                            .find(|(idx, _)| full_text[*idx..].starts_with(pat))
+                            .find(|(idx, _)| matches_pattern(&full_text[*idx..]))
                             .map(|(idx, _)| idx)
                     })
             };
@@ -75,12 +109,12 @@ impl ViEngine {
                 full_text
                     .char_indices()
                     .filter(|(idx, _)| *idx < cur_byte_offset)
-                    .rfind(|(idx, _)| full_text[*idx..].starts_with(pat))
+                    .rfind(|(idx, _)| matches_pattern(&full_text[*idx..]))
                     .map(|(idx, _)| idx)
                     .or_else(|| {
                         full_text
                             .char_indices()
-                            .rfind(|(idx, _)| full_text[*idx..].starts_with(pat))
+                            .rfind(|(idx, _)| matches_pattern(&full_text[*idx..]))
                             .map(|(idx, _)| idx)
                     })
             };

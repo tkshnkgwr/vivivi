@@ -289,6 +289,8 @@ impl App {
         let wrap = config.appearance.wrap;
 
         let mut vi = ViEngine::new();
+        vi.ignorecase = config.editing.ignorecase;
+        vi.smartcase = config.editing.smartcase;
         #[cfg(not(test))]
         let clipboard_provider = crate::tui::clipboard::SystemClipboard::new_shared();
         #[cfg(test)]
@@ -1023,6 +1025,8 @@ impl App {
         self.list_chars_config.eol = cfg.invisibles.eol;
         let cb_opt = vivivi_vi::ClipboardOption::parse(&cfg.general.clipboard);
         self.vi.set_clipboard_option(cb_opt);
+        self.vi.ignorecase = cfg.editing.ignorecase;
+        self.vi.smartcase = cfg.editing.smartcase;
         self.config = cfg.clone();
     }
 
@@ -1031,6 +1035,8 @@ impl App {
         self.config.appearance.line_number = self.show_line_numbers;
         self.config.appearance.relative_number = self.relative_number;
         self.config.editing.tab_width = self.tab_width;
+        self.config.editing.ignorecase = self.vi.ignorecase;
+        self.config.editing.smartcase = self.vi.smartcase;
         self.config.appearance.wrap = self.wrap;
         self.config.appearance.gutter_markers = self.change_tracker.enabled;
         self.config.invisibles.enabled = self.list_chars_config.enabled;
@@ -1218,23 +1224,28 @@ impl App {
 
     /// LSP イベントの定期ポーリング
     pub fn poll_lsp(&mut self) {
+        let mut jump_target: Option<(usize, usize)> = None;
         if let Some(ref mut mgr) = self.lsp_manager {
             mgr.poll_events();
-            if let Some(hover) = mgr.latest_hover() {
-                self.lsp_hover_text = Some(hover.contents.clone());
+            if let Some(hover) = mgr.take_latest_hover() {
+                self.lsp_hover_text = Some(hover.contents);
             }
             if let Some(loc) = mgr.latest_definition() {
                 let target_line = loc.range.start.line as usize;
                 let target_col = loc.range.start.character as usize;
-                self.cursor.pos.line = target_line.min(self.buffer.line_count().saturating_sub(1));
-                self.cursor.pos.col = target_col;
-                self.status_message = Some(format!(
-                    "定義へジャンプしました: 行 {}, 列 {}",
-                    target_line + 1,
-                    target_col + 1
-                ));
+                jump_target = Some((target_line, target_col));
                 mgr.clear_latest_definition();
             }
+        }
+        if let Some((target_line, target_col)) = jump_target {
+            self.cursor.pos.line = target_line.min(self.buffer.line_count().saturating_sub(1));
+            self.cursor.pos.col = target_col;
+            self.clamp_cursor();
+            self.status_message = Some(format!(
+                "定義へジャンプしました: 行 {}, 列 {}",
+                target_line + 1,
+                target_col + 1
+            ));
         }
     }
 

@@ -119,6 +119,60 @@ fn test_search_and_substitute() {
 }
 
 #[test]
+fn test_search_ignorecase_and_smartcase() {
+    let mut vi = ViEngine::new();
+    let mut buf = TextBuffer::from_text("Hello world HELLO WORLD hello");
+    let mut cur = TextCursor::new(0, 0);
+
+    // デフォルト: ignorecase = true, smartcase = true
+    assert!(vi.ignorecase);
+    assert!(vi.smartcase);
+
+    // 1. 小文字のみ "world" で検索 -> 最初の "world" (col 6) にマッチ
+    vi.execute(
+        &ViCommand::SearchForward("world".to_string()),
+        &mut buf,
+        &mut cur,
+    );
+    assert_eq!(cur.pos.col, 6);
+
+    // 2. 次の一致 (n) -> "WORLD" (col 18) にもマッチ（小文字検索は大文字小文字を無視）
+    vi.execute(&ViCommand::SearchNext, &mut buf, &mut cur);
+    assert_eq!(cur.pos.col, 18);
+
+    // 3. 大文字混在 "WORLD" で検索 -> 大文字小文字が厳密に区別されるため "WORLD" (col 18) に直接ジャンプ
+    cur.pos.col = 0;
+    vi.execute(
+        &ViCommand::SearchForward("WORLD".to_string()),
+        &mut buf,
+        &mut cur,
+    );
+    assert_eq!(cur.pos.col, 18);
+
+    // 4. smartcase = false, ignorecase = true の場合 -> 大文字混在でも大文字小文字を同一視
+    vi.smartcase = false;
+    cur.pos.col = 0;
+    vi.execute(
+        &ViCommand::SearchForward("WORLD".to_string()),
+        &mut buf,
+        &mut cur,
+    );
+    // 最初の "world" (col 6) にヒット
+    assert_eq!(cur.pos.col, 6);
+
+    // 5. ignorecase = false の場合 -> 常に厳密一致
+    vi.ignorecase = false;
+    cur.pos.col = 0;
+    vi.execute(
+        &ViCommand::SearchForward("WORLD".to_string()),
+        &mut buf,
+        &mut cur,
+    );
+    // 大文字 "WORLD" (col 18) にしかヒットしない
+    assert_eq!(cur.pos.col, 18);
+}
+
+#[test]
 fn test_matching_paren_jump() {
     let mut vi = ViEngine::new();
     let mut buf = TextBuffer::from_text("fn main() { println!(\"hello\"); }");

@@ -79,7 +79,7 @@ pub struct ViExecutionResult {
 /// engine.execute(&ViCommand::Move(Motion::Right(2)), &mut buffer, &mut cursor);
 /// assert_eq!(cursor.pos.col, 2);
 /// ```
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ViEngine {
     mode: ViMode,
     registers: RegisterMgr,
@@ -88,6 +88,10 @@ pub struct ViEngine {
     pub(crate) last_search_pattern: Option<String>,
     /// 直前の検索方向 (true: 前方 `/`, false: 後方 `?`)
     pub(crate) last_search_forward: bool,
+    /// 検索時大文字小文字無視フラグ (:set ignorecase / ic)
+    pub ignorecase: bool,
+    /// 大文字混在時は厳密区別フラグ (:set smartcase / sc)
+    pub smartcase: bool,
     /// 矩形一括挿入セッション
     pub block_insert_session: Option<BlockInsertSession>,
     /// 現在マクロ記録中のレジスタ名
@@ -144,6 +148,8 @@ impl ViEngine {
             parser: CommandParser::new(),
             last_search_pattern: None,
             last_search_forward: true,
+            ignorecase: true,
+            smartcase: true,
             block_insert_session: None,
             recording_register: None,
             recorded_macro_keys: Vec::new(),
@@ -358,5 +364,11 @@ impl ViEngine {
         if self.current_insert_cmd.is_some() {
             self.current_insert_chars.pop();
         }
+    }
+}
+
+impl Default for ViEngine {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -235,7 +235,20 @@ impl ViviviGuiApp {
 impl eframe::App for ViviviGuiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // テーマや外観設定（Exコマンドや外部設定ファイル読込等）の動的同期
-        if self.core.config.appearance.theme != self.active_theme.meta.name {
+        let cfg_theme_norm = self
+            .core
+            .config
+            .appearance
+            .theme
+            .to_lowercase()
+            .replace(['-', '_', ' '], "");
+        let cur_theme_norm = self
+            .active_theme
+            .meta
+            .name
+            .to_lowercase()
+            .replace(['-', '_', ' '], "");
+        if cfg_theme_norm != cur_theme_norm {
             self.active_theme =
                 vivivi_app::theme::Theme::load_by_name(&self.core.config.appearance.theme);
             crate::theme::apply_theme(ctx, &self.active_theme);

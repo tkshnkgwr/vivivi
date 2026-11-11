@@ -356,9 +356,22 @@ impl App {
         if let Some(pat) = self.vi.last_search_pattern()
             && !pat.is_empty()
         {
-            return regex::Regex::new(pat)
+            let should_ignore = if self.config.editing.smartcase && self.config.editing.ignorecase {
+                !pat.chars().any(|c| c.is_uppercase())
+            } else {
+                self.config.editing.ignorecase
+            };
+
+            return regex::RegexBuilder::new(pat)
+                .case_insensitive(should_ignore)
+                .build()
                 .ok()
-                .or_else(|| regex::Regex::new(&regex::escape(pat)).ok());
+                .or_else(|| {
+                    regex::RegexBuilder::new(&regex::escape(pat))
+                        .case_insensitive(should_ignore)
+                        .build()
+                        .ok()
+                });
         }
         None
     }

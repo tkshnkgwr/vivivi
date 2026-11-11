@@ -569,8 +569,18 @@ pub(crate) fn handle_settings_command(app: &mut App, trimmed: &str) -> bool {
             true
         }
 
-        // --- ミニマップ表示切替 (:set minimap / :set nominimap / :set minimap? / :se minimap) ---
-        "minimap" | "set minimap" | "se minimap" => {
+        // --- ミニマップ表示切替 (:set minimap / :set nominimap / :set minimap? / :se minimap / :minimap) ---
+        "minimap" | "set minimap!" | "se minimap!" | "set invminimap" | "se invminimap" => {
+            app.config.appearance.gui.show_minimap = !app.config.appearance.gui.show_minimap;
+            let state = if app.config.appearance.gui.show_minimap {
+                "ON"
+            } else {
+                "OFF"
+            };
+            app.status_message = Some(format!("ミニマップ表示: {state}"));
+            true
+        }
+        "set minimap" | "se minimap" => {
             app.config.appearance.gui.show_minimap = true;
             app.status_message = Some("ミニマップ表示: ON (:set minimap)".to_string());
             true
@@ -619,6 +629,90 @@ pub(crate) fn handle_settings_command(app: &mut App, trimmed: &str) -> bool {
             app.status_message = Some(format!(
                 "{state} (重力落下アニメーション: {})",
                 if app.config.appearance.gui.enable_gravity_drop {
+                    "ON"
+                } else {
+                    "OFF"
+                }
+            ));
+            true
+        }
+
+        // --- 検索時大文字小文字無視 (:set ignorecase / :set noignorecase / :set ic / :set noic / :set ic? / :set invic / :set ic!) ---
+        "ic" | "set ic" | "se ic" | "ignorecase" | "set ignorecase" | "se ignorecase" => {
+            app.config.editing.ignorecase = true;
+            app.vi.ignorecase = true;
+            app.status_message = Some("大文字小文字同一視 (ignorecase): ON (:set ic)".to_string());
+            true
+        }
+        "noic" | "set noic" | "se noic" | "noignorecase" | "set noignorecase"
+        | "se noignorecase" => {
+            app.config.editing.ignorecase = false;
+            app.vi.ignorecase = false;
+            app.status_message =
+                Some("大文字小文字同一視 (ignorecase): OFF (:set noic)".to_string());
+            true
+        }
+        "set ic!" | "se ic!" | "set invic" | "se invic" | "set ignorecase!" | "se ignorecase!" => {
+            app.config.editing.ignorecase = !app.config.editing.ignorecase;
+            app.vi.ignorecase = app.config.editing.ignorecase;
+            let state = if app.config.editing.ignorecase {
+                "ON"
+            } else {
+                "OFF"
+            };
+            app.status_message = Some(format!("大文字小文字同一視 (ignorecase): {state}"));
+            true
+        }
+        "ic?" | "set ic?" | "se ic?" | "ignorecase?" | "set ignorecase?" | "se ignorecase?" => {
+            let state = if app.config.editing.ignorecase {
+                "ignorecase"
+            } else {
+                "noignorecase"
+            };
+            app.status_message = Some(format!(
+                "{state} (大文字小文字同一視: {})",
+                if app.config.editing.ignorecase {
+                    "ON"
+                } else {
+                    "OFF"
+                }
+            ));
+            true
+        }
+
+        // --- 大文字混在時厳密区別 (:set smartcase / :set nosmartcase / :set sc / :set nosc / :set sc? / :set invsc / :set sc!) ---
+        "sc" | "set sc" | "se sc" | "smartcase" | "set smartcase" | "se smartcase" => {
+            app.config.editing.smartcase = true;
+            app.vi.smartcase = true;
+            app.status_message = Some("スマートケース (smartcase): ON (:set sc)".to_string());
+            true
+        }
+        "nosc" | "set nosc" | "se nosc" | "nosmartcase" | "set nosmartcase" | "se nosmartcase" => {
+            app.config.editing.smartcase = false;
+            app.vi.smartcase = false;
+            app.status_message = Some("スマートケース (smartcase): OFF (:set nosc)".to_string());
+            true
+        }
+        "set sc!" | "se sc!" | "set invsc" | "se invsc" | "set smartcase!" | "se smartcase!" => {
+            app.config.editing.smartcase = !app.config.editing.smartcase;
+            app.vi.smartcase = app.config.editing.smartcase;
+            let state = if app.config.editing.smartcase {
+                "ON"
+            } else {
+                "OFF"
+            };
+            app.status_message = Some(format!("スマートケース (smartcase): {state}"));
+            true
+        }
+        "sc?" | "set sc?" | "se sc?" | "smartcase?" | "set smartcase?" | "se smartcase?" => {
+            let state = if app.config.editing.smartcase {
+                "smartcase"
+            } else {
+                "nosmartcase"
+            };
+            app.status_message = Some(format!(
+                "{state} (スマートケース: {})",
+                if app.config.editing.smartcase {
                     "ON"
                 } else {
                     "OFF"
@@ -681,8 +775,18 @@ pub(crate) fn handle_settings_command(app: &mut App, trimmed: &str) -> bool {
             } else {
                 "nogutter"
             };
+            let ic = if app.config.editing.ignorecase {
+                "ic"
+            } else {
+                "noic"
+            };
+            let sc = if app.config.editing.smartcase {
+                "sc"
+            } else {
+                "nosc"
+            };
             app.status_message = Some(format!(
-                "{nu} {rnu} {wr} ts={} {lc} {gt} {mm} {pt} theme={} fenc={} ff={}",
+                "{nu} {rnu} {wr} ts={} {lc} {gt} {mm} {pt} {ic} {sc} theme={} fenc={} ff={}",
                 app.tab_width,
                 app.config.appearance.theme,
                 app.encoding.name(),

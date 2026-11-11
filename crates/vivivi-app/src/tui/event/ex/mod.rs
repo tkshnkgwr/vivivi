@@ -167,9 +167,15 @@ pub fn execute_ex_command(app: &mut App, cmd: &str) {
 
         // --- Undo / Redo (:undo, :u, :redo) ---
         "undo" | "u" => {
+            if app.mode() != vivivi_vi::ViMode::Normal {
+                app.feed_vi_char('\x1b');
+            }
             app.feed_vi_char('u');
         }
         "redo" => {
+            if app.mode() != vivivi_vi::ViMode::Normal {
+                app.feed_vi_char('\x1b');
+            }
             app.feed_vi_char('\x12');
         }
 

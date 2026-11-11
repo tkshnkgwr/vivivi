@@ -373,6 +373,20 @@ fn test_public_gui_ex_commands_theme_and_appearance_sync() {
         gui.minimap_open = gui.core.config.appearance.gui.show_minimap;
     }
     assert!(gui.minimap_open);
+
+    // 4. :minimap コマンド単体でのトグル
+    gui.core.execute_ex("minimap");
+    assert!(!gui.core.config.appearance.gui.show_minimap);
+    if gui.minimap_open != gui.core.config.appearance.gui.show_minimap {
+        gui.minimap_open = gui.core.config.appearance.gui.show_minimap;
+    }
+    assert!(!gui.minimap_open);
+
+    // 5. ピルボタントグル操作（self.minimap_open と config の双方向同期）
+    gui.minimap_open = !gui.minimap_open;
+    gui.core.config.appearance.gui.show_minimap = gui.minimap_open;
+    assert!(gui.minimap_open);
+    assert!(gui.core.config.appearance.gui.show_minimap);
 }
 
 /// シナリオ 10: GUI 設定ダイアログ（Preferences Dialog: 左右2ペイン）のライフサイクル、
@@ -683,4 +697,62 @@ fn test_public_gui_hex_lsp_treesitter_integration() {
     gui.core.lsp_hover_text = Some("fn main()".to_string());
     gui.close_all_modals();
     assert!(gui.core.lsp_hover_text.is_none());
+}
+
+/// シナリオ 12: ヘルプ（チートシート）等のモーダル表示中にマウスホイールを回しても、
+/// 背後のテキストバッファのスクロール・カーソル位置が一切汚染・突き抜けしないことの検証。
+#[test]
+fn test_public_gui_modal_scroll_isolation() {
+    let lines = (0..100)
+        .map(|i| format!("line {}", i))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let core = App::new(&lines, None, CharEncoding::Utf8, NewlineType::Lf);
+    let mut gui = ViviviGuiApp::from_core(core);
+
+    assert_eq!(gui.core.scroll.0, 0);
+    assert_eq!(gui.core.cursor.pos.line, 0);
+
+    // 1. 通常時はマウスホイールで背後テキストがスクロールする
+    gui.process_egui_events(
+        &[Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: egui::vec2(0.0, -5.0),
+            modifiers: Modifiers::NONE,
+        }],
+        Modifiers::NONE,
+    );
+    assert!(gui.core.scroll.0 > 0);
+    let scrolled_pos = gui.core.scroll.0;
+
+    // 2. ヘルプ（チートシート）を表示
+    gui.core.show_help = true;
+    assert!(gui.is_any_modal_open());
+
+    // 3. ヘルプ表示中にホイールイベントが発生しても、背後のエディタスクロールは完全に遮断される
+    gui.process_egui_events(
+        &[Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: egui::vec2(0.0, -10.0),
+            modifiers: Modifiers::NONE,
+        }],
+        Modifiers::NONE,
+    );
+    assert_eq!(
+        gui.core.scroll.0, scrolled_pos,
+        "モーダル表示中は背後テキストのスクロール値が一切変化しないこと"
+    );
+
+    // 4. ヘルプを閉じると再びスクロールが機能する
+    gui.core.show_help = false;
+    assert!(!gui.is_any_modal_open());
+    gui.process_egui_events(
+        &[Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: egui::vec2(0.0, -2.0),
+            modifiers: Modifiers::NONE,
+        }],
+        Modifiers::NONE,
+    );
+    assert!(gui.core.scroll.0 > scrolled_pos);
 }

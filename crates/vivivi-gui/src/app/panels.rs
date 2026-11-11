@@ -8,6 +8,41 @@ use vivivi_vi::ViMode;
 use super::{SidebarTab, ViviviGuiApp};
 use crate::theme::colors;
 
+/// Zed 風のメニューポップアップ共通スタイル（最小幅・余白・セパレータ境界線）を適用します。
+fn apply_menu_popup_style(ui: &mut egui::Ui, min_width: f32) {
+    ui.set_min_width(min_width);
+    ui.spacing_mut().item_spacing = Vec2::new(0.0, 2.0);
+    ui.spacing_mut().button_padding = Vec2::new(8.0, 4.0);
+    ui.visuals_mut().widgets.noninteractive.bg_stroke =
+        egui::Stroke::new(1.0, Color32::from_rgb(45, 51, 74));
+}
+
+/// Zed 風の左寄せラベル＋右寄せショートカット付きメニュー項目を描画します。
+fn menu_item(ui: &mut egui::Ui, label: &str, shortcut: &str) -> bool {
+    let shortcut_color = Color32::from_rgb(125, 134, 172);
+    let mut btn = egui::Button::new(label);
+    if !shortcut.is_empty() {
+        btn = btn.shortcut_text(egui::RichText::new(shortcut).color(shortcut_color));
+    }
+    ui.add(btn).clicked()
+}
+
+/// Zed 風のチェック状態付き左寄せラベル＋右寄せショートカット付きメニュー項目を描画します。
+fn menu_toggle_item(ui: &mut egui::Ui, checked: &mut bool, label: &str, shortcut: &str) -> bool {
+    let shortcut_color = Color32::from_rgb(125, 134, 172);
+    let prefix = if *checked { "✓ " } else { "  " };
+    let mut btn = egui::Button::new(format!("{prefix}{label}")).selected(*checked);
+    if !shortcut.is_empty() {
+        btn = btn.shortcut_text(egui::RichText::new(shortcut).color(shortcut_color));
+    }
+    if ui.add(btn).clicked() {
+        *checked = !*checked;
+        true
+    } else {
+        false
+    }
+}
+
 impl ViviviGuiApp {
     /// 1. メニューバー ＆ マルチタブバーの描画
     pub(crate) fn render_top_panel(&mut self, ctx: &egui::Context) {
@@ -21,114 +56,136 @@ impl ViviviGuiApp {
                     ui.visuals_mut().widgets.hovered.bg_fill = colors::BG_HOVER;
 
                     ui.menu_button("File", |ui| {
-                        if ui.button("New Tab  (:tabnew)").clicked() {
+                        apply_menu_popup_style(ui, 220.0);
+                        if menu_item(ui, "New Tab", ":tabnew") {
                             self.core.new_tab(None);
                             ui.close_menu();
                         }
-                        if ui.button("Save  (:w)").clicked() {
+                        if menu_item(ui, "Save", ":w") {
                             self.core.execute_ex("w");
                             ui.close_menu();
                         }
-                        if ui.button("Recent Files  (:recent)").clicked() {
+                        if menu_item(ui, "Recent Files", ":recent") {
                             self.core.execute_ex("recent");
                             ui.close_menu();
                         }
-                        if ui.button("2-Pane Filer  (:filer)").clicked() {
+                        if menu_item(ui, "2-Pane Filer", ":filer") {
                             self.core.execute_ex("filer");
                             ui.close_menu();
                         }
                         ui.separator();
-                        if ui.button("Close Tab  (:tabclose)").clicked() {
+                        if menu_item(ui, "Close Tab", ":tabclose") {
                             let _ = self.core.close_tab();
                             ui.close_menu();
                         }
-                        if ui.button("Quit  (:q)").clicked() {
+                        if menu_item(ui, "Quit", ":q") {
                             self.core.execute_ex("q");
                             ui.close_menu();
                         }
                     });
 
                     ui.menu_button("Edit", |ui| {
-                        if ui.button("Undo  (u)").clicked() {
+                        apply_menu_popup_style(ui, 240.0);
+                        if menu_item(ui, "Undo", "u") {
                             self.core.execute_ex("undo");
                             ui.close_menu();
                         }
-                        if ui.button("Redo  (Ctrl-R)").clicked() {
+                        if menu_item(ui, "Redo", "ctrl-r") {
                             self.core.execute_ex("redo");
                             ui.close_menu();
                         }
                         ui.separator();
-                        if ui.button("Toggle Keisen Mode  (F5)").clicked() {
+                        let mut keisen = self.core.keisen_mode.is_active;
+                        if menu_toggle_item(ui, &mut keisen, "Toggle Keisen Mode", "f5") {
                             self.core.keisen_mode.toggle();
                             ui.close_menu();
                         }
-                        if ui.button("Toggle CSV Mode  (:csv)").clicked() {
+                        let mut csv_mode = self.core.is_csv_active;
+                        if menu_toggle_item(ui, &mut csv_mode, "Toggle CSV Mode", ":csv") {
                             self.core.execute_ex("csv");
                             ui.close_menu();
                         }
-                        if ui.button("Clipboard History  (F6)").clicked() {
+                        if menu_item(ui, "Clipboard History", "f6") {
                             self.core.show_clipboard_hist = !self.core.show_clipboard_hist;
                             ui.close_menu();
                         }
                         ui.separator();
-                        if ui.button("Preferences / 設定...  (Ctrl+,)").clicked() {
+                        if menu_item(ui, "Preferences...", "ctrl-,") {
                             self.settings_dialog.open(&self.core.config);
                             ui.close_menu();
                         }
                     });
 
                     ui.menu_button("View", |ui| {
-                        if ui
-                            .checkbox(&mut self.sidebar_open, "Sidebar (Ctrl+e / :tree)")
-                            .clicked()
-                        {
+                        apply_menu_popup_style(ui, 250.0);
+                        if menu_toggle_item(ui, &mut self.sidebar_open, "Sidebar", "ctrl-e") {
                             ui.close_menu();
                         }
-                        if ui.button("🌐 Visualize (Project Graph) (:graph)").clicked() {
-                            self.core.show_visualize_graph = !self.core.show_visualize_graph;
+                        if menu_toggle_item(
+                            ui,
+                            &mut self.core.show_visualize_graph,
+                            "Visualize Project Graph",
+                            ":graph",
+                        ) {
                             ui.close_menu();
                         }
-                        if ui.button("🔢 Binary Mode (Hex Editor) (:hex)").clicked() {
+                        let mut hex_mode = self.core.is_hex_mode;
+                        if menu_toggle_item(ui, &mut hex_mode, "Binary Mode (Hex Editor)", ":hex") {
                             self.core.toggle_hex_mode();
                             ui.close_menu();
                         }
                         ui.separator();
-                        if ui.checkbox(&mut self.minimap_open, "Minimap").clicked() {
-                            self.core.config.appearance.gui.show_minimap = self.minimap_open;
+                        if menu_toggle_item(
+                            ui,
+                            &mut self.core.config.appearance.gui.show_minimap,
+                            "Minimap",
+                            ":minimap",
+                        ) {
+                            self.minimap_open = self.core.config.appearance.gui.show_minimap;
                             ui.close_menu();
                         }
-                        if ui
-                            .checkbox(&mut self.core.show_line_numbers, "Line Numbers")
-                            .clicked()
-                        {
+                        if menu_toggle_item(
+                            ui,
+                            &mut self.core.show_line_numbers,
+                            "Line Numbers",
+                            ":set nu",
+                        ) {
+                            self.core.config.appearance.line_number = self.core.show_line_numbers;
                             ui.close_menu();
                         }
-                        if ui
-                            .checkbox(&mut self.core.relative_number, "Relative Line Numbers")
-                            .clicked()
-                        {
+                        if menu_toggle_item(
+                            ui,
+                            &mut self.core.relative_number,
+                            "Relative Line Numbers",
+                            ":set rnu",
+                        ) {
+                            self.core.config.appearance.relative_number = self.core.relative_number;
                             ui.close_menu();
                         }
-                        if ui
-                            .checkbox(
-                                &mut self.core.list_chars_config.enabled,
-                                "Invisible Chars (:set list)",
-                            )
-                            .clicked()
-                        {
+                        if menu_toggle_item(
+                            ui,
+                            &mut self.core.list_chars_config.enabled,
+                            "Invisible Chars",
+                            ":set list",
+                        ) {
+                            self.core.config.invisibles.enabled =
+                                self.core.list_chars_config.enabled;
                             ui.close_menu();
                         }
-                        if ui
-                            .checkbox(&mut self.particles.enabled, "Delete Particles")
-                            .clicked()
-                        {
-                            self.core.config.appearance.gui.enable_gravity_drop =
-                                self.particles.enabled;
+                        if menu_toggle_item(
+                            ui,
+                            &mut self.core.config.appearance.gui.enable_gravity_drop,
+                            "Delete Particles",
+                            "",
+                        ) {
+                            self.particles.enabled =
+                                self.core.config.appearance.gui.enable_gravity_drop;
                             ui.close_menu();
                         }
 
                         ui.separator();
                         ui.menu_button("Color Theme", |ui| {
+                            apply_menu_popup_style(ui, 180.0);
                             let available = vivivi_app::theme::Theme::list_available_themes();
                             let current_name = self.active_theme.meta.name.to_lowercase();
                             for theme_name in available {
@@ -147,97 +204,100 @@ impl ViviviGuiApp {
                     });
 
                     ui.menu_button("Window", |ui| {
-                        if ui.button("Split Horizontal  (:sp)").clicked() {
+                        apply_menu_popup_style(ui, 220.0);
+                        if menu_item(ui, "Split Horizontal", ":sp") {
                             self.core.execute_ex("sp");
                             ui.close_menu();
                         }
-                        if ui.button("Split Vertical  (:vsp)").clicked() {
+                        if menu_item(ui, "Split Vertical", ":vsp") {
                             self.core.execute_ex("vsp");
                             ui.close_menu();
                         }
-                        if ui.button("Close Window  (:close)").clicked() {
+                        ui.separator();
+                        if menu_item(ui, "Close Window", ":close") {
                             self.core.execute_ex("close");
                             ui.close_menu();
                         }
-                        if ui.button("Only Window  (:only)").clicked() {
+                        if menu_item(ui, "Only Window", ":only") {
                             self.core.execute_ex("only");
                             ui.close_menu();
                         }
                     });
 
                     ui.menu_button("Tools", |ui| {
-                        if ui.button("🚀 LSP Start  (:lsp start)").clicked() {
+                        apply_menu_popup_style(ui, 260.0);
+                        if menu_item(ui, "LSP Start", ":lsp start") {
                             self.core.start_lsp(None);
                             ui.close_menu();
                         }
-                        if ui.button("⏹ LSP Stop  (:lsp stop)").clicked() {
+                        if menu_item(ui, "LSP Stop", ":lsp stop") {
                             self.core.stop_lsp();
                             ui.close_menu();
                         }
-                        if ui.button("💬 LSP Hover  (K / :lsp hover)").clicked() {
+                        if menu_item(ui, "LSP Hover", "K") {
                             self.core.request_lsp_hover();
                             ui.close_menu();
                         }
-                        if ui.button("🎯 Go to Definition  (gd / :lsp def)").clicked() {
+                        if menu_item(ui, "Go to Definition", "gd") {
                             self.core.request_lsp_definition();
                             ui.close_menu();
                         }
-                        if ui
-                            .checkbox(
-                                &mut self.core.lsp_show_diagnostics_panel,
-                                "LSP Diagnostics Panel (:lsp diag)",
-                            )
-                            .clicked()
-                        {
+                        if menu_toggle_item(
+                            ui,
+                            &mut self.core.lsp_show_diagnostics_panel,
+                            "LSP Diagnostics",
+                            ":lsp diag",
+                        ) {
                             ui.close_menu();
                         }
                         ui.separator();
-                        if ui
-                            .button("🌳 Smart Select Expand  (Alt+Up / :smartselect)")
-                            .clicked()
-                        {
+                        if menu_item(ui, "Expand Selection", "alt-up") {
                             self.core.expand_smart_selection();
                             ui.close_menu();
                         }
-                        if ui
-                            .button("🌱 Smart Select Shrink  (Alt+Down / :smartselect shrink)")
-                            .clicked()
-                        {
+                        if menu_item(ui, "Shrink Selection", "alt-down") {
                             self.core.shrink_smart_selection();
                             ui.close_menu();
                         }
-                        if ui.button("🔍 View Tree-sitter AST  (:ast)").clicked() {
+                        if menu_item(ui, "View Syntax Tree (AST)", ":ast") {
                             self.core.execute_ex("ast");
                             ui.close_menu();
                         }
                         ui.separator();
-                        if ui.button("✂ Trim Trailing Whitespace  (:trim)").clicked() {
+                        if menu_item(ui, "Trim Trailing Whitespace", ":trim") {
                             self.core.execute_ex("trim");
                             ui.close_menu();
                         }
                     });
 
                     ui.menu_button("Help", |ui| {
-                        if ui.button("Vi Cheatsheet  (:help)").clicked() {
+                        apply_menu_popup_style(ui, 240.0);
+                        if menu_item(ui, "Vi Cheatsheet", ":help") {
                             self.core.execute_ex("help");
                             ui.close_menu();
                         }
                         ui.separator();
-                        if ui.button("Check for Updates...  (:checkupdate)").clicked() {
+                        if menu_item(ui, "Check for Updates...", ":checkupdate") {
                             self.core.check_for_updates(true);
                             ui.close_menu();
                         }
                         if let moult_update::UpdateStatus::ReadyToApply { ref release, .. } =
                             self.core.update_status()
-                            && ui
-                                .button(format!("✨ Restart to Update (v{})", release.version))
-                                .clicked()
+                            && menu_item(
+                                ui,
+                                &format!("Restart to Update (v{})", release.version),
+                                ":restart",
+                            )
                         {
                             let _ = self.core.apply_update_and_restart();
                             ui.close_menu();
                         }
                         ui.separator();
-                        ui.label("vivivi - Vi-like Editor in Rust");
+                        ui.label(
+                            egui::RichText::new("vivivi - Vi-like Editor in Rust")
+                                .color(Color32::from_rgb(125, 134, 172))
+                                .size(11.5),
+                        );
                     });
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -251,6 +311,7 @@ impl ViviviGuiApp {
                             .clicked()
                         {
                             self.minimap_open = !self.minimap_open;
+                            self.core.config.appearance.gui.show_minimap = self.minimap_open;
                         }
 
                         let sidebar_label = if self.sidebar_open {

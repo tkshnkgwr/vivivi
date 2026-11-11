@@ -305,6 +305,15 @@ impl ViviviGuiApp {
 
                 // 5. マウスホイールによるスクロール
                 Event::MouseWheel { delta, .. } => {
+                    // モーダルウィンドウ（ヘルプ・設定・プレビュー・履歴・ファイラー等）表示中、
+                    // またはツールウィンドウ表示中はエディタ本文へのホイールスクロール突き抜けを完全に遮断
+                    if is_modal_active
+                        || self.core.lsp_hover_text.is_some()
+                        || self.core.lsp_show_diagnostics_panel
+                    {
+                        continue;
+                    }
+
                     let view_height = ((self
                         .core
                         .window_rects

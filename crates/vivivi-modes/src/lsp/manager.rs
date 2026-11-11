@@ -234,6 +234,16 @@ impl LspManager {
         self.latest_hover.as_ref()
     }
 
+    /// 直近のホバー情報を取得し、内部状態をクリアします。
+    pub fn take_latest_hover(&mut self) -> Option<LspHover> {
+        self.latest_hover.take()
+    }
+
+    /// 直近のホバー情報をクリアします。
+    pub fn clear_latest_hover(&mut self) {
+        self.latest_hover = None;
+    }
+
     /// 直近の補完候補一覧を取得します。
     pub fn latest_completions(&self) -> &[LspCompletionItem] {
         &self.latest_completions

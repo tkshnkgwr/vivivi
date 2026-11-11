@@ -104,7 +104,7 @@ fn test_ex_source_script_commands() {
 fn test_ex_extended_set_commands() {
     let mut app = App::new("test", None, Default::default(), Default::default());
 
-    // 1. ミニマップ切替 (:set minimap / :set nominimap / :set minimap?)
+    // 1. ミニマップ切替 (:set minimap / :set nominimap / :set minimap? / :minimap / :set minimap!)
     app.execute_ex("set nominimap");
     assert!(!app.config.appearance.gui.show_minimap);
     app.execute_ex("set minimap?");
@@ -116,6 +116,18 @@ fn test_ex_extended_set_commands() {
     app.execute_ex("set minimap?");
     let msg = app.status_message.take().unwrap_or_default();
     assert!(msg.contains("minimap (ミニマップ表示: ON)"));
+
+    // :minimap コマンド単体でのトグル動作
+    app.execute_ex("minimap");
+    assert!(!app.config.appearance.gui.show_minimap);
+    app.execute_ex("minimap");
+    assert!(app.config.appearance.gui.show_minimap);
+
+    // :set minimap! による反転動作
+    app.execute_ex("set minimap!");
+    assert!(!app.config.appearance.gui.show_minimap);
+    app.execute_ex("set minimap!");
+    assert!(app.config.appearance.gui.show_minimap);
 
     // 2. 文字削除重力落下アニメーション切替 (:set particles / :set noparticles / :set particles?)
     app.execute_ex("set noparticles");
@@ -150,10 +162,40 @@ fn test_ex_extended_set_commands() {
     let msg = app.status_message.take().unwrap_or_default();
     assert!(msg.contains("listchars=zenkaku:全"));
 
-    // 5. 全オプション表示 (:set all)
+    // 5. 大文字小文字無視・スマートケース切替 (:set ic / :set noic / :set sc / :set nosc)
+    assert!(app.config.editing.ignorecase);
+    assert!(app.vi.ignorecase);
+    assert!(app.config.editing.smartcase);
+    assert!(app.vi.smartcase);
+
+    app.execute_ex("set noic");
+    assert!(!app.config.editing.ignorecase);
+    assert!(!app.vi.ignorecase);
+    app.execute_ex("set ic?");
+    let msg = app.status_message.take().unwrap_or_default();
+    assert!(msg.contains("noignorecase"));
+
+    app.execute_ex("set ic");
+    assert!(app.config.editing.ignorecase);
+    assert!(app.vi.ignorecase);
+
+    app.execute_ex("set nosc");
+    assert!(!app.config.editing.smartcase);
+    assert!(!app.vi.smartcase);
+    app.execute_ex("set sc?");
+    let msg = app.status_message.take().unwrap_or_default();
+    assert!(msg.contains("nosmartcase"));
+
+    app.execute_ex("set sc");
+    assert!(app.config.editing.smartcase);
+    assert!(app.vi.smartcase);
+
+    // 6. 全オプション表示 (:set all)
     app.execute_ex("set all");
     let msg = app.status_message.take().unwrap_or_default();
     assert!(msg.contains("ts="));
     assert!(msg.contains("theme="));
     assert!(msg.contains("fenc="));
+    assert!(msg.contains("ic"));
+    assert!(msg.contains("sc"));
 }
