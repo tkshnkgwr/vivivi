@@ -7,6 +7,8 @@ pub mod cmd_exec;
 pub mod editor;
 pub mod filer;
 pub mod help;
+pub mod hex_view;
+pub mod lsp_view;
 pub mod outline;
 pub mod preview;
 pub mod recent;
@@ -152,10 +154,14 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     let text_view_height = inner_active_editor_area.height as usize;
     app.adjust_scroll(text_view_height, text_view_width);
 
-    // 1. 各エディタウィンドウの描画
-    for &(win_idx, area) in &window_rects {
-        let is_active = win_idx == active_idx;
-        editor::render_window(frame, app, area, win_idx, is_active);
+    // 1. 各エディタウィンドウの描画 (バイナリモード時は HexView を描画)
+    if app.is_hex_mode {
+        hex_view::render_hex_view(frame, app, editor_container);
+    } else {
+        for &(win_idx, area) in &window_rects {
+            let is_active = win_idx == active_idx;
+            editor::render_window(frame, app, area, win_idx, is_active);
+        }
     }
 
     // 2. アウトラインペインの描画
@@ -199,6 +205,16 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     // 8.6 外部コマンド実行ダイアログの描画
     if app.show_cmd_exec_dialog {
         cmd_exec::render_cmd_exec_modal(frame, app, size);
+    }
+
+    // 8.7 LSP ホバーポップアップの描画
+    if app.lsp_show_hover {
+        lsp_view::render_lsp_hover(frame, app, size);
+    }
+
+    // 8.8 LSP 診断情報パネルの描画
+    if app.lsp_show_diagnostics_panel {
+        lsp_view::render_lsp_diagnostics(frame, app, size);
     }
 
     // 9. カーソルの画面配置

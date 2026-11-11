@@ -75,8 +75,8 @@
 | UI/UX Visual       | Sidebar File Explorer (File Tree)             | ViVi 4 / Modern          | Hierarchical tree, async lazy loading, cloud/NAS-safe design                | Implemented (vivivi-gui) |
 | UI/UX Visual       | Gravity Drop Deletion Animation               | OpenViVi                 | Playful physical falling character animation upon deletion                  | Implemented (vivivi-gui) |
 | UI/UX Visual       | Desktop GUI (egui / eframe)                   | OpenViVi (Qt rewrite)    | Modern GUI frontend with rich borders and custom fonts                      | Implemented (vivivi-gui) |
-| Future             | Tree-sitter Syntax Engine Integration         | Modern Extension         | Accurate AST-based syntax highlighting and AST node selection               | Planned (Phase 5)        |
-| Future             | Binary / Hex Editor Mode                      | ViVi 3 / ViVi 4          | Hex dump + ASCII parallel view and byte-level editing                       | Planned (Phase 5)        |
+| Future             | Tree-sitter Syntax Engine Integration         | Modern Extension         | Accurate AST-based syntax highlighting and AST node selection               | Implemented (modes/app)  |
+| Future             | Binary / Hex Editor Mode                      | ViVi 3 / ViVi 4          | Hex dump + ASCII parallel view and byte-level editing                       | Implemented (modes/app)  |
 | Future             | Scripting Engine (Modern ViViScript)          | ViVi 3 / ViVi 4          | Editor automation via Rhai / Lua integration                                | Planned (Phase 6)        |
 | Future             | Project Visualizer Graph (Visualize)          | ViVi 4                   | 2D force-directed graph of file sizes, dependencies & freshness             | Implemented (vivivi-gui) |
 | Distribution       | Update Check, Notify & Auto-Update Prep       | Modern Extension         | GitHub Releases sync, moult-update self-update, notification UI & pair swap | Completed (moult-update) |
@@ -352,20 +352,28 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 - [x] **[ViVi 4 / Modern Extension] Sidebar File Explorer Async Cloud-Resilient Enhancements**
   - Basic left-pane directory listing, parent `..` traversal, and click-to-open are implemented in `vivivi-gui`.
   - Future enhancements: keyboard-driven tree navigation (`:tree` / `Ctrl-e`) and **async on-demand lazy loading with I/O timeouts** for network drives & cloud storage (Box/OneDrive).
-- [ ] **[ViVi 3 / ViVi 4] Binary / Hex Editor Mode**
-  - Hex dump + ASCII parallel view and byte-level editing.
+- [x] **[ViVi 3 / ViVi 4] Binary / Hex Editor Mode**
+  - Hex dump + ASCII parallel view and byte-level editing (`vivivi-modes::hex`).
+  - 3-column synchronized grid: address offsets (8-digit HEX), hex byte dump (16 bytes/row with 8-byte space grouping), printable ASCII preview.
+  - High/low nibble editing in Hex pane, direct character typing in ASCII pane, Undo/Redo, and byte pattern search.
+  - TUI (Ratatui) and GUI (egui) integration with `:hex` / `:binary` Ex command switching and statusline reporting.
 - [x] **[ViVi 4] Project Visualizer Graph (Visualize / Force-Directed Graph)**
   - 2D force-directed layout graph visualizing file sizes, include dependencies, and edit freshness.
 - [x] **[Visual & Brand] Official Application Icon & Native Embedding (Neo-Triple V)**
   - Adoption of "Neo-Triple V (Dynamic Asymmetric Neon)" design and asset generation (1024px PNG, 256px PNG, multi-resolution ICO, and raw RGBA stream under `assets/icons/`).
   - Native embedding into desktop GUI (`egui::ViewportBuilder::with_icon`) and Windows `.exe` binaries (`winres`).
 - [ ] **[Original]** Gigabyte file (1GB+) handling via Piece Tree & Memory-Mapped Files (`memmap2`).
-- [ ] **[Modern Extension] Tree-sitter Syntax Engine Integration**
-  - Integrate AST (Abstract Syntax Tree) parsing engine via `tree-sitter` crate.
-  - Accurate contextual highlighting for nested scopes, blocks, and identifiers (collaborating with builtin tokenizers).
-  - Syntax node-based smart selection (expand/shrink visual selection by AST node).
-  - Incremental parsing architecture guaranteeing zero input latency during typing.
-- [ ] **[Original]** LSP (Language Server Protocol) client integration.
+- [x] **[Modern Extension] Tree-sitter Syntax Engine Integration**
+  - Integrate AST (Abstract Syntax Tree) parsing engine via `tree-sitter` crate (`vivivi-modes::treesitter::TreeSitterEngine`).
+  - Accurate contextual highlighting for nested scopes, blocks, and identifiers (collaborating with builtin tokenizers through layered rendering).
+  - Syntax node-based smart selection (expand/shrink visual selection by AST node via `Alt+Up` / `Alt+Down` / `Alt++` / `Alt+-`).
+  - Ex commands `:smartselect [expand|shrink]` and `:ast` (AST S-expression preview inspection).
+  - Incremental parsing architecture guaranteeing zero input latency during typing (`edit` API).
+- [x] **[Original] LSP (Language Server Protocol) Client Integration**
+  - LSP v3.17 compliant asynchronous client engine (`vivivi-modes::lsp`).
+  - JSON-RPC 2.0 / Content-Length communication stream over background stdio child processes (`rust-analyzer`, `clangd`, etc.).
+  - Real-time diagnostic collection (`textDocument/publishDiagnostics`), hover documentation (`textDocument/hover`), definition navigation (`textDocument/definition`), and completion (`textDocument/completion`).
+  - TUI integration with `:lsp start [cmd]`, `:lsp stop`, `:lsp hover` (key: `K`), `:lsp def` (key: `gd`), and `:lsp diag` Ex commands.
 - [ ] **[Original]** Multi-cursor editing.
 - [x] **[Update Management & Operations] Update Check, Notification & Auto-Update Pipeline Preparation (Medium priority)**
   - **1. GitHub Actions CI/CD Release Pipeline (`.github/workflows/release.yml`)**:
@@ -390,9 +398,10 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - Establish statistical benchmarking harness and HTML report generation using `criterion`.
   - Measure $O(1)$ vs $O(N)$ insertion/deletion speedup comparing GapBuffer against standard Vec on 1M chars.
   - Latency profiling for inline CSV/TSV width calculation and Migemo incremental search on 100k lines.
-- [ ] **[Developer Ergonomics] Standalone Executable Examples (`examples/`) (Low priority)**
+- [x] **[Developer Ergonomics] Standalone Executable Examples (`examples/`) (Low priority)**
   - Minimal CLI demos verifying `vivivi-core` and `vivivi-modes` logic without launching the entire TUI.
-  - Place `gap_buffer_demo.rs` (buffer locality visualization), `keisen_combine.rs` (Unicode box drawing intersection test), `inline_csv_align.rs` (instant table formatter).
+  - `gap_buffer_demo.rs` (buffer locality visualization), `keisen_combine.rs` (Unicode box drawing intersection test), `inline_csv_align.rs` (instant table formatter), and `dabbrev_runner.rs` (dynamic word expansion).
+  - Ready to run via `cargo run --example <name>` and accompanied by `examples/README.md`.
 
 ---
 

@@ -76,6 +76,9 @@ pub fn run(mut app: App) -> anyhow::Result<()> {
             last_cursor_mode = Some(current_mode);
         }
 
+        // LSP イベントの定期ポーリング
+        app.poll_lsp();
+
         // 画面描画
         terminal.draw(|frame| {
             ui::render(frame, &mut app);

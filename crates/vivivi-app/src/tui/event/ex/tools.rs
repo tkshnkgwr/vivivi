@@ -6,6 +6,96 @@ use crate::tui::app::App;
 ///
 /// コマンドを処理した場合は `true`、合致しなかった場合は `false` を返します。
 pub(crate) fn handle_tools_command(app: &mut App, trimmed: &str) -> bool {
+    // :hex または :binary
+    if trimmed == "hex" || trimmed == "binary" {
+        app.toggle_hex_mode();
+        return true;
+    }
+    if trimmed == "text" {
+        if app.is_hex_mode {
+            app.toggle_hex_mode();
+        } else {
+            app.status_message = Some("すでにテキストモードです".to_string());
+        }
+        return true;
+    }
+
+    // :lsp コマンド (:lsp start, :lsp stop, :lsp hover, :lsp def, :lsp diag)
+    if let Some(rest) = trimmed.strip_prefix("lsp") {
+        let rest = rest.trim();
+        if rest.starts_with("start") {
+            let cmd_part = rest.strip_prefix("start").unwrap_or("").trim();
+            let custom_cmd = if cmd_part.is_empty() {
+                None
+            } else {
+                Some(cmd_part)
+            };
+            app.start_lsp(custom_cmd);
+        } else if rest == "stop" {
+            app.stop_lsp();
+        } else if rest == "hover" {
+            app.request_lsp_hover();
+        } else if rest == "def" || rest == "definition" {
+            app.request_lsp_definition();
+        } else if rest == "diag" || rest == "diagnostics" {
+            app.lsp_show_diagnostics_panel = !app.lsp_show_diagnostics_panel;
+            app.status_message = Some(format!(
+                "LSP 診断情報パネル: {}",
+                if app.lsp_show_diagnostics_panel {
+                    "表示"
+                } else {
+                    "非表示"
+                }
+            ));
+        } else {
+            app.status_message = Some("使用法: :lsp [start|stop|hover|def|diag]".to_string());
+        }
+        return true;
+    }
+
+    // :smartselect (Tree-sitter スマート選択拡大/縮小)
+    if let Some(rest) = trimmed.strip_prefix("smartselect") {
+        let rest = rest.trim();
+        if rest == "shrink" || rest == "prev" || rest == "-" {
+            app.shrink_smart_selection();
+        } else {
+            app.expand_smart_selection();
+        }
+        return true;
+    }
+
+    // :ast (Tree-sitter 構文木プレビュー表示またはスマート選択)
+    if let Some(rest) = trimmed.strip_prefix("ast") {
+        let rest = rest.trim();
+        if rest == "shrink" || rest == "prev" || rest == "-" {
+            app.shrink_smart_selection();
+        } else if rest == "expand" || rest == "+" {
+            app.expand_smart_selection();
+        } else {
+            // AST プレビュー（S 式ダンプ）を表示
+            app.update_treesitter();
+            if let Some(ref ts) = app.treesitter {
+                if let Some(sexp) = ts.to_sexp() {
+                    let mut lines = Vec::new();
+                    lines.push("=== Tree-sitter AST S-Expression ===".to_string());
+                    for line in sexp.lines() {
+                        lines.push(line.to_string());
+                    }
+                    app.preview_lines = lines;
+                    app.show_preview = true;
+                    app.preview_scroll = 0;
+                    app.status_message = Some("構文木 (AST) プレビューを表示しました".to_string());
+                } else {
+                    app.status_message = Some("構文木が生成されていません".to_string());
+                }
+            } else {
+                app.status_message =
+                    Some("Tree-sitter 構文解析エンジンが利用できません".to_string());
+            }
+        }
+        return true;
+    }
+
     // :r !<cmd> または :read !<cmd>
     if let Some(cmd) = trimmed
         .strip_prefix("r !")

@@ -88,6 +88,10 @@ impl ViviviGuiApp {
                             self.core.show_visualize_graph = !self.core.show_visualize_graph;
                             ui.close_menu();
                         }
+                        if ui.button("🔢 Binary Mode (Hex Editor) (:hex)").clicked() {
+                            self.core.toggle_hex_mode();
+                            ui.close_menu();
+                        }
                         ui.separator();
                         if ui.checkbox(&mut self.minimap_open, "Minimap").clicked() {
                             self.core.config.appearance.gui.show_minimap = self.minimap_open;

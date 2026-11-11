@@ -177,6 +177,13 @@ pub fn render_editor(frame: &mut Frame, app: &App, area: Rect, win_idx: usize, i
                 text: display_line.clone(),
                 token_type: vivivi_modes::TokenType::Text,
             }]
+        } else if let Some(ref ts) = app.treesitter {
+            let ast_tokens = ts.highlight_syntax_tokens(line_idx, &display_line);
+            if !ast_tokens.is_empty() {
+                ast_tokens
+            } else {
+                vivivi_modes::tokenize_line(&display_line, app.syntax_lang)
+            }
         } else {
             vivivi_modes::tokenize_line(&display_line, app.syntax_lang)
         };

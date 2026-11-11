@@ -73,8 +73,8 @@
 | UI/UX表示    | サイドバー ファイルツリー (Explorer)       | 共通 (ViVi / モダン)   | 階層フォルダ展開、非同期遅延読込、クラウド/NAS安全設計             | 実装済み (vivivi-gui)   |
 | UI/UX表示    | 削除文字落下アニメーション                 | OpenViVi               | 文字削除時に文字が物理重力で落下するOpenViVi特有の演出             | 実装済み (vivivi-gui)   |
 | UI/UX表示    | デスクトップGUI (egui / eframe)            | OpenViVi (Qt再構築)    | ターミナルTUIに加え、モダンGUIによるリッチグラフィック描画         | 実装済み (vivivi-gui)   |
-| 将来構想     | 構文木ハイライト (Tree-sitter 統合)        | モダン拡張             | 多言語のAST解析に基づく高度シンタックスハイライト・ノード選択      | 未実装 (Phase 5)        |
-| 将来構想     | バイナリモード (Hex Editor)                | ViVi 3 / ViVi 4        | 16進ダンプ＋ASCII並行表示によるバイト単位の直接編集                | 未実装 (Phase 5)        |
+| 将来構想     | 構文木ハイライト (Tree-sitter 統合)        | モダン拡張             | 多言語のAST解析に基づく高度シンタックスハイライト・ノード選択      | 実装済み (modes/app)    |
+| 将来構想     | バイナリモード (Hex Editor)                | ViVi 3 / ViVi 4        | 16進ダンプ＋ASCII並行表示によるバイト単位の直接編集                | 実装済み (modes/app)    |
 | 将来構想     | スクリプトエンジン (現代版ViViScript)      | ViVi 3 / ViVi 4        | Rhai / Lua等を用いたエディタ操作自動化・マクロ拡張                 | 未実装 (Phase 6)        |
 | 将来構想     | プロジェクト可視化グラフ (Visualize)       | ViVi 4                 | インクルード依存関係・ファイル鮮度を物理力学2Dグラフで描画         | 実装済み (vivivi-gui)   |
 | 配布・運用   | 更新チェック・通知・自動更新準備           | 独自拡張               | GitHub Releases連携・moult-update自己更新・通知UI・ペア同期        | 実装済み (moult-update) |
@@ -351,20 +351,28 @@
 - [x] **【ViVi 4 / モダン拡張】 サイドバー・ファイルエクスプローラーの非同期クラウド耐障害強化**
   - エディタ左ペインへのファイル/ディレクトリ階層表示・親子移動・クリックオープンは `vivivi-gui` に基本実装済み
   - 今後の拡張：キーボード駆動ナビゲーション（`:tree` / `:Explore` / `Ctrl-e` トグル）、および **ネットワークドライブ・クラウド同期（Box/OneDrive等）向け非同期遅延読み込み（Lazy Loading）・I/Oタイムアウト** の本格導入
-- [ ] **【ViVi 3 / ViVi 4】 バイナリモード (Hex Editor)**
-  - 16進ダンプ＋ASCII並行表示、バイト単位の直感編集
+- [x] **【ViVi 3 / ViVi 4】 バイナリモード (Hex Editor)**
+  - 16進ダンプ＋ASCII並行表示、バイト単位の直感編集（`vivivi-modes::hex`）
+  - アドレスオフセット列（8桁HEX）、16進ダンプ列（16バイト折返し/中央空白区切り）、印字可能ASCII列の3列同期グリッド
+  - Hexペインでの上位/下位ニブル単位編集、ASCIIペインでの直接文字入力、Undo/Redo、バイト列パターン検索
+  - TUI（Ratatui）および GUI（egui）における `:hex` / `:binary` Exコマンド連携とステータスバー情報表示
 - [x] **【ViVi 4】 プロジェクト可視化グラフ (Visualize / 力学モデルグラフ)**
   - インクルード依存関係・ファイルサイズ・更新鮮度を物理力学モデルで2Dグラフ描画
 - [x] **【ビジュアル・ブランド】 公式アプリアイコン配備とネイティブ埋め込み (Neo-Triple V)**
   - 「ネオ・トリプルV (Dynamic Asymmetric Neon)」デザインの選定とアセット配備（`assets/icons/` 配下に 1024px PNG, 256px PNG, マルチ解像度 ICO, raw RGBA を完備）
   - デスクトップ GUI (`egui::ViewportBuilder::with_icon`) および Windows `.exe` (`winres`) へのネイティブ組み込み
 - [ ] **【独自】** 巨大ファイル（1GB超）の高速表示・編集（Piece Tree / Memory-Mapped File `memmap2`）
-- [ ] **【モダン拡張】 構文木ハイライト (Tree-sitter 統合)**
-  - 多言語のAST（抽象構文木）解析エンジン `tree-sitter` クレートの統合
-  - ネストされたスコープ・括弧・識別子の正確なハイライト（現状の内蔵トークナイザーの上位互換・連携）
-  - 構文木ノードに基づくスマート選択（関数・ブロック単位の選択拡大 / 縮小）
-  - インクリメンタルパースによるタイピング遅延ゼロの構文解析
-- [ ] **【独自】** LSP (Language Server Protocol) クライアント統合
+- [x] **【モダン拡張】 構文木ハイライト (Tree-sitter 統合)**
+  - 多言語のAST（抽象構文木）解析エンジン `tree-sitter` クレートの統合（`vivivi-modes::treesitter::TreeSitterEngine`）
+  - ネストされたスコープ・括弧・識別子の正確なハイライト（現状の内蔵トークナイザーの上位互換・多層レイヤリング描画連携）
+  - 構文木ノードに基づくスマート選択（関数・ブロック単位の選択拡大 `expand` / 縮小 `shrink`、キーバインド `Alt+Up` / `Alt+Down` / `Alt++` / `Alt+-`）
+  - `:smartselect [expand|shrink]` および `:ast`（構文木S式プレビュー表示）Exコマンド対応
+  - インクリメンタルパースによるタイピング遅延ゼロの構文解析更新（`edit` API完備）
+- [x] **【独自】 LSP (Language Server Protocol) クライアント統合**
+  - LSP v3.17 準拠の非同期クライアントエンジン（`vivivi-modes::lsp`）
+  - JSON-RPC 2.0 / Content-Length 通信ストリーム、バックグラウンド子プロセス（`rust-analyzer`, `clangd` 等）連携
+  - リアルタイム診断情報収集（`textDocument/publishDiagnostics`）、ホバー（`textDocument/hover`）、定義ジャンプ（`textDocument/definition`）、コード補完（`textDocument/completion`）
+  - TUIにおける `:lsp start [cmd]`, `:lsp stop`, `:lsp hover` (キー: `K`), `:lsp def` (キー: `gd`), `:lsp diag` コマンド統合
 - [ ] **【独自】** マルチカーソル編集
 - [x] **【更新管理・運用】 アプリの更新チェック機能・通知機能・自動更新の環境整備とプログラム連携（優先度：中）**
   - **1. GitHub Actions CI/CD リリース自動化パイプラインの構築 (`.github/workflows/release.yml`)**:
@@ -389,9 +397,10 @@
   - `criterion` クレートを用いた統計的ベンチマーク計測とHTMLグラフ出力の確立
   - 100万文字テキスト挿入・削除における GapBuffer と標準 Vec の $O(1)$ vs $O(N)$ 速度実測
   - 10万行CSV/TSVインライン列幅計算・クォート透過解析およびMigemo検索のレイテンシ検証
-- [ ] **【開発支援・ライブラリ化】 単体機能の実行可能サンプルコード整備 (`examples/`)（優先度：低）**
+- [x] **【開発支援・ライブラリ化】 単体機能の実行可能サンプルコード整備 (`examples/`)（優先度：低）**
   - TUI全体を起動せずに `vivivi-core` や `vivivi-modes` のロジックを試せる最小CLIデモ
-  - `gap_buffer_demo.rs`（バッファ局所編集可視化）、`keisen_combine.rs`（Unicode罫線十字結合検証）、`inline_csv_align.rs`（CSV即時整列ツール）等の配置
+  - `gap_buffer_demo.rs`（バッファ局所編集可視化）、`keisen_combine.rs`（Unicode罫線十字結合検証）、`inline_csv_align.rs`（CSV即時整列ツール）、`dabbrev_runner.rs`（動的単語補完）の整備
+  - `cargo run --example <name>` によるワンタッチ実行環境と `examples/README.md` の配備
 
 ---
 

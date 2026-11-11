@@ -515,6 +515,17 @@ pub(crate) fn handle_normal_mode(app: &mut App, key: KeyEvent) {
             app.feed_vi_char('\x1b');
             app.prev_tab();
         }
+        KeyCode::Char('d') if app.g_pending => {
+            // gd: LSP シンボル定義ジャンプ
+            app.g_pending = false;
+            app.feed_vi_char('\x1b');
+            app.request_lsp_definition();
+        }
+        KeyCode::Char('K') => {
+            // K: LSP カーソル位置ホバー情報
+            app.g_pending = false;
+            app.request_lsp_hover();
+        }
         KeyCode::Char('g') => {
             if app.g_pending {
                 // gg (先頭行ジャンプ)

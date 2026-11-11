@@ -29,3 +29,20 @@ moult-update.workspace = true
 
 
 [dev-dependencies]
+
+[[example]]
+name = "gap_buffer_demo"
+path = "../../examples/gap_buffer_demo.rs"
+
+[[example]]
+name = "keisen_combine"
+path = "../../examples/keisen_combine.rs"
+
+[[example]]
+name = "inline_csv_align"
+path = "../../examples/inline_csv_align.rs"
+
+[[example]]
+name = "dabbrev_runner"
+path = "../../examples/dabbrev_runner.rs"
+

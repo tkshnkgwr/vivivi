@@ -3,9 +3,10 @@ use crate::types::{AppKeyEvent, LogicalRect};
 use std::path::PathBuf;
 use vivivi_core::{CharEncoding, CursorPosition, NewlineType, TextBuffer, TextCursor};
 use vivivi_modes::{
-    AbbrevManager, BoxAlignment, ChangeTracker, ConversionType, CsvMode, DabbrevSession,
-    DynamicMacroEngine, KeisenDirection, KeisenMode, LexEditEngine, ListCharsConfig, MigemoEngine,
-    OutlineItem, RecentManager, SyntaxLang, align_lines, calculate_box_selection, convert_text,
+    AbbrevManager, AstSelectionRange, BoxAlignment, ChangeTracker, ConversionType, CsvMode,
+    DabbrevSession, DynamicMacroEngine, HexCursor, HexDocument, KeisenDirection, KeisenMode,
+    LexEditEngine, ListCharsConfig, LspManager, MigemoEngine, OutlineItem, RecentManager,
+    SyntaxLang, TreeSitterEngine, align_lines, calculate_box_selection, convert_text,
     expand_zen_coding, insert_beg_end_lines, parse_outline, renumber_lines,
 };
 use vivivi_vi::{RegisterContent, ViEngine, ViMode};
@@ -188,6 +189,22 @@ pub struct App {
     // --- クラッシュリカバリ・スワップファイル (.swp) ---
     pub key_stroke_count: usize,
     pub has_swap_warning: bool,
+
+    // --- バイナリモード (Hex Editor) ---
+    pub is_hex_mode: bool,
+    pub hex_doc: Option<HexDocument>,
+    pub hex_cursor: HexCursor,
+    pub hex_scroll: usize,
+
+    // --- LSP (Language Server Protocol) ---
+    pub lsp_manager: Option<LspManager>,
+    pub lsp_hover_text: Option<String>,
+    pub lsp_show_hover: bool,
+    pub lsp_show_diagnostics_panel: bool,
+
+    // --- Tree-sitter 構文木解析 & スマート選択 ---
+    pub treesitter: Option<TreeSitterEngine>,
+    pub current_smart_selection: Option<AstSelectionRange>,
 
     // --- マルチタブ管理 (Tab Bar UI) ---
     pub tabs: Vec<crate::tui::tab::TabPage>,
@@ -376,6 +393,14 @@ impl App {
                 });
         }
 
+        let mut ts_engine = TreeSitterEngine::new();
+        let treesitter = if ts_engine.set_language(syntax_lang) {
+            ts_engine.parse(initial_text);
+            Some(ts_engine)
+        } else {
+            None
+        };
+
         let initial_tab = crate::tui::tab::TabPage {
             id: 1,
             buffer: buffer.clone(),
@@ -473,6 +498,19 @@ impl App {
             wrap,
             key_stroke_count: 0,
             has_swap_warning,
+
+            is_hex_mode: false,
+            hex_doc: None,
+            hex_cursor: HexCursor::new(),
+            hex_scroll: 0,
+
+            lsp_manager: None,
+            lsp_hover_text: None,
+            lsp_show_hover: false,
+            lsp_show_diagnostics_panel: false,
+
+            treesitter,
+            current_smart_selection: None,
 
             tabs: vec![initial_tab],
             active_tab: 0,
@@ -1068,6 +1106,202 @@ impl App {
     pub fn close_cmd_exec_dialog(&mut self) {
         self.show_cmd_exec_dialog = false;
         self.cmd_exec_output_preview = None;
+    }
+
+    /// バイナリモード (Hex Editor) とテキストモードを切り替えます。
+    pub fn toggle_hex_mode(&mut self) {
+        if self.is_hex_mode {
+            // テキストモードへ復帰
+            if let Some(ref hex_doc) = self.hex_doc
+                && hex_doc.is_dirty()
+            {
+                let updated_text = hex_doc.to_utf8_lossy();
+                self.buffer = TextBuffer::from_text(&updated_text);
+                self.cursor = TextCursor::new(0, 0);
+            }
+            self.is_hex_mode = false;
+            self.status_message = Some("テキストモードへ切り替えました".to_string());
+        } else {
+            // バイナリモードへ移行
+            let data = self.buffer.to_string().into_bytes();
+            let mut hex_doc = HexDocument::from_bytes(data);
+            if let Some(ref path) = self.file_path {
+                hex_doc.set_file_path(Some(path.clone()));
+            }
+            self.hex_doc = Some(hex_doc);
+            self.hex_cursor = HexCursor::new();
+            self.hex_scroll = 0;
+            self.is_hex_mode = true;
+            self.status_message = Some(
+                "バイナリモード (Hex Editor) へ切り替えました (終了は :hex または :text)"
+                    .to_string(),
+            );
+        }
+    }
+
+    /// LSP サーバーを開始します。
+    pub fn start_lsp(&mut self, custom_cmd: Option<&str>) {
+        let mut mgr = self.lsp_manager.take().unwrap_or_default();
+        let res = if let Some(cmd) = custom_cmd {
+            mgr.start_server(cmd, &[])
+        } else if let Some(ref path) = self.file_path {
+            mgr.start_server_for_path(path)
+        } else {
+            Err("ファイルパスが未設定のため、LSPサーバーを特定できません (:lsp start <cmd> で指定してください)".to_string())
+        };
+
+        match res {
+            Ok(()) => {
+                let name = mgr.server_name().unwrap_or("LSP").to_string();
+                if let Some(ref path) = self.file_path {
+                    let uri = format!("file:///{}", path.to_string_lossy().replace('\\', "/"));
+                    let text = self.buffer.to_string();
+                    let lang_id = match self.syntax_lang {
+                        SyntaxLang::Rust => "rust",
+                        SyntaxLang::Cpp => "cpp",
+                        SyntaxLang::Python => "python",
+                        SyntaxLang::JavaScript => "javascript",
+                        SyntaxLang::Go => "go",
+                        _ => "plaintext",
+                    };
+                    mgr.notify_did_open(&uri, lang_id, 1, &text);
+                }
+                self.lsp_manager = Some(mgr);
+                self.status_message = Some(format!("LSP サーバー '{name}' を起動しました"));
+            }
+            Err(e) => {
+                self.status_message = Some(format!("LSP 起動エラー: {e}"));
+            }
+        }
+    }
+
+    /// LSP サーバーを停止します。
+    pub fn stop_lsp(&mut self) {
+        if let Some(mut mgr) = self.lsp_manager.take() {
+            mgr.stop_server();
+            self.status_message = Some("LSP サーバーを停止しました".to_string());
+        } else {
+            self.status_message = Some("LSP サーバーは起動していません".to_string());
+        }
+    }
+
+    /// カーソル位置のホバー情報をリクエストします。
+    pub fn request_lsp_hover(&mut self) {
+        if let (Some(mgr), Some(path)) = (&mut self.lsp_manager, &self.file_path) {
+            let uri = format!("file:///{}", path.to_string_lossy().replace('\\', "/"));
+            mgr.request_hover(
+                &uri,
+                self.cursor.pos.line as u32,
+                self.cursor.pos.col as u32,
+            );
+            self.lsp_show_hover = true;
+            self.status_message = Some("LSP ホバー情報を要求中...".to_string());
+        } else {
+            self.status_message = Some("LSP サーバーが起動していません (:lsp start)".to_string());
+        }
+    }
+
+    /// カーソル位置のシンボル定義ジャンプをリクエストします。
+    pub fn request_lsp_definition(&mut self) {
+        if let (Some(mgr), Some(path)) = (&mut self.lsp_manager, &self.file_path) {
+            let uri = format!("file:///{}", path.to_string_lossy().replace('\\', "/"));
+            mgr.request_definition(
+                &uri,
+                self.cursor.pos.line as u32,
+                self.cursor.pos.col as u32,
+            );
+            self.status_message = Some("LSP 定義ジャンプを要求中...".to_string());
+        } else {
+            self.status_message = Some("LSP サーバーが起動していません (:lsp start)".to_string());
+        }
+    }
+
+    /// LSP イベントの定期ポーリング
+    pub fn poll_lsp(&mut self) {
+        if let Some(ref mut mgr) = self.lsp_manager {
+            mgr.poll_events();
+            if let Some(hover) = mgr.latest_hover() {
+                self.lsp_hover_text = Some(hover.contents.clone());
+            }
+            if let Some(loc) = mgr.latest_definition() {
+                let target_line = loc.range.start.line as usize;
+                let target_col = loc.range.start.character as usize;
+                self.cursor.pos.line = target_line.min(self.buffer.line_count().saturating_sub(1));
+                self.cursor.pos.col = target_col;
+                self.status_message = Some(format!(
+                    "定義へジャンプしました: 行 {}, 列 {}",
+                    target_line + 1,
+                    target_col + 1
+                ));
+                mgr.clear_latest_definition();
+            }
+        }
+    }
+
+    /// Tree-sitter 構文木を最新のバッファ内容で更新します。
+    pub fn update_treesitter(&mut self) {
+        if let Some(ref mut ts) = self.treesitter {
+            let text = self.buffer.to_string();
+            ts.parse(&text);
+        }
+    }
+
+    /// 構文木ノードに基づくスマート選択拡大（Expand Selection）を実行します。
+    pub fn expand_smart_selection(&mut self) {
+        self.update_treesitter();
+        if let Some(ref mut ts) = self.treesitter {
+            let line = self.cursor.pos.line;
+            let col = self.cursor.pos.col;
+            if let Some(new_range) =
+                ts.smart_expand_selection(line, col, self.current_smart_selection)
+            {
+                self.current_smart_selection = Some(new_range);
+                self.cursor.anchor = Some(CursorPosition::new(
+                    new_range.start_line,
+                    new_range.start_col,
+                ));
+                self.cursor.pos =
+                    CursorPosition::new(new_range.end_line, new_range.end_col.saturating_sub(1));
+                self.vi.set_mode(ViMode::Visual);
+                self.status_message = Some(format!(
+                    "スマート選択 (拡大): 行 {}:{} 〜 {}:{}",
+                    new_range.start_line + 1,
+                    new_range.start_col + 1,
+                    new_range.end_line + 1,
+                    new_range.end_col
+                ));
+            }
+        } else {
+            self.status_message =
+                Some("現在のファイルは Tree-sitter 構文木解析に対応していません".to_string());
+        }
+    }
+
+    /// 構文木ノードに基づくスマート選択縮小（Shrink Selection）を実行します。
+    pub fn shrink_smart_selection(&mut self) {
+        if let Some(ref mut ts) = self.treesitter {
+            if let Some(prev_range) = ts.smart_shrink_selection() {
+                self.current_smart_selection = Some(prev_range);
+                self.cursor.anchor = Some(CursorPosition::new(
+                    prev_range.start_line,
+                    prev_range.start_col,
+                ));
+                self.cursor.pos =
+                    CursorPosition::new(prev_range.end_line, prev_range.end_col.saturating_sub(1));
+                self.status_message = Some(format!(
+                    "スマート選択 (縮小): 行 {}:{} 〜 {}:{}",
+                    prev_range.start_line + 1,
+                    prev_range.start_col + 1,
+                    prev_range.end_line + 1,
+                    prev_range.end_col
+                ));
+            } else {
+                self.current_smart_selection = None;
+                self.cursor.anchor = None;
+                self.vi.set_mode(ViMode::Normal);
+                self.status_message = Some("スマート選択を解除しました".to_string());
+            }
+        }
     }
 }
 

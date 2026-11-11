@@ -39,12 +39,15 @@ pub mod filer;
 pub mod folding;
 pub mod grep;
 pub mod gutter;
+pub mod hex;
 pub mod invisible;
+pub mod lsp;
 pub mod print;
 pub mod project;
 pub mod recent;
 pub mod template;
 pub mod todo;
+pub mod treesitter;
 
 pub use abbrev::AbbrevManager;
 pub use align::align_lines;
@@ -64,10 +67,19 @@ pub use filer::{ActiveFilerPane, FileEntry, FilerPane, TwoPaneFiler};
 pub use folding::{FoldManager, FoldRange};
 pub use grep::{GrepMatch, GrepSession, execute_grep};
 pub use gutter::{ChangeTracker, LineChangeState};
+pub use hex::{
+    BYTES_PER_ROW, HexAction, HexCursor, HexDocument, HexPane, HexRow, Nibble, calculate_row_count,
+    format_hex_row,
+};
 pub use invisible::{InvisibleChar, ListCharsConfig, format_line_invisibles};
 pub use keisen::{BoxAlignment, KeisenDirection, KeisenMode, KeisenType};
 pub use lex_edit::{LexEditEngine, WordEditRecord};
 pub use line_edit::insert_beg_end_lines;
+pub use lsp::{
+    CompletionItemKind, DiagnosticSeverity, JsonRpcError, JsonRpcMessage, LspClient,
+    LspCompletionItem, LspDiagnostic, LspHover, LspLocation, LspManager, LspPosition, LspRange,
+    PendingLspRequest, RequestId, ServerState, decode_lsp_payload, encode_lsp_payload,
+};
 pub use migemo::MigemoEngine;
 pub use outline::{OutlineItem, OutlineKind, detect_language_from_content, parse_outline};
 pub use print::{PrintPage, PrintSettings, export_to_pdf, format_preview_text, paginate_text};
@@ -77,4 +89,5 @@ pub use renumber::renumber_lines;
 pub use syntax::{SyntaxLang, SyntaxToken, TokenType, tokenize_line};
 pub use template::{TemplateManager, TemplateResult};
 pub use todo::{TodoItem, TodoTag, scan_buffer_todos, scan_dir_todos};
+pub use treesitter::{AstSelectionRange, AstToken, TreeSitterEngine};
 pub use zen_coding::{ZenElement, expand_zen_coding};

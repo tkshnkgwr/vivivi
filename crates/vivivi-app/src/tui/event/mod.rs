@@ -122,6 +122,21 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
         return;
     }
 
+    // Alt + Up / Alt + Down / Alt + '+' / Alt + '-': Tree-sitter スマート構文木選択 (拡大・縮小)
+    if key.modifiers.contains(KeyModifiers::ALT) {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('+') | KeyCode::Char('=') => {
+                app.expand_smart_selection();
+                return;
+            }
+            KeyCode::Down | KeyCode::Char('-') => {
+                app.shrink_smart_selection();
+                return;
+            }
+            _ => {}
+        }
+    }
+
     // F1: ヘルプを開く
     if key.code == KeyCode::F(1) {
         if app.show_help {
@@ -467,6 +482,25 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
                 app.status_message = Some(format!("ファイルを開きました: {}", path.display()));
             }
         }
+        return;
+    }
+
+    // LSP ホバー表示中のキーハンドリング
+    if app.lsp_show_hover && (is_esc || key.code == KeyCode::Char('q')) {
+        app.lsp_show_hover = false;
+        app.lsp_hover_text = None;
+        return;
+    }
+
+    // LSP 診断情報パネル表示中のキーハンドリング
+    if app.lsp_show_diagnostics_panel && (is_esc || key.code == KeyCode::Char('q')) {
+        app.lsp_show_diagnostics_panel = false;
+        return;
+    }
+
+    // バイナリモード (Hex Editor) のキーハンドリング
+    if app.is_hex_mode {
+        handle_hex_mode_key(app, key, is_esc);
         return;
     }
 
@@ -976,6 +1010,143 @@ fn toggle_tui_settings_item(app: &mut App) {
                     !app.config.appearance.gui.reactive_idle_sleep;
             }
             _ => {}
+        },
+        _ => {}
+    }
+}
+
+/// バイナリモード (Hex Editor) 中のキーイベントを処理します。
+fn handle_hex_mode_key(app: &mut App, key: KeyEvent, is_esc: bool) {
+    if is_esc {
+        app.hex_cursor.nibble = vivivi_modes::hex::Nibble::High;
+        return;
+    }
+
+    let doc_len = app.hex_doc.as_ref().map(|d| d.len()).unwrap_or(0);
+    if doc_len == 0 {
+        return;
+    }
+
+    match key.code {
+        // ペイン切り替え (Hex ⇄ ASCII)
+        KeyCode::Tab => {
+            app.hex_cursor.toggle_pane();
+        }
+        // カーソル移動 (左)
+        KeyCode::Left | KeyCode::Char('h') => {
+            app.hex_cursor.offset = app.hex_cursor.offset.saturating_sub(1);
+            app.hex_cursor.nibble = vivivi_modes::hex::Nibble::High;
+        }
+        // カーソル移動 (右)
+        KeyCode::Right | KeyCode::Char('l') => {
+            if app.hex_cursor.offset + 1 < doc_len {
+                app.hex_cursor.offset += 1;
+            }
+            app.hex_cursor.nibble = vivivi_modes::hex::Nibble::High;
+        }
+        // カーソル移動 (上: 16バイト戻る)
+        KeyCode::Up | KeyCode::Char('k') => {
+            app.hex_cursor.offset = app.hex_cursor.offset.saturating_sub(16);
+            app.hex_cursor.nibble = vivivi_modes::hex::Nibble::High;
+        }
+        // カーソル移動 (下: 16バイト進む)
+        KeyCode::Down | KeyCode::Char('j') => {
+            if app.hex_cursor.offset + 16 < doc_len {
+                app.hex_cursor.offset += 16;
+            } else {
+                app.hex_cursor.offset = doc_len.saturating_sub(1);
+            }
+            app.hex_cursor.nibble = vivivi_modes::hex::Nibble::High;
+        }
+        // 行頭移動 (0 / ^ / Home)
+        KeyCode::Home | KeyCode::Char('0') | KeyCode::Char('^') => {
+            app.hex_cursor.offset = (app.hex_cursor.offset / 16) * 16;
+            app.hex_cursor.nibble = vivivi_modes::hex::Nibble::High;
+        }
+        // 行末移動 ($ / End)
+        KeyCode::End | KeyCode::Char('$') => {
+            let row_start = (app.hex_cursor.offset / 16) * 16;
+            app.hex_cursor.offset = (row_start + 15).min(doc_len.saturating_sub(1));
+            app.hex_cursor.nibble = vivivi_modes::hex::Nibble::High;
+        }
+        // 先頭移動 (g)
+        KeyCode::Char('g') => {
+            app.hex_cursor.offset = 0;
+            app.hex_cursor.nibble = vivivi_modes::hex::Nibble::High;
+        }
+        // 末尾移動 (G)
+        KeyCode::Char('G') => {
+            app.hex_cursor.offset = doc_len.saturating_sub(1);
+            app.hex_cursor.nibble = vivivi_modes::hex::Nibble::High;
+        }
+        // スクロール (PageDown / PageUp)
+        KeyCode::PageDown => {
+            app.hex_cursor.offset =
+                (app.hex_cursor.offset + 16 * 10).min(doc_len.saturating_sub(1));
+        }
+        KeyCode::PageUp => {
+            app.hex_cursor.offset = app.hex_cursor.offset.saturating_sub(16 * 10);
+        }
+        // Undo (u)
+        KeyCode::Char('u') if key.modifiers == KeyModifiers::NONE => {
+            if let Some(ref mut doc) = app.hex_doc
+                && doc.undo()
+            {
+                app.status_message = Some("Undo 完了".to_string());
+            }
+        }
+        // Redo (Ctrl-r)
+        KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            if let Some(ref mut doc) = app.hex_doc
+                && doc.redo()
+            {
+                app.status_message = Some("Redo 完了".to_string());
+            }
+        }
+        // 削除 (x)
+        KeyCode::Char('x') if key.modifiers == KeyModifiers::NONE => {
+            if let Some(ref mut doc) = app.hex_doc {
+                doc.delete_bytes(app.hex_cursor.offset, 1);
+                if app.hex_cursor.offset >= doc.len() && !doc.is_empty() {
+                    app.hex_cursor.offset = doc.len() - 1;
+                }
+            }
+        }
+        // 編集入力 (文字入力)
+        KeyCode::Char(ch) => match app.hex_cursor.pane {
+            vivivi_modes::hex::HexPane::Hex => {
+                if let Some(digit) = ch.to_digit(16) {
+                    let hex_val = digit as u8;
+                    let offset = app.hex_cursor.offset;
+                    let nibble = app.hex_cursor.nibble;
+                    if let Some(ref mut doc) = app.hex_doc {
+                        doc.set_nibble(offset, nibble, hex_val);
+                        match nibble {
+                            vivivi_modes::hex::Nibble::High => {
+                                app.hex_cursor.nibble = vivivi_modes::hex::Nibble::Low;
+                            }
+                            vivivi_modes::hex::Nibble::Low => {
+                                app.hex_cursor.nibble = vivivi_modes::hex::Nibble::High;
+                                if app.hex_cursor.offset + 1 < doc.len() {
+                                    app.hex_cursor.offset += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            vivivi_modes::hex::HexPane::Ascii => {
+                if ch.is_ascii() {
+                    let byte_val = ch as u8;
+                    let offset = app.hex_cursor.offset;
+                    if let Some(ref mut doc) = app.hex_doc {
+                        doc.set_byte(offset, byte_val);
+                        if app.hex_cursor.offset + 1 < doc.len() {
+                            app.hex_cursor.offset += 1;
+                        }
+                    }
+                }
+            }
         },
         _ => {}
     }

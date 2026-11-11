@@ -552,3 +552,102 @@ fn test_ex_update_commands() {
                 .contains("準備できていません")
     );
 }
+
+#[test]
+fn test_ex_hex_mode_toggle_and_edit() {
+    let mut app = App::new("ABCDEF", None, Default::default(), Default::default());
+
+    // 1. :hex でバイナリモードへ移行
+    crate::tui::event::ex::execute_ex_command(&mut app, "hex");
+    assert!(app.is_hex_mode);
+    assert!(app.hex_doc.is_some());
+    assert_eq!(app.hex_doc.as_ref().unwrap().data(), b"ABCDEF");
+
+    // 2. Tab キーで ASCII ペインへ切り替え
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Tab,
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert_eq!(app.hex_cursor.pane, vivivi_modes::hex::HexPane::Ascii);
+
+    // 3. 'Z' を入力して 0 バイト目を置換 ('A' -> 'Z')
+    crate::tui::event::handle_key_event(
+        &mut app,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('Z'),
+            crossterm::event::KeyModifiers::empty(),
+        ),
+    );
+    assert_eq!(app.hex_doc.as_ref().unwrap().data(), b"ZBCDEF");
+
+    // 4. :text でテキストモードへ復帰
+    crate::tui::event::ex::execute_ex_command(&mut app, "text");
+    assert!(!app.is_hex_mode);
+    assert_eq!(app.buffer.to_string(), "ZBCDEF");
+}
+
+#[test]
+fn test_ex_lsp_commands() {
+    let mut app = App::new("fn main() {}", None, Default::default(), Default::default());
+
+    // 1. :lsp diag でパネルをトグル
+    assert!(!app.lsp_show_diagnostics_panel);
+    crate::tui::event::ex::execute_ex_command(&mut app, "lsp diag");
+    assert!(app.lsp_show_diagnostics_panel);
+    crate::tui::event::ex::execute_ex_command(&mut app, "lsp diag");
+    assert!(!app.lsp_show_diagnostics_panel);
+
+    // 2. :lsp stop (未起動時)
+    crate::tui::event::ex::execute_ex_command(&mut app, "lsp stop");
+    assert!(
+        app.status_message
+            .as_ref()
+            .unwrap()
+            .contains("起動していません")
+    );
+}
+
+#[test]
+fn test_ex_treesitter_and_smartselect() {
+    let code = "fn main() {\n    let answer = 42;\n}\n";
+    let mut app = App::new(code, None, Default::default(), Default::default());
+    app.syntax_lang = vivivi_modes::SyntaxLang::Rust;
+    let mut ts = vivivi_modes::TreeSitterEngine::new();
+    assert!(ts.set_language(vivivi_modes::SyntaxLang::Rust));
+    ts.parse(code);
+    app.treesitter = Some(ts);
+
+    // 1. :ast コマンドで構文木プレビュー表示
+    crate::tui::event::ex::execute_ex_command(&mut app, "ast");
+    assert!(app.show_preview);
+    assert!(
+        app.preview_lines
+            .iter()
+            .any(|l| l.contains("function_item") || l.contains("source_file"))
+    );
+
+    // 2. スマート選択拡大 (:smartselect expand)
+    app.cursor.pos.line = 1;
+    app.cursor.pos.col = 8; // "let ans|wer = 42;"
+    crate::tui::event::ex::execute_ex_command(&mut app, "smartselect expand");
+    assert_eq!(app.mode(), vivivi_vi::ViMode::Visual);
+    assert!(app.current_smart_selection.is_some());
+
+    // 3. キーイベントによるスマート選択 (Alt+Up / Alt+Down)
+    let alt_up = crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Up,
+        crossterm::event::KeyModifiers::ALT,
+    );
+    crate::tui::event::handle_key_event(&mut app, alt_up);
+    assert!(app.current_smart_selection.is_some());
+
+    let alt_down = crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Down,
+        crossterm::event::KeyModifiers::ALT,
+    );
+    crate::tui::event::handle_key_event(&mut app, alt_down);
+    assert!(app.current_smart_selection.is_some());
+}

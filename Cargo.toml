@@ -8,6 +8,7 @@ members = [
     "crates/vivivi-gui",
     "crates/moult-update",
 ]
+default-members = ["crates/vivivi-app"]
 
 [workspace.package]
 version = "0.9.15-beta"

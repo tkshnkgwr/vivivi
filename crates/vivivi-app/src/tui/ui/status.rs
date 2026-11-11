@@ -136,7 +136,52 @@ pub fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         _ => String::new(),
     };
 
-    let left_info = format!("{mode_str}{keisen_badge}{csv_badge} {file_name}{modified_badge}");
+    let hex_badge = if app.is_hex_mode {
+        if let Some(doc) = &app.hex_doc {
+            let b = doc.get_byte(app.hex_cursor.offset).unwrap_or(0);
+            let ch_repr = if (0x20..=0x7E).contains(&b) {
+                (b as char).to_string()
+            } else {
+                ".".to_string()
+            };
+            format!(
+                " [HEX: 0x{:08x}/0x{:08x} 0x{:02x} '{}']",
+                app.hex_cursor.offset,
+                doc.len(),
+                b,
+                ch_repr
+            )
+        } else {
+            " [HEX]".to_string()
+        }
+    } else {
+        String::new()
+    };
+
+    let lsp_badge = if let Some(mgr) = &app.lsp_manager {
+        if mgr.is_running() {
+            let sname = mgr.server_name().unwrap_or("LSP");
+            let diags_count = if let Some(ref path) = app.file_path {
+                let uri = format!("file:///{}", path.to_string_lossy().replace('\\', "/"));
+                mgr.get_diagnostics(&uri).map(|d| d.len()).unwrap_or(0)
+            } else {
+                0
+            };
+            if diags_count > 0 {
+                format!(" [{sname}: {diags_count}件警告/エラー]")
+            } else {
+                format!(" [{sname}]")
+            }
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
+    let left_info = format!(
+        "{mode_str}{keisen_badge}{csv_badge}{hex_badge}{lsp_badge} {file_name}{modified_badge}"
+    );
     let right_info = format!(
         "{update_badge}{enc_info} {}:{} | {percent}% ",
         cur.line + 1,

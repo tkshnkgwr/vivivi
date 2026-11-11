@@ -200,6 +200,15 @@ impl App {
         let recent_file_path = get_recent_file_path();
         let _ = self.recent_manager.save_to_file(&recent_file_path);
 
+        let mut ts_engine = vivivi_modes::TreeSitterEngine::new();
+        if ts_engine.set_language(self.syntax_lang) {
+            ts_engine.parse(&content);
+            self.treesitter = Some(ts_engine);
+        } else {
+            self.treesitter = None;
+        }
+        self.current_smart_selection = None;
+
         self.status_message = Some(format!(
             "ファイルを開きました [{}/{}]: {:?}",
             self.encoding.name(),
