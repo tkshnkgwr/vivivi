@@ -68,6 +68,9 @@ impl ViviviGuiApp {
                 };
                 let editor_width = (available_rect.width() - minimap_width).max(100.0);
 
+                // エディタ描画前に最新のバッファ状態に基づきガター変更マーカー（Diffキャッシュ）を更新
+                self.core.update_change_markers();
+
                 let editor_rect = Rect::from_min_size(
                     available_rect.min,
                     Vec2::new(editor_width, available_rect.height()),
@@ -1084,7 +1087,7 @@ impl ViviviGuiApp {
                         painter.rect_stroke(
                             cursor_rect,
                             CornerRadius::ZERO,
-                            Stroke::new(1.5, Color32::YELLOW),
+                            Stroke::new(1.5_f32, Color32::YELLOW),
                             egui::StrokeKind::Inside,
                         );
                     }

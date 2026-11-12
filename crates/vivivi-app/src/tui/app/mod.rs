@@ -817,6 +817,18 @@ impl App {
         }
     }
 
+    /// 現在のバッファ内容に合わせてガター変更マーカー（Diff キャッシュ）を最新化します。
+    ///
+    /// 前回の計算時から行数・各行内容に変更がない場合は Diff 計算をスキップし、
+    /// 描画フレームレートへの影響をゼロにします。
+    pub fn update_change_markers(&mut self) {
+        if !self.change_tracker.enabled {
+            return;
+        }
+        let lines = self.buffer.all_lines();
+        self.change_tracker.update_markers(&lines);
+    }
+
     /// 半画面分（10行）カーソルを上下にスクロール移動します (`Ctrl-D` / `Ctrl-U` 相当)。
     ///
     /// # 引数

@@ -108,13 +108,22 @@ pub struct SideBySideLine {
 pub fn diff_lines(old_text: &str, new_text: &str) -> Vec<DiffLine> {
     let old_lines: Vec<&str> = old_text.lines().collect();
     let new_lines: Vec<&str> = new_text.lines().collect();
+    diff_slices(&old_lines, &new_lines)
+}
 
+/// 2つの行文字列スライスから LCS（最長共通部分列）を計算し、差分行リストを生成します。
+///
+/// 文字列ベクタ（`&[String]`）や文字列スライス（`&[&str]`）を直接比較でき、文字列の再結合・再分割のオーバーヘッドを回避します。
+pub fn diff_slices<T: AsRef<str>>(old_lines: &[T], new_lines: &[T]) -> Vec<DiffLine> {
     let n = old_lines.len();
     let m = new_lines.len();
 
     // 共通プレフィックスの検出
     let mut prefix_len = 0;
-    while prefix_len < n && prefix_len < m && old_lines[prefix_len] == new_lines[prefix_len] {
+    while prefix_len < n
+        && prefix_len < m
+        && old_lines[prefix_len].as_ref() == new_lines[prefix_len].as_ref()
+    {
         prefix_len += 1;
     }
 
@@ -122,7 +131,7 @@ pub fn diff_lines(old_text: &str, new_text: &str) -> Vec<DiffLine> {
     let mut suffix_len = 0;
     while suffix_len < (n - prefix_len)
         && suffix_len < (m - prefix_len)
-        && old_lines[n - 1 - suffix_len] == new_lines[m - 1 - suffix_len]
+        && old_lines[n - 1 - suffix_len].as_ref() == new_lines[m - 1 - suffix_len].as_ref()
     {
         suffix_len += 1;
     }
@@ -130,12 +139,12 @@ pub fn diff_lines(old_text: &str, new_text: &str) -> Vec<DiffLine> {
     let mut result = Vec::new();
 
     // 1. プレフィックス
-    for (idx, &line) in old_lines.iter().enumerate().take(prefix_len) {
+    for (idx, line) in old_lines.iter().enumerate().take(prefix_len) {
         result.push(DiffLine {
             diff_type: DiffType::Equal,
             old_lineno: Some(idx + 1),
             new_lineno: Some(idx + 1),
-            text: line.to_string(),
+            text: line.as_ref().to_string(),
         });
     }
 
@@ -147,20 +156,20 @@ pub fn diff_lines(old_text: &str, new_text: &str) -> Vec<DiffLine> {
     if n_mid > 0 || m_mid > 0 {
         // 安全ガード（DPテーブルのセル数が10,000,000を超える場合は全削除＋全追加フォールバック）
         if (n_mid + 1).saturating_mul(m_mid + 1) > 10_000_000 {
-            for (idx, &line) in mid_old.iter().enumerate() {
+            for (idx, line) in mid_old.iter().enumerate() {
                 result.push(DiffLine {
                     diff_type: DiffType::Delete,
                     old_lineno: Some(prefix_len + idx + 1),
                     new_lineno: None,
-                    text: line.to_string(),
+                    text: line.as_ref().to_string(),
                 });
             }
-            for (idx, &line) in mid_new.iter().enumerate() {
+            for (idx, line) in mid_new.iter().enumerate() {
                 result.push(DiffLine {
                     diff_type: DiffType::Insert,
                     old_lineno: None,
                     new_lineno: Some(prefix_len + idx + 1),
-                    text: line.to_string(),
+                    text: line.as_ref().to_string(),
                 });
             }
         } else {
@@ -168,7 +177,7 @@ pub fn diff_lines(old_text: &str, new_text: &str) -> Vec<DiffLine> {
             let mut dp = vec![vec![0usize; m_mid + 1]; n_mid + 1];
             for i in 0..n_mid {
                 for j in 0..m_mid {
-                    if mid_old[i] == mid_new[j] {
+                    if mid_old[i].as_ref() == mid_new[j].as_ref() {
                         dp[i + 1][j + 1] = dp[i][j] + 1;
                     } else {
                         dp[i + 1][j + 1] = dp[i + 1][j].max(dp[i][j + 1]);
@@ -181,12 +190,12 @@ pub fn diff_lines(old_text: &str, new_text: &str) -> Vec<DiffLine> {
             let mut mid_diff = Vec::new();
 
             while i > 0 || j > 0 {
-                if i > 0 && j > 0 && mid_old[i - 1] == mid_new[j - 1] {
+                if i > 0 && j > 0 && mid_old[i - 1].as_ref() == mid_new[j - 1].as_ref() {
                     mid_diff.push(DiffLine {
                         diff_type: DiffType::Equal,
                         old_lineno: Some(prefix_len + i),
                         new_lineno: Some(prefix_len + j),
-                        text: mid_old[i - 1].to_string(),
+                        text: mid_old[i - 1].as_ref().to_string(),
                     });
                     i -= 1;
                     j -= 1;
@@ -195,7 +204,7 @@ pub fn diff_lines(old_text: &str, new_text: &str) -> Vec<DiffLine> {
                         diff_type: DiffType::Insert,
                         old_lineno: None,
                         new_lineno: Some(prefix_len + j),
-                        text: mid_new[j - 1].to_string(),
+                        text: mid_new[j - 1].as_ref().to_string(),
                     });
                     j -= 1;
                 } else if i > 0 && (j == 0 || dp[i][j - 1] < dp[i - 1][j]) {
@@ -203,7 +212,7 @@ pub fn diff_lines(old_text: &str, new_text: &str) -> Vec<DiffLine> {
                         diff_type: DiffType::Delete,
                         old_lineno: Some(prefix_len + i),
                         new_lineno: None,
-                        text: mid_old[i - 1].to_string(),
+                        text: mid_old[i - 1].as_ref().to_string(),
                     });
                     i -= 1;
                 }
@@ -215,14 +224,14 @@ pub fn diff_lines(old_text: &str, new_text: &str) -> Vec<DiffLine> {
     }
 
     // 3. サフィックス
-    for (idx, &line) in old_lines[n - suffix_len..].iter().enumerate() {
+    for (idx, line) in old_lines[n - suffix_len..].iter().enumerate() {
         let old_idx = n - suffix_len + idx;
         let new_idx = m - suffix_len + idx;
         result.push(DiffLine {
             diff_type: DiffType::Equal,
             old_lineno: Some(old_idx + 1),
             new_lineno: Some(new_idx + 1),
-            text: line.to_string(),
+            text: line.as_ref().to_string(),
         });
     }
 

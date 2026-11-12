@@ -14,7 +14,7 @@ fn apply_menu_popup_style(ui: &mut egui::Ui, min_width: f32) {
     ui.spacing_mut().item_spacing = Vec2::new(0.0, 2.0);
     ui.spacing_mut().button_padding = Vec2::new(8.0, 4.0);
     ui.visuals_mut().widgets.noninteractive.bg_stroke =
-        egui::Stroke::new(1.0, Color32::from_rgb(45, 51, 74));
+        egui::Stroke::new(1.0_f32, Color32::from_rgb(45, 51, 74));
 }
 
 /// Zed 風の左寄せラベル＋右寄せショートカット付きメニュー項目を描画します。

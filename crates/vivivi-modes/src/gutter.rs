@@ -3,6 +3,7 @@
 //! バッファ読み込み時および保存時の状態を保持し、
 //! 各行の未保存変更（黄）および保存済み変更（緑）を追跡・判定します。
 
+use crate::diff::{DiffType, diff_slices};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
@@ -53,8 +54,9 @@ impl LineChangeState {
 
 /// 変更行追跡マネージャー。
 ///
-/// ファイルの初期状態（ロード時）と直近保存時の各行ハッシュを保持し、
-/// バッファの各行について未保存の追加/変更か、保存済みの変更かを高速に判定します。
+/// ファイルの初期状態（ロード時）と直近保存時の各行を保持し、
+/// LCS（最長共通部分列）差分エンジンを用いて、未保存の追加/変更や保存済み変更を
+/// 高速かつ正確に判定・キャッシュします。
 ///
 /// # Examples
 ///
@@ -71,10 +73,16 @@ impl LineChangeState {
 /// ```
 #[derive(Debug, Clone)]
 pub struct ChangeTracker {
+    /// 直近保存時の各行文字列
+    saved_lines: Vec<String>,
     /// ファイル初回読み込み時の各行ハッシュ
     original_hashes: Vec<u64>,
     /// 直近保存時の各行ハッシュ
     saved_hashes: Vec<u64>,
+    /// 最新の計算済みガターマーカーキャッシュ
+    cached_markers: Vec<LineChangeState>,
+    /// 前回のキャッシュ計算時の行ハッシュ
+    last_current_hashes: Vec<u64>,
     /// ガターマーカー表示の有効/無効
     pub enabled: bool,
 }
@@ -92,9 +100,13 @@ impl ChangeTracker {
     /// ```
     pub fn new(initial_lines: &[String]) -> Self {
         let hashes: Vec<u64> = initial_lines.iter().map(|l| hash_line(l)).collect();
+        let markers = vec![LineChangeState::Unchanged; initial_lines.len()];
         Self {
+            saved_lines: initial_lines.to_vec(),
             original_hashes: hashes.clone(),
-            saved_hashes: hashes,
+            saved_hashes: hashes.clone(),
+            cached_markers: markers,
+            last_current_hashes: hashes,
             enabled: true,
         }
     }
@@ -111,13 +123,16 @@ impl ChangeTracker {
     /// ```
     pub fn empty() -> Self {
         Self {
+            saved_lines: Vec::new(),
             original_hashes: Vec::new(),
             saved_hashes: Vec::new(),
+            cached_markers: Vec::new(),
+            last_current_hashes: Vec::new(),
             enabled: true,
         }
     }
 
-    /// ファイル保存時に呼び出し、直近保存済み状態のハッシュを更新します。
+    /// ファイル保存時に呼び出し、直近保存済み状態のハッシュと行リストを更新します。
     ///
     /// # Examples
     ///
@@ -132,10 +147,33 @@ impl ChangeTracker {
     /// assert_eq!(markers[0], LineChangeState::SavedModified);
     /// ```
     pub fn on_save(&mut self, current_lines: &[String]) {
+        self.saved_lines = current_lines.to_vec();
         self.saved_hashes = current_lines.iter().map(|l| hash_line(l)).collect();
+        self.cached_markers = self.compute_markers(current_lines);
+        self.last_current_hashes = self.saved_hashes.clone();
     }
 
-    /// 現在の行リストに対する各行の変更状態（[`LineChangeState`]）を算出します。
+    /// バッファ変更時にマーカーキャッシュを最新化します。
+    ///
+    /// 前回の計算時から行数および各行ハッシュに変化がない場合は Diff 計算をスキップし、
+    /// 描画フレームレートへの影響をゼロにします。
+    pub fn update_markers(&mut self, current_lines: &[String]) {
+        if !self.enabled {
+            return;
+        }
+
+        let cur_hashes: Vec<u64> = current_lines.iter().map(|l| hash_line(l)).collect();
+        if self.cached_markers.len() == current_lines.len()
+            && self.last_current_hashes == cur_hashes
+        {
+            return;
+        }
+
+        self.cached_markers = self.compute_markers(current_lines);
+        self.last_current_hashes = cur_hashes;
+    }
+
+    /// 現在の行リストに対する各行の変更状態（[`LineChangeState`]）を LCS 差分エンジンにより算出します。
     ///
     /// # Examples
     ///
@@ -152,64 +190,116 @@ impl ChangeTracker {
             return vec![LineChangeState::Unchanged; current_lines.len()];
         }
 
+        // 1. 直近保存時（saved_lines）と現在（current_lines）の差分を LCS で算出
+        let diff = diff_slices(&self.saved_lines, current_lines);
+
+        let cur_len = current_lines.len();
         let cur_hashes: Vec<u64> = current_lines.iter().map(|l| hash_line(l)).collect();
-        let mut markers = Vec::with_capacity(cur_hashes.len());
+        let mut markers = vec![LineChangeState::Unchanged; cur_len];
 
-        let orig_len = self.original_hashes.len();
-        let saved_len = self.saved_hashes.len();
+        let is_orig_identical_to_saved = self.original_hashes == self.saved_hashes;
 
-        for (i, &cur_hash) in cur_hashes.iter().enumerate() {
-            let matches_saved = i < saved_len && self.saved_hashes[i] == cur_hash;
-            let matches_orig = i < orig_len && self.original_hashes[i] == cur_hash;
+        let mut idx = 0;
+        while idx < diff.len() {
+            match diff[idx].diff_type {
+                DiffType::Equal => {
+                    if let Some(new_line_1based) = diff[idx].new_lineno {
+                        let cur_idx = new_line_1based - 1;
+                        if cur_idx < cur_len {
+                            // 保存時と一致している行。初回読み込み時と比較して SavedModified か判定
+                            let is_original = if is_orig_identical_to_saved {
+                                true
+                            } else if let Some(old_line_1based) = diff[idx].old_lineno {
+                                let saved_idx = old_line_1based - 1;
+                                saved_idx < self.original_hashes.len()
+                                    && cur_idx < cur_hashes.len()
+                                    && self.original_hashes[saved_idx] == cur_hashes[cur_idx]
+                            } else {
+                                false
+                            };
 
-            if matches_saved {
-                if matches_orig {
-                    markers.push(LineChangeState::Unchanged);
-                } else {
-                    markers.push(LineChangeState::SavedModified);
+                            markers[cur_idx] = if is_original {
+                                LineChangeState::Unchanged
+                            } else {
+                                LineChangeState::SavedModified
+                            };
+                        }
+                    }
+                    idx += 1;
                 }
-            } else if i >= saved_len {
-                markers.push(LineChangeState::Added);
-            } else {
-                markers.push(LineChangeState::Modified);
+                DiffType::Delete | DiffType::Insert => {
+                    // 連続する Delete と Insert のチャンクを収集
+                    let mut del_count = 0;
+                    let mut inserts = Vec::new();
+                    while idx < diff.len() && diff[idx].diff_type != DiffType::Equal {
+                        if diff[idx].diff_type == DiffType::Delete {
+                            del_count += 1;
+                        } else if diff[idx].diff_type == DiffType::Insert {
+                            inserts.push(diff[idx].new_lineno);
+                        }
+                        idx += 1;
+                    }
+
+                    // 削除行数までの挿入は「変更（Modified）」、それを超える挿入は「追加（Added）」
+                    for (ins_i, &new_line_opt) in inserts.iter().enumerate() {
+                        if let Some(new_line_1based) = new_line_opt {
+                            let cur_idx = new_line_1based - 1;
+                            if cur_idx < cur_len {
+                                if ins_i < del_count {
+                                    markers[cur_idx] = LineChangeState::Modified;
+                                } else {
+                                    markers[cur_idx] = LineChangeState::Added;
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
         markers
     }
 
-    /// 指定された単一行インデックスとその内容に対する変更状態（[LineChangeState]）を直接算出します。
+    /// 指定された単一行インデックスとその内容に対する変更状態（[`LineChangeState`]）を返します。
     ///
-    /// バッファ全体の走査や行文字列ベクタの生成を回避し、画面可視行のみを $O(1)$ かつアロケーションフリーで高速判定します。
+    /// キャッシュが存在する場合は $O(1)$ かつメモリ確保ゼロで即座に返します。
     ///
     /// # 引数
-    /// - line_idx: 判定対象の行番号（0-based）
-    /// - line: 判定対象の行文字列スライス
+    /// - `line_idx`: 判定対象の行番号（0-based）
+    /// - `line`: 判定対象の行文字列スライス
     ///
     /// # 戻り値
     /// 直近保存時および初回読み込み時からの差分に基づく変更状態
     ///
     /// # Examples
     ///
-    /// `
+    /// ```
     /// use vivivi_modes::gutter::{ChangeTracker, LineChangeState};
     ///
     /// let tracker = ChangeTracker::new(&["initial".to_string()]);
     /// assert_eq!(tracker.marker_at(0, "initial"), LineChangeState::Unchanged);
     /// assert_eq!(tracker.marker_at(0, "modified"), LineChangeState::Modified);
     /// assert_eq!(tracker.marker_at(1, "new line"), LineChangeState::Added);
-    /// `
+    /// ```
     pub fn marker_at(&self, line_idx: usize, line: &str) -> LineChangeState {
         if !self.enabled {
             return LineChangeState::Unchanged;
         }
 
-        let orig_len = self.original_hashes.len();
-        let saved_len = self.saved_hashes.len();
         let cur_hash = hash_line(line);
 
-        let matches_saved = line_idx < saved_len && self.saved_hashes[line_idx] == cur_hash;
-        let matches_orig = line_idx < orig_len && self.original_hashes[line_idx] == cur_hash;
+        // キャッシュが存在し、かつ該当行の内容がキャッシュ計算時と一致している場合は高速リターン
+        if let Some(&marker) = self.cached_markers.get(line_idx)
+            && self.last_current_hashes.get(line_idx) == Some(&cur_hash)
+        {
+            return marker;
+        }
+
+        // キャッシュ未更新時または行内容変更時のフォールバック判定
+        let matches_saved =
+            line_idx < self.saved_hashes.len() && self.saved_hashes[line_idx] == cur_hash;
+        let matches_orig =
+            line_idx < self.original_hashes.len() && self.original_hashes[line_idx] == cur_hash;
 
         if matches_saved {
             if matches_orig {
@@ -217,7 +307,7 @@ impl ChangeTracker {
             } else {
                 LineChangeState::SavedModified
             }
-        } else if line_idx >= saved_len {
+        } else if line_idx >= self.saved_hashes.len() {
             LineChangeState::Added
         } else {
             LineChangeState::Modified
@@ -295,5 +385,36 @@ mod tests {
             markers,
             vec![LineChangeState::SavedModified, LineChangeState::Unchanged]
         );
+    }
+
+    #[test]
+    fn test_change_tracker_insert_in_middle() {
+        let lines = vec![
+            "line 1".to_string(),
+            "line 2".to_string(),
+            "line 3".to_string(),
+            "line 4".to_string(),
+            "line 5".to_string(),
+        ];
+        let mut tracker = ChangeTracker::new(&lines);
+
+        // 2行目の直後（インデックス 2）に新行 "inserted" を追加
+        let current = vec![
+            "line 1".to_string(),
+            "line 2".to_string(),
+            "inserted".to_string(),
+            "line 3".to_string(),
+            "line 4".to_string(),
+            "line 5".to_string(),
+        ];
+        tracker.update_markers(&current);
+
+        // 追加行のみが Added、それ以外の行（元の3〜5行目を含む）はすべて Unchanged であること！
+        assert_eq!(tracker.marker_at(0, "line 1"), LineChangeState::Unchanged);
+        assert_eq!(tracker.marker_at(1, "line 2"), LineChangeState::Unchanged);
+        assert_eq!(tracker.marker_at(2, "inserted"), LineChangeState::Added);
+        assert_eq!(tracker.marker_at(3, "line 3"), LineChangeState::Unchanged);
+        assert_eq!(tracker.marker_at(4, "line 4"), LineChangeState::Unchanged);
+        assert_eq!(tracker.marker_at(5, "line 5"), LineChangeState::Unchanged);
     }
 }

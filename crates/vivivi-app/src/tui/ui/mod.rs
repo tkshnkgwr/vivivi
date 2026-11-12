@@ -83,6 +83,9 @@ use vivivi_vi::ViMode;
 /// })?;
 /// ```
 pub fn render(frame: &mut Frame, app: &mut App) {
+    // 描画前に最新のバッファ状態に基づきガター変更マーカー（Diffキャッシュ）を更新
+    app.update_change_markers();
+
     let size = frame.area();
 
     // 画面をエディタ領域（上部）とステータスバー／コマンドライン（最下部）に分割

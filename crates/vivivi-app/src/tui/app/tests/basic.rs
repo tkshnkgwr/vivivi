@@ -957,3 +957,57 @@ fn test_phase1_tui_integration() {
     );
     assert_eq!(app.scroll.0, 0);
 }
+
+#[test]
+fn test_gutter_change_markers_insert_line_diff() {
+    let initial_text = "line 1\nline 2\nline 3\nline 4\nline 5\n";
+    let mut app = App::new(initial_text, None, CharEncoding::Utf8, NewlineType::Lf);
+
+    // 初期状態のマーカー更新
+    app.update_change_markers();
+    assert_eq!(
+        app.change_tracker.marker_at(0, "line 1"),
+        vivivi_modes::LineChangeState::Unchanged
+    );
+    assert_eq!(
+        app.change_tracker.marker_at(1, "line 2"),
+        vivivi_modes::LineChangeState::Unchanged
+    );
+
+    // 2行目に移動して 'o' で下に1行追加
+    app.feed_vi_char('j'); // 1行目（line 2）へ
+    app.feed_vi_char('o'); // 下に新規行を開く
+    app.feed_vi_char('n');
+    app.feed_vi_char('e');
+    app.feed_vi_char('w');
+    app.feed_vi_char('\x1b'); // ノーマルモード復帰
+
+    // 描画前のマーカー更新
+    app.update_change_markers();
+
+    // 検証：挿入された空行（行2）のみが Added、それ以降の行（line 3〜5）は Unchanged のまま維持される
+    assert_eq!(
+        app.change_tracker.marker_at(0, "line 1"),
+        vivivi_modes::LineChangeState::Unchanged
+    );
+    assert_eq!(
+        app.change_tracker.marker_at(1, "line 2"),
+        vivivi_modes::LineChangeState::Unchanged
+    );
+    assert_eq!(
+        app.change_tracker.marker_at(2, ""),
+        vivivi_modes::LineChangeState::Added
+    );
+    assert_eq!(
+        app.change_tracker.marker_at(3, "line 3"),
+        vivivi_modes::LineChangeState::Unchanged
+    );
+    assert_eq!(
+        app.change_tracker.marker_at(4, "line 4"),
+        vivivi_modes::LineChangeState::Unchanged
+    );
+    assert_eq!(
+        app.change_tracker.marker_at(5, "line 5"),
+        vivivi_modes::LineChangeState::Unchanged
+    );
+}
