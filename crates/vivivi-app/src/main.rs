@@ -21,6 +21,9 @@ use vivivi_vi::ViEngine;
 /// # Errors
 /// ターミナルの初期化失敗やファイル読み込みエラーが発生した場合に [`anyhow::Error`] を返します。
 fn main() -> anyhow::Result<()> {
+    // GUI・TUI 共通のパニックログ自動保存フックを最優先で設定
+    vivivi_app::panic_log::install_panic_hook("TUI");
+
     // 前回アップデート時に残存した旧バイナリ (*.old) を自動消去
     moult_update::cleanup_old_binaries();
 
@@ -65,7 +68,11 @@ fn main() -> anyhow::Result<()> {
     };
 
     let app = App::new(&initial_text, file_path, encoding, newline);
-    tui::run(app)
+    if let Err(err) = tui::run(app) {
+        let _ = vivivi_app::panic_log::record_fatal_error("TUI", &format!("{err:#}"));
+        return Err(err);
+    }
+    Ok(())
 }
 
 /// 非対話型の動作確認コンソールデモ

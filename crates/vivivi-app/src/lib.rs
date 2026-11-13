@@ -5,6 +5,7 @@
 //! 設定管理、および ex コマンドエンジンを提供します。
 
 pub mod config;
+pub mod panic_log;
 pub mod theme;
 pub mod tui;
 pub mod types;

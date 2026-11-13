@@ -15,6 +15,9 @@ use vivivi_gui::{ViviviGuiApp, fonts, theme};
 const ICON_RGBA_256: &[u8] = include_bytes!("../../../assets/icons/icon_256.rgba");
 
 fn main() -> eframe::Result {
+    // GUI・TUI 共通のパニックログ自動保存フックを最優先で設定（windows_subsystem での無言終了対策）
+    vivivi_app::panic_log::install_panic_hook("GUI");
+
     // 前回アップデート時に残存した旧バイナリ (*.old) を自動消去
     moult_update::cleanup_old_binaries();
 
@@ -83,7 +86,7 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
 
-    eframe::run_native(
+    let result = eframe::run_native(
         "vivivi",
         native_options,
         Box::new(move |cc| {
@@ -97,5 +100,10 @@ fn main() -> eframe::Result {
             app.window_state = window_state;
             Ok(Box::new(app))
         }),
-    )
+    );
+
+    if let Err(ref err) = result {
+        let _ = vivivi_app::panic_log::record_fatal_error("GUI", &err.to_string());
+    }
+    result
 }
