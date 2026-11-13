@@ -9,6 +9,5 @@ license.workspace = true
 vivivi-core.workspace = true
 vivivi-modes.workspace = true
 regex.workspace = true
-thiserror.workspace = true
 
 [dev-dependencies]
