@@ -4,6 +4,40 @@
 
 ---
 
+## [0.9.21-beta] - 2026-11-13
+
+### Added / Improved
+- **GUI サイドバーの Zed 風階層ツリー化 & シングルクリック操作対応 (`vivivi-gui`)**:
+  - `AsyncFileTree` にディレクトリ単位の展開・折りたたみ状態管理と非同期子ノード走査を導入し、インデント縦ガイド線付きの階層ツリー表示に対応。
+  - Files / Outline 双方で全幅ヒットボックス・ホバー行ハイライト・行全体での `PointingHand` カーソル表示・シングルクリックでのファイルオープン／シンボルジャンプを実装。
+- **GUI 設定画面 (Preferences) のレイアウト・折り返し改善 (`vivivi-gui`)**:
+  - 設定ウィンドウ幅・高さ（`920x640`）および左カテゴリペイン幅（`236px`）を拡大し、設定項目名・カテゴリ名・Keymap 列への単一行表示制御（`TextWrapMode::Extend`）と Appearance グループ枠幅統一を適用。
+- **GUI / TUI パリティ強化 & 機能改善 (`vivivi-app`, `vivivi-gui`, `vivivi-modes`, `vivivi-vi`)**:
+  - GUI・TUI 共通のパニックログ自動保存フック（`%USERPROFILE%\.vivivi\logs\`）を追加。
+  - `:cmd` / `:cmdexec` 外部コマンド実行モーダル、GUI ワードラップ（`:set wrap`）描画追従、`:outline` / `F8` と GUI サイドバー連動、ヘルプビューア幅 2 倍化に対応。
+  - Tree-sitter AST ハイライトの色位置ズレ・コメント/リテラル複合ノード欠落修正、`:s` 置換件数表示バグ修正、`:sort` コマンド実装を統合。
+- **開発・検証運用改善**:
+  - 互換範囲内の依存クレート整理を実施し、`rust-verification` スキルの標準並列数を `-j 4` に調整。
+
+---
+
+## [0.9.20-beta] - 2026-11-12
+
+### Fixed
+- **ガター変更追跡の LCS Diff 化 & GUI ビルド警告解消 (`vivivi-modes`, `vivivi-app`, `vivivi-gui`)**:
+  - `ChangeTracker` をインデックス比較から LCS 差分エンジン（`diff_slices`）連携＆キャッシュ方式へ刷新し、行挿入・削除時の後続行誤判定を修正。
+  - TUI / GUI 描画前の Diff キャッシュ更新連携および `Stroke::new` の警告を解消。
+
+---
+
+## [0.9.19-beta] - 2026-11-11
+
+### Added / Fixed
+- **GUI メニュー刷新・SmartCase 検索連動・各種描画不具合修正 (`vivivi-gui`, `vivivi-vi`)**:
+  - GUI メニューのショートカット右寄せ・チェック状態同期、SmartCase / IgnoreCase の完全連動、ヘルプ表示時のホイール突き抜け遮断、テーマ・ホバー・ミニマップのフレーム同期修正を実施。
+
+---
+
 ## [0.9.18-beta] - 2026-11-11
 
 ### Added / Improved

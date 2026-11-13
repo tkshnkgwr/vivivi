@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [0.9.21-beta] - 2026-11-13
+
+### Added / Improved
+- **Zed-Style Hierarchical Sidebar Tree & Single-Click Actions (`vivivi-gui`)**:
+  - Extended `AsyncFileTree` with per-directory expand/collapse state and asynchronous child scanning, rendering hierarchical trees with vertical indent guides.
+  - Unified Files and Outline sidebars with full-width row hit-testing, hover row highlight, row-wide `PointingHand` cursor, and single-click open/jump.
+- **GUI Preferences Dialog Layout & No-Wrap Polish (`vivivi-gui`)**:
+  - Expanded dialog dimensions (`920x640`) and left category pane (`236px`), enforced single-line rendering (`TextWrapMode::Extend`) on categories, setting labels, and keymap key columns, and aligned Appearance group frame widths.
+- **GUI / TUI Parity Fixes & Stability (`vivivi-app`, `vivivi-gui`, `vivivi-modes`, `vivivi-vi`)**:
+  - Added shared panic log auto-persistence hook (`%USERPROFILE%\.vivivi\logs\`) across GUI and TUI.
+  - Added GUI `:cmd` / `:cmdexec` modal, GUI soft word-wrap rendering (`:set wrap`), `:outline` / `F8` sidebar synchronization, and 2x wider help viewer.
+  - Fixed Tree-sitter AST highlight offset drift and non-leaf comment/literal coverage, `:s` replacement count reporting, and implemented `:sort`.
+- **Workspace Maintenance & Verification Tuning**:
+  - Updated compatible crate dependencies and configured `-j 4` default parallelism in `rust-verification`.
+
+---
+
+## [0.9.20-beta] - 2026-11-12
+
+### Fixed
+- **LCS Diff Gutter Tracking & GUI Warning Cleanup (`vivivi-modes`, `vivivi-app`, `vivivi-gui`)**:
+  - Replaced index-based `ChangeTracker` with cached LCS diff slices (`diff_slices`) so inserting/deleting lines no longer marks subsequent shifted lines as modified; resolved `Stroke::new` build warnings.
+
+---
+
+## [0.9.19-beta] - 2026-11-11
+
+### Added / Fixed
+- **GUI Menu Refresh, SmartCase Search Sync & Modal/Render Fixes (`vivivi-gui`, `vivivi-vi`)**:
+  - Aligned menu shortcuts, wired SmartCase/IgnoreCase with `:set`, prevented help modal scroll bleed-through, and fixed per-frame theme/hover/minimap sync bugs.
+
+---
+
 ## [0.9.18-beta] - 2026-11-11
 
 ### Added / Improved
