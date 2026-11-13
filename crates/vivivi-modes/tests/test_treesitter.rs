@@ -114,3 +114,82 @@ fn test_treesitter_incremental_edit() {
     assert!(engine.parse(updated_code));
     assert!(engine.has_tree());
 }
+
+#[test]
+fn test_treesitter_highlight_syntax_tokens_preserves_alignment_and_comments() {
+    let mut engine = TreeSitterEngine::new();
+    assert!(engine.set_language(SyntaxLang::Rust));
+
+    let rust_code = concat!(
+        "#[test]\n",
+        "fn test_count_and_motion() {\n",
+        "    let mut parser = CommandParser::new();\n",
+        "\n",
+        "    // 3j -> Move(Down(3)) 日本語コメント\n",
+        "    assert_eq!(parser.feed_char('3', ViMode::Normal), None);\n",
+        "    assert_eq!(\n",
+        "        parser.feed_char('j', ViMode::Normal),\n",
+        "        Some(ViCommand::Move(Motion::Down(3)))\n",
+        "    ); // inline comment\n",
+        "    /* block comment */\n",
+        "}\n",
+    );
+    assert!(engine.parse(rust_code));
+
+    let lines: Vec<&str> = rust_code.lines().collect();
+
+    // 各行で連結テキストが元の行と完全一致し、位置ズレが一切起きないこと
+    for (idx, line) in lines.iter().enumerate() {
+        let tokens = engine.highlight_syntax_tokens(idx, line);
+        if !tokens.is_empty() {
+            let reconstructed: String = tokens.iter().map(|t| t.text.as_str()).collect();
+            assert_eq!(
+                reconstructed, *line,
+                "行 {idx} のトークン連結結果が元の行と一致すること"
+            );
+        }
+    }
+
+    // 4行目: 単一行コメント ("    // 3j -> Move(Down(3)) 日本語コメント")
+    let comment_tokens = engine.highlight_syntax_tokens(4, lines[4]);
+    assert!(
+        comment_tokens
+            .iter()
+            .any(|t| t.token_type == TokenType::Comment && t.text.starts_with("// 3j")),
+        "単一行コメントが Comment トークンとして認識されること: {comment_tokens:?}"
+    );
+
+    // 5行目: "    assert_eq!(parser.feed_char('3', ViMode::Normal), None);"
+    // '3' の文字リテラル部分が正確に StringLiteral で、feed_char はズレていないこと
+    let line5_tokens = engine.highlight_syntax_tokens(5, lines[5]);
+    assert!(
+        line5_tokens
+            .iter()
+            .any(|t| t.token_type == TokenType::StringLiteral && t.text == "'3'"),
+        "'3' が StringLiteral として位置ズレなく抽出されること: {line5_tokens:?}"
+    );
+    assert!(
+        !line5_tokens
+            .iter()
+            .any(|t| t.token_type == TokenType::StringLiteral && t.text.contains("har")),
+        "feed_char の文字が StringLiteral に誤色付けされないこと: {line5_tokens:?}"
+    );
+
+    // 9行目: "    ); // inline comment"
+    let inline_comment_tokens = engine.highlight_syntax_tokens(9, lines[9]);
+    assert!(
+        inline_comment_tokens
+            .iter()
+            .any(|t| t.token_type == TokenType::Comment && t.text == "// inline comment"),
+        "コードと同一行のインラインコメントも Comment になること: {inline_comment_tokens:?}"
+    );
+
+    // 10行目: "    /* block comment */"
+    let block_comment_tokens = engine.highlight_syntax_tokens(10, lines[10]);
+    assert!(
+        block_comment_tokens
+            .iter()
+            .any(|t| t.token_type == TokenType::Comment && t.text == "/* block comment */"),
+        "ブロックコメントも Comment になること: {block_comment_tokens:?}"
+    );
+}

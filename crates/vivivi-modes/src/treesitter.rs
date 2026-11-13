@@ -238,11 +238,58 @@ impl TreeSitterEngine {
     }
 
     /// 指定行のトークンを [`SyntaxToken`] 一覧として取得します。
+    ///
+    /// AST トークン間の未分類文字・空白（ギャップ）を [`TokenType::Text`] で補完するため、
+    /// 返却される全トークンを連結すると常に元の `line_text`（解析成功時）と一致し、
+    /// 描画側の文字位置ズレを防ぎます。
     pub fn highlight_syntax_tokens(&self, line_index: usize, line_text: &str) -> Vec<SyntaxToken> {
-        self.highlight_line(line_index, line_text)
-            .into_iter()
-            .map(|t| t.to_syntax_token())
-            .collect()
+        let mut ast_tokens = self.highlight_line(line_index, line_text);
+        if ast_tokens.is_empty() {
+            return Vec::new();
+        }
+
+        ast_tokens.sort_by_key(|t| (t.start_col, t.end_col));
+
+        let len = line_text.len();
+        let mut result = Vec::with_capacity(ast_tokens.len() * 2 + 1);
+        let mut cursor_byte = 0usize;
+
+        for tok in ast_tokens {
+            let raw_start = tok.start_col.min(len);
+            let raw_end = tok.end_col.min(len);
+            if raw_end <= cursor_byte || raw_end <= raw_start {
+                continue;
+            }
+            let actual_start = raw_start.max(cursor_byte);
+            if !line_text.is_char_boundary(cursor_byte)
+                || !line_text.is_char_boundary(actual_start)
+                || !line_text.is_char_boundary(raw_end)
+            {
+                continue;
+            }
+
+            if actual_start > cursor_byte {
+                result.push(SyntaxToken {
+                    text: line_text[cursor_byte..actual_start].to_string(),
+                    token_type: TokenType::Text,
+                });
+            }
+
+            result.push(SyntaxToken {
+                text: line_text[actual_start..raw_end].to_string(),
+                token_type: tok.token_type,
+            });
+            cursor_byte = raw_end;
+        }
+
+        if cursor_byte < len && line_text.is_char_boundary(cursor_byte) {
+            result.push(SyntaxToken {
+                text: line_text[cursor_byte..].to_string(),
+                token_type: TokenType::Text,
+            });
+        }
+
+        result
     }
 
     fn collect_tokens_for_line(
@@ -262,8 +309,20 @@ impl TreeSitterEngine {
             return;
         }
 
-        // 葉ノード（子ノードを持たない末端トークン）であればトークン化
-        if node.child_count() == 0 {
+        // コメントや文字列/文字リテラル等は内部に子ノード（"//", "comment_content", "\"", "string_content" 等）を
+        // 持つため、子へ降りずノード全体で単一トークンとして確定させる
+        let is_atomic_token_node = matches!(
+            node.kind(),
+            "line_comment"
+                | "block_comment"
+                | "comment"
+                | "string_literal"
+                | "raw_string_literal"
+                | "char_literal"
+        );
+
+        // 葉ノードまたは単一色複合ノードであればトークン化
+        if node.child_count() == 0 || is_atomic_token_node {
             if let Some(token_type) = Self::node_to_token_type(&node) {
                 let col_start = if start.row == target_row {
                     start.column
@@ -276,15 +335,21 @@ impl TreeSitterEngine {
                     line_text.len()
                 };
 
-                if col_end > col_start && col_start < line_text.len() {
-                    let clamped_end = col_end.min(line_text.len());
-                    let text = &line_text[col_start..clamped_end];
-                    tokens.push(AstToken {
-                        text: text.to_string(),
-                        token_type,
-                        start_col: col_start,
-                        end_col: clamped_end,
-                    });
+                let len = line_text.len();
+                if col_start < len {
+                    let clamped_end = col_end.min(len);
+                    if clamped_end > col_start
+                        && line_text.is_char_boundary(col_start)
+                        && line_text.is_char_boundary(clamped_end)
+                    {
+                        let text = &line_text[col_start..clamped_end];
+                        tokens.push(AstToken {
+                            text: text.to_string(),
+                            token_type,
+                            start_col: col_start,
+                            end_col: clamped_end,
+                        });
+                    }
                 }
             }
             return;
@@ -326,17 +391,19 @@ impl TreeSitterEngine {
             "fn" | "let" | "mut" | "pub" | "struct" | "enum" | "impl" | "trait" | "match"
             | "if" | "else" | "loop" | "while" | "for" | "in" | "return" | "break" | "continue"
             | "use" | "mod" | "crate" | "self" | "super" | "as" | "where" | "async" | "await"
-            | "unsafe" | "type" | "const" | "static" | "ref" | "move" => Some(TokenType::Keyword),
+            | "unsafe" | "type" | "const" | "static" | "ref" | "move" | "dyn" | "macro_rules!" => {
+                Some(TokenType::Keyword)
+            }
 
             // 識別子・関数・型
-            "type_identifier" | "primitive_type" => Some(TokenType::Type),
+            "type_identifier" | "primitive_type" | "self_type" => Some(TokenType::Type),
             "identifier" => Some(TokenType::Text),
 
             // 演算子・区切り記号
             "+" | "-" | "*" | "/" | "%" | "=" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&"
-            | "||" | "!" | "&" | "|" | "^" | "<<" | ">>" | "=>" | "->" | ".." | "..=" => {
-                Some(TokenType::Punctuation)
-            }
+            | "||" | "!" | "&" | "|" | "^" | "<<" | ">>" | "=>" | "->" | ".." | "..=" | "..."
+            | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" | "?" | "#"
+            | "@" => Some(TokenType::Punctuation),
 
             // 括弧・デリミタ
             "{" | "}" | "(" | ")" | "[" | "]" | ";" | ":" | "::" | "," | "." => {

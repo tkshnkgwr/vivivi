@@ -7,7 +7,7 @@ use egui::{Event, ImeEvent, Key, Modifiers, Pos2};
 use vivivi_app::{App, KeyCode, KeyModifiers};
 use vivivi_core::{CharEncoding, NewlineType};
 use vivivi_gui::{
-    ParticleManager, SettingsCategory, ViviviGuiApp, colors, egui_key_to_app_key,
+    ParticleManager, SettingsCategory, SidebarTab, ViviviGuiApp, colors, egui_key_to_app_key,
     extract_deleted_line_segment,
 };
 use vivivi_vi::ViMode;
@@ -755,4 +755,318 @@ fn test_public_gui_modal_scroll_isolation() {
         Modifiers::NONE,
     );
     assert!(gui.core.scroll.0 > scrolled_pos);
+}
+
+#[test]
+fn test_theme_palette_switches_all_ui_colors_not_only_text() {
+    let dark = vivivi_app::theme::Theme::builtin_tokyo_night();
+    let light = vivivi_app::theme::Theme::builtin_vivi_classic();
+    let p_dark = vivivi_gui::GuiPalette::from_theme(&dark);
+    let p_light = vivivi_gui::GuiPalette::from_theme(&light);
+
+    assert!(p_dark.is_dark);
+    assert!(!p_light.is_dark);
+    assert_ne!(p_dark.bg_editor, p_light.bg_editor);
+    assert_ne!(p_dark.bg_panel, p_light.bg_panel);
+    assert_ne!(p_dark.bg_statusline, p_light.bg_statusline);
+
+    let ctx = egui::Context::default();
+    vivivi_gui::apply_theme(&ctx, &light);
+    let applied = ctx.style().visuals.clone();
+    assert_eq!(applied.panel_fill, p_light.bg_panel);
+    assert_eq!(applied.window_fill, p_light.bg_editor);
+    assert!(!applied.dark_mode);
+}
+
+#[test]
+fn test_settings_dialog_renders_above_backdrop_on_foreground_order() {
+    let core = App::new("hello", None, CharEncoding::Utf8, NewlineType::Lf);
+    let mut gui = ViviviGuiApp::from_core(core);
+    gui.settings_dialog.open(&gui.core.config);
+
+    let ctx = egui::Context::default();
+    let raw_input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(1024.0, 768.0),
+        )),
+        ..Default::default()
+    };
+
+    let output = ctx.run(raw_input, |ctx| {
+        gui.render_settings_dialog(ctx);
+    });
+    assert!(!output.shapes.is_empty());
+
+    // 設定ウィンドウはバックドロップ (Order::Middle) より前面の Order::Foreground に配置されること
+    let win_layer = ctx
+        .memory(|mem| {
+            mem.areas()
+                .visible_layer_ids()
+                .iter()
+                .copied()
+                .find(|l| l.id == egui::Id::new("vivivi_preferences_modal_v2"))
+        })
+        .expect("設定ダイアログのウィンドウレイヤーが存在すること");
+    let backdrop_layer = ctx
+        .memory(|mem| {
+            mem.areas()
+                .visible_layer_ids()
+                .iter()
+                .copied()
+                .find(|l| l.id == egui::Id::new("settings_modal_backdrop_area"))
+        })
+        .expect("バックドロップ領域レイヤーが存在すること");
+
+    assert_eq!(win_layer.order, egui::Order::Foreground);
+    assert_eq!(backdrop_layer.order, egui::Order::Middle);
+}
+
+#[test]
+fn test_settings_dialog_keeps_fixed_width_across_categories() {
+    let core = App::new("hello", None, CharEncoding::Utf8, NewlineType::Lf);
+    let mut gui = ViviviGuiApp::from_core(core);
+    gui.settings_dialog.open(&gui.core.config);
+
+    let ctx = egui::Context::default();
+    let mut observed_widths = Vec::new();
+
+    for category in vivivi_gui::app::SettingsCategory::all() {
+        gui.settings_dialog.active_category = *category;
+        // 2フレーム回してレイアウト収束後の実幅を取得
+        for _ in 0..2 {
+            let raw_input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1600.0, 900.0),
+                )),
+                ..Default::default()
+            };
+            let _ = ctx.run(raw_input, |ctx| {
+                gui.render_settings_dialog(ctx);
+            });
+        }
+        let rect = ctx
+            .memory(|mem| mem.area_rect(egui::Id::new("vivivi_preferences_modal_v2")))
+            .expect("設定ダイアログのレイアウト矩形が取得できること");
+        observed_widths.push((format!("{category:?}"), rect.width()));
+    }
+
+    let first_width = observed_widths[0].1;
+    assert!(
+        (680.0..=710.0).contains(&first_width),
+        "設定ダイアログ幅は固定値 680px（+枠余白）付近であること: {observed_widths:?}"
+    );
+    for (name, w) in &observed_widths {
+        assert!(
+            (*w - first_width).abs() <= 0.5,
+            "カテゴリ {name} 切り替え前後で幅が変化しないこと: {observed_widths:?}"
+        );
+    }
+}
+
+#[test]
+fn test_help_modal_defaults_to_doubled_width() {
+    let mut core = App::new("hello", None, CharEncoding::Utf8, NewlineType::Lf);
+    core.open_help(None);
+    let mut gui = ViviviGuiApp::from_core(core);
+
+    let ctx = egui::Context::default();
+    for _ in 0..2 {
+        let raw_input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1600.0, 900.0),
+            )),
+            ..Default::default()
+        };
+        let _ = ctx.run(raw_input, |ctx| {
+            gui.render_modals(ctx);
+        });
+    }
+
+    let rect = ctx
+        .memory(|mem| mem.area_rect(egui::Id::new("vivivi_help_modal_v2")))
+        .expect("ヘルプモーダルの矩形が取得できること");
+    assert!(
+        rect.width() >= 1200.0,
+        "ヘルプモーダル幅が従来の 620px の約2倍（1240px 基準）であること: width={}",
+        rect.width()
+    );
+}
+
+/// シナリオ 13: GUI のアウトラインサイドバーが起動直後およびバッファ編集後に自動で同期されること。
+#[test]
+fn test_gui_outline_sidebar_auto_syncs_on_render() {
+    let core = App::new(
+        "fn first_sym() {}\nstruct SecondSym;\n",
+        Some(std::path::PathBuf::from("sample.rs")),
+        CharEncoding::Utf8,
+        NewlineType::Lf,
+    );
+    let mut gui = ViviviGuiApp::from_core(core);
+
+    // 起動直後に初期シンボルが抽出されていること
+    assert_eq!(gui.core.outline_items.len(), 2);
+    assert!(gui.core.outline_items[0].title.contains("first_sym"));
+    assert!(gui.core.outline_items[1].title.contains("SecondSym"));
+
+    // バッファに新規関数を追加したあと、Outline タブへ切り替えて render_sidebar を呼ぶと同期される
+    let end = gui.core.buffer.len();
+    gui.core
+        .buffer
+        .basic_insert_text(end, "pub fn edited_sym() {}\n");
+    gui.sidebar_open = true;
+    gui.sidebar_tab = SidebarTab::Outline;
+
+    let ctx = egui::Context::default();
+    let raw_input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(
+            Pos2::ZERO,
+            egui::vec2(1280.0, 800.0),
+        )),
+        ..Default::default()
+    };
+    let _ = ctx.run(raw_input, |ctx| {
+        gui.render_sidebar(ctx);
+    });
+
+    assert_eq!(gui.core.outline_items.len(), 3);
+    assert!(gui.core.outline_items[2].title.contains("edited_sym"));
+}
+
+/// シナリオ 14: `:outline` / `F8`（`toggle_outline`）が GUI サイドバー開閉と Outline タブ切替に連動すること。
+#[test]
+fn test_gui_outline_toggle_command_and_f8_syncs_sidebar() {
+    let core = App::new(
+        "fn main() {}\n",
+        Some(std::path::PathBuf::from("main.rs")),
+        CharEncoding::Utf8,
+        NewlineType::Lf,
+    );
+    let mut gui = ViviviGuiApp::from_core(core);
+
+    // 初期状態は Files タブが開いているため、:outline で Outline タブへ切り替わる
+    gui.sidebar_open = true;
+    gui.sidebar_tab = SidebarTab::Files;
+    gui.core.execute_ex("outline");
+    gui.sync_sidebar_requests();
+    assert!(gui.sidebar_open);
+    assert_eq!(gui.sidebar_tab, SidebarTab::Outline);
+    assert!(!gui.core.outline_focus);
+
+    // Outline タブ表示中にもう一度 F8 を押すとサイドバーが閉じる
+    let f8 = vivivi_app::AppKeyEvent::new(KeyCode::F(8), KeyModifiers::NONE);
+    gui.core.handle_key(f8);
+    gui.sync_sidebar_requests();
+    assert!(!gui.sidebar_open);
+    assert!(!gui.core.show_outline);
+
+    // 閉じた状態から F8 で再度 Outline タブとして開く
+    gui.core.handle_key(f8);
+    gui.sync_sidebar_requests();
+    assert!(gui.sidebar_open);
+    assert_eq!(gui.sidebar_tab, SidebarTab::Outline);
+    assert!(gui.core.show_outline);
+}
+
+/// シナリオ 15: `:cmd` 外部コマンド実行ダイアログが GUI モーダルとして描画・操作でき、文字入力がエディタに漏れないこと。
+#[test]
+fn test_gui_cmd_exec_dialog_renders_and_isolates_input() {
+    let core = App::new("initial text", None, CharEncoding::Utf8, NewlineType::Lf);
+    let mut gui = ViviviGuiApp::from_core(core);
+
+    gui.core.execute_ex("cmd");
+    assert!(gui.core.show_cmd_exec_dialog);
+    assert!(gui.is_any_modal_open());
+
+    // モーダル表示中はエディタ本体へ q/j キーが漏れない
+    gui.process_egui_events(&[Event::Text("q".to_string())], Modifiers::NONE);
+    assert!(gui.core.show_cmd_exec_dialog);
+    assert_eq!(gui.core.buffer.to_string(), "initial text");
+
+    // 実行モード 0（実行のみ）でコマンド実行すると出力プレビューが更新される
+    gui.core.cmd_exec_mode = 0;
+    gui.core.cmd_exec_input = "echo hello_cmd".to_string();
+    gui.core.execute_cmd_exec_dialog();
+    assert!(gui.core.cmd_exec_output_preview.is_some());
+
+    // egui モーダル描画がパニックせず実行できること
+    let ctx = egui::Context::default();
+    let raw_input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(
+            Pos2::ZERO,
+            egui::vec2(1280.0, 800.0),
+        )),
+        ..Default::default()
+    };
+    let _ = ctx.run(raw_input, |ctx| {
+        gui.render_modals(ctx);
+    });
+
+    // Esc で閉じること
+    gui.process_egui_events(
+        &[Event::Key {
+            key: Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        }],
+        Modifiers::NONE,
+    );
+    assert!(!gui.core.show_cmd_exec_dialog);
+}
+
+/// シナリオ 16: GUI ワードラップ (`:set wrap`) 有効時、長い行が折り返されカーソル矩形の Y 座標が下段へ移動すること。
+#[test]
+fn test_gui_word_wrap_wraps_long_line_and_cursor_position() {
+    let long_line = "a".repeat(220);
+    let core = App::new(&long_line, None, CharEncoding::Utf8, NewlineType::Lf);
+    let mut gui = ViviviGuiApp::from_core(core);
+    gui.sidebar_open = false;
+    gui.minimap_open = false;
+    gui.core.cursor.pos.line = 0;
+    gui.core.cursor.pos.col = 200;
+
+    let ctx = egui::Context::default();
+    let make_input = || egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(
+            Pos2::ZERO,
+            egui::vec2(640.0, 480.0),
+        )),
+        ..Default::default()
+    };
+
+    // 1. wrap OFF のときは同一論理行の 1 行目 (origin.y) にカーソルが留まる
+    gui.core.wrap = false;
+    let _ = ctx.run(make_input(), |ctx| {
+        gui.render_central_panel(ctx);
+    });
+    let nowrap_cursor = gui
+        .last_cursor_rect
+        .expect("nowrap 時もカーソル矩形が計算されること");
+    assert!(
+        (nowrap_cursor.top() - gui.last_active_text_origin.y).abs() < 1.0,
+        "nowrap 時は 1 行目の Y に描画されるべき: top={}, origin_y={}",
+        nowrap_cursor.top(),
+        gui.last_active_text_origin.y
+    );
+
+    // 2. `:set wrap` で有効化すると折り返されてカーソルが 2 行目以降 (origin.y + line_height 以上) へ移る
+    gui.core.execute_ex("set wrap");
+    assert!(gui.core.wrap);
+    let _ = ctx.run(make_input(), |ctx| {
+        gui.render_central_panel(ctx);
+    });
+    let wrap_cursor = gui
+        .last_cursor_rect
+        .expect("wrap 時もカーソル矩形が計算されること");
+    assert!(
+        wrap_cursor.top() >= gui.last_active_text_origin.y + gui.line_height,
+        "wrap 有効時の長い行の後半カーソルは下段に折り返されるべき: top={}, origin_y={}, line_height={}",
+        wrap_cursor.top(),
+        gui.last_active_text_origin.y,
+        gui.line_height
+    );
 }

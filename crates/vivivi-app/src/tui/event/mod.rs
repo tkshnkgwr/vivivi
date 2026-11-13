@@ -227,60 +227,7 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
                 app.cmd_exec_input.pop();
             }
             KeyCode::Enter => {
-                let cmd = app.cmd_exec_input.trim().to_string();
-                if !cmd.is_empty() {
-                    match app.cmd_exec_mode {
-                        0 => {
-                            // 実行のみ (結果プレビュー)
-                            match app.execute_shell_command(&cmd) {
-                                Ok(out) => {
-                                    app.cmd_exec_output_preview = Some(out);
-                                    app.status_message = Some(format!("!{cmd} ➔ 実行完了"));
-                                }
-                                Err(e) => {
-                                    app.cmd_exec_output_preview = Some(format!("エラー: {e}"));
-                                    app.status_message = Some(format!("コマンド実行エラー: {e}"));
-                                }
-                            }
-                        }
-                        1 => {
-                            // バッファ挿入 (:r !)
-                            match app.read_command_into_buffer(&cmd, None) {
-                                Ok(count) => {
-                                    app.status_message =
-                                        Some(format!(":r !{cmd} ➔ {count} 行を挿入しました"));
-                                    app.close_cmd_exec_dialog();
-                                }
-                                Err(e) => {
-                                    app.cmd_exec_output_preview = Some(format!("エラー: {e}"));
-                                    app.status_message = Some(format!("コマンド読込エラー: {e}"));
-                                }
-                            }
-                        }
-                        2 => {
-                            // 選択行置換 (:[range]!)
-                            let (start, end) = match app.cursor.anchor {
-                                Some(anchor) => (
-                                    anchor.line.min(app.cursor.pos.line),
-                                    anchor.line.max(app.cursor.pos.line),
-                                ),
-                                None => (app.cursor.pos.line, app.cursor.pos.line),
-                            };
-                            match app.filter_range_with_command(&cmd, start, end) {
-                                Ok(count) => {
-                                    app.status_message =
-                                        Some(format!(":[range]!{cmd} ➔ {count} 行に置換しました"));
-                                    app.close_cmd_exec_dialog();
-                                }
-                                Err(e) => {
-                                    app.cmd_exec_output_preview = Some(format!("エラー: {e}"));
-                                    app.status_message = Some(format!("置換エラー: {e}"));
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
+                app.execute_cmd_exec_dialog();
             }
             KeyCode::Char(c) => {
                 app.cmd_exec_input.push(c);
@@ -749,12 +696,13 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
 
     // 2. 罫線モード有効時の操作
     // Ctrl+矢印 / Alt+矢印 で描画、Shift+矢印 で消去
-    // Ctrl+hjkl で描画、Shift+hjkl で消去
+    // ノーマルモード等（挿入・コマンドライン以外）では Ctrl+hjkl / Shift+hjkl も有効
     // ※修飾キーなしの通常の矢印キー（十字キー）や素のhjklは通常のカーソル移動を行う
-    if app.keisen_mode.is_active {
+    if app.keisen_mode.is_active && app.mode() != ViMode::CommandLine {
         let is_shift = key.modifiers.contains(KeyModifiers::SHIFT);
         let is_ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let is_alt = key.modifiers.contains(KeyModifiers::ALT);
+        let allow_hjkl = !matches!(app.mode(), ViMode::Insert | ViMode::Replace);
 
         if is_ctrl || is_shift || is_alt {
             let is_erase = is_shift;
@@ -764,10 +712,16 @@ fn dispatch_key_event(app: &mut App, key: KeyEvent) {
                 KeyCode::Right => Some(KeisenDirection::Right),
                 KeyCode::Up => Some(KeisenDirection::Up),
                 KeyCode::Down => Some(KeisenDirection::Down),
-                KeyCode::Char('h') | KeyCode::Char('H') => Some(KeisenDirection::Left),
-                KeyCode::Char('l') | KeyCode::Char('L') => Some(KeisenDirection::Right),
-                KeyCode::Char('k') | KeyCode::Char('K') => Some(KeisenDirection::Up),
-                KeyCode::Char('j') | KeyCode::Char('J') => Some(KeisenDirection::Down),
+                KeyCode::Char('h') | KeyCode::Char('H') if allow_hjkl => {
+                    Some(KeisenDirection::Left)
+                }
+                KeyCode::Char('l') | KeyCode::Char('L') if allow_hjkl => {
+                    Some(KeisenDirection::Right)
+                }
+                KeyCode::Char('k') | KeyCode::Char('K') if allow_hjkl => Some(KeisenDirection::Up),
+                KeyCode::Char('j') | KeyCode::Char('J') if allow_hjkl => {
+                    Some(KeisenDirection::Down)
+                }
                 _ => None,
             };
 

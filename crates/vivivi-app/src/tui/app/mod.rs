@@ -95,6 +95,10 @@ pub struct App {
     pub outline_items: Vec<OutlineItem>,
     /// 選択中のアウトライン項目のインデックス
     pub selected_outline_idx: usize,
+    /// アウトライン解析済みのバッファリビジョン
+    pub outline_revision: Option<u64>,
+    /// アウトライン解析時の言語種別
+    pub outline_lang: SyntaxLang,
 
     // --- 動的補完 (dabbrev / Ctrl-L, Ctrl-M) ---
     pub dabbrev: DabbrevSession,
@@ -144,6 +148,8 @@ pub struct App {
 
     /// サイドバー・ファイルツリーの表示トグル要求フラグ (:tree, :explore)
     pub toggle_tree_request: bool,
+    /// サイドバー・アウトラインタブの表示トグル要求フラグ (:outline, F8)
+    pub toggle_outline_request: bool,
     /// プロジェクト可視化グラフ (Visualize / ViVi 4) の表示フラグ (:visualize, :graph)
     pub show_visualize_graph: bool,
 
@@ -204,6 +210,8 @@ pub struct App {
 
     // --- Tree-sitter 構文木解析 & スマート選択 ---
     pub treesitter: Option<TreeSitterEngine>,
+    pub treesitter_revision: u64,
+    pub treesitter_lang: SyntaxLang,
     pub current_smart_selection: Option<AstSelectionRange>,
 
     // --- マルチタブ管理 (Tab Bar UI) ---
@@ -419,7 +427,9 @@ impl App {
             change_tracker: change_tracker.clone(),
         };
 
-        Self {
+        let treesitter_revision = buffer.revision();
+
+        let mut app = Self {
             buffer,
             cursor: initial_cursor,
             vi,
@@ -445,6 +455,8 @@ impl App {
             outline_focus: false,
             outline_items: Vec::new(),
             selected_outline_idx: 0,
+            outline_revision: None,
+            outline_lang: syntax_lang,
 
             dabbrev: DabbrevSession::new(),
             abbrev: AbbrevManager::new(),
@@ -475,6 +487,7 @@ impl App {
             show_filer: false,
             filer: None,
             toggle_tree_request: false,
+            toggle_outline_request: false,
             show_visualize_graph: false,
 
             change_tracker,
@@ -512,6 +525,8 @@ impl App {
             lsp_show_diagnostics_panel: false,
 
             treesitter,
+            treesitter_revision,
+            treesitter_lang: syntax_lang,
             current_smart_selection: None,
 
             tabs: vec![initial_tab],
@@ -521,7 +536,9 @@ impl App {
             update_manager,
             update_target,
             update_staging_dir,
-        }
+        };
+        app.refresh_outline();
+        app
     }
 
     /// 更新があるかバックグラウンドで照会
@@ -751,6 +768,10 @@ impl App {
     pub fn step_keisen(&mut self, dir: KeisenDirection, is_erase: bool) {
         self.keisen_mode
             .step(&mut self.buffer, &mut self.cursor.pos, dir, is_erase);
+        if let Some(win) = self.windows.get_mut(self.active_window) {
+            win.cursor = self.cursor.clone();
+            win.scroll = self.scroll;
+        }
     }
 
     /// 指定された行・列座標における画面表示カラム位置（全角幅2、半角幅1、タブ幅を考慮）を計算します。
@@ -1114,6 +1135,65 @@ impl App {
         modified_count
     }
 
+    /// 指定行範囲（`None` の場合は末尾空行シードを除く全行）を [`vivivi_modes::SortOptions`] に従ってソートします。
+    ///
+    /// 処理した行数を返します。
+    pub fn sort_buffer_lines(
+        &mut self,
+        range: Option<(usize, usize)>,
+        options: vivivi_modes::SortOptions,
+    ) -> usize {
+        let line_count = self.buffer.line_count();
+        if line_count == 0 {
+            return 0;
+        }
+
+        let (start_line, end_line) = match range {
+            Some((s, e)) => {
+                let sc = s.min(line_count.saturating_sub(1));
+                let ec = e.min(line_count.saturating_sub(1));
+                (sc.min(ec), sc.max(ec))
+            }
+            None => {
+                let mut last = line_count.saturating_sub(1);
+                if last > 0 && self.buffer.get_line(last).as_deref() == Some("") {
+                    last -= 1;
+                }
+                (0, last)
+            }
+        };
+
+        if start_line > end_line {
+            return 0;
+        }
+
+        let mut lines = Vec::with_capacity(end_line - start_line + 1);
+        for l in start_line..=end_line {
+            lines.push(self.buffer.get_line(l).unwrap_or_default());
+        }
+        let line_refs: Vec<&str> = lines.iter().map(String::as_str).collect();
+        let sorted = vivivi_modes::sort_lines(&line_refs, options);
+
+        let start_offset = self.buffer.line_start_position(start_line);
+        let last_len = lines.last().map_or(0, |s| s.chars().count());
+        let end_offset = self.buffer.line_start_position(end_line) + last_len;
+        let replacement = sorted.join("\n");
+
+        self.buffer.open_undo_block();
+        self.buffer.delete_range(start_offset, end_offset);
+        self.buffer.insert_text(start_offset, &replacement);
+        self.buffer.close_undo_block();
+
+        self.cursor.pos = CursorPosition::new(start_line, 0);
+        self.clamp_cursor();
+        if let Some(win) = self.windows.get_mut(self.active_window) {
+            win.cursor = self.cursor.clone();
+            win.scroll = self.scroll;
+        }
+
+        sorted.len()
+    }
+
     /// 外部コマンド実行ダイアログ (cmdExecDlg) を開きます。
     pub fn open_cmd_exec_dialog(&mut self) {
         self.show_cmd_exec_dialog = true;
@@ -1124,6 +1204,64 @@ impl App {
     pub fn close_cmd_exec_dialog(&mut self) {
         self.show_cmd_exec_dialog = false;
         self.cmd_exec_output_preview = None;
+    }
+
+    /// 外部コマンド実行ダイアログの入力コマンドと選択モードを実行します。
+    pub fn execute_cmd_exec_dialog(&mut self) {
+        let cmd = self.cmd_exec_input.trim().to_string();
+        if cmd.is_empty() {
+            return;
+        }
+        match self.cmd_exec_mode {
+            0 => {
+                // 実行のみ (結果プレビュー)
+                match self.execute_shell_command(&cmd) {
+                    Ok(out) => {
+                        self.cmd_exec_output_preview = Some(out);
+                        self.status_message = Some(format!("!{cmd} ➔ 実行完了"));
+                    }
+                    Err(e) => {
+                        self.cmd_exec_output_preview = Some(format!("エラー: {e}"));
+                        self.status_message = Some(format!("コマンド実行エラー: {e}"));
+                    }
+                }
+            }
+            1 => {
+                // バッファ挿入 (:r !)
+                match self.read_command_into_buffer(&cmd, None) {
+                    Ok(count) => {
+                        self.status_message = Some(format!(":r !{cmd} ➔ {count} 行を挿入しました"));
+                        self.close_cmd_exec_dialog();
+                    }
+                    Err(e) => {
+                        self.cmd_exec_output_preview = Some(format!("エラー: {e}"));
+                        self.status_message = Some(format!("コマンド読込エラー: {e}"));
+                    }
+                }
+            }
+            2 => {
+                // 選択行置換 (:[range]!)
+                let (start, end) = match self.cursor.anchor {
+                    Some(anchor) => (
+                        anchor.line.min(self.cursor.pos.line),
+                        anchor.line.max(self.cursor.pos.line),
+                    ),
+                    None => (self.cursor.pos.line, self.cursor.pos.line),
+                };
+                match self.filter_range_with_command(&cmd, start, end) {
+                    Ok(count) => {
+                        self.status_message =
+                            Some(format!(":[range]!{cmd} ➔ {count} 行に置換しました"));
+                        self.close_cmd_exec_dialog();
+                    }
+                    Err(e) => {
+                        self.cmd_exec_output_preview = Some(format!("エラー: {e}"));
+                        self.status_message = Some(format!("置換エラー: {e}"));
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     /// バイナリモード (Hex Editor) とテキストモードを切り替えます。
@@ -1261,12 +1399,44 @@ impl App {
         }
     }
 
+    /// Tree-sitter 構文木を現在の言語設定および最新バッファ内容で再初期化します。
+    pub fn reinit_treesitter(&mut self) {
+        let mut ts_engine = TreeSitterEngine::new();
+        if ts_engine.set_language(self.syntax_lang) {
+            let text = self.buffer.to_string();
+            ts_engine.parse(&text);
+            self.treesitter = Some(ts_engine);
+        } else {
+            self.treesitter = None;
+        }
+        self.treesitter_lang = self.syntax_lang;
+        self.treesitter_revision = self.buffer.revision();
+    }
+
+    /// バッファ編集または言語変更があった場合のみ Tree-sitter 構文木を再同期します。
+    pub fn sync_treesitter_if_dirty(&mut self) {
+        if self.treesitter_lang != self.syntax_lang {
+            self.reinit_treesitter();
+            return;
+        }
+        let current_rev = self.buffer.revision();
+        if self.treesitter_revision != current_rev {
+            if let Some(ref mut ts) = self.treesitter {
+                let text = self.buffer.to_string();
+                ts.parse(&text);
+            }
+            self.treesitter_revision = current_rev;
+        }
+    }
+
     /// Tree-sitter 構文木を最新のバッファ内容で更新します。
     pub fn update_treesitter(&mut self) {
         if let Some(ref mut ts) = self.treesitter {
             let text = self.buffer.to_string();
             ts.parse(&text);
         }
+        self.treesitter_lang = self.syntax_lang;
+        self.treesitter_revision = self.buffer.revision();
     }
 
     /// 構文木ノードに基づくスマート選択拡大（Expand Selection）を実行します。
@@ -1335,23 +1505,7 @@ pub fn current_datetime_str() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    let days = (secs / 86400) as i64;
-    let day_secs = secs % 86400;
-    let hour = day_secs / 3600;
-    let min = (day_secs % 3600) / 60;
-    let sec = day_secs % 60;
-
-    let z = days + 719468;
-    let era = if z >= 0 { z } else { z - 146096 } / 146097;
-    let doe = (z - era * 146097) as u32;
-    let yoe = (doe - doe / 1024 + doe / 1461 - doe / 142401) / 365;
-    let y = yoe as i64 + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = if m <= 2 { y + 1 } else { y };
-    format!("{y:04}-{m:02}-{d:02} {hour:02}:{min:02}:{sec:02}")
+    crate::panic_log::format_utc_datetime_from_secs(secs)
 }
 
 /// 現在日付（UTC）を YYYY-MM-DD 形式の文字列で取得します。

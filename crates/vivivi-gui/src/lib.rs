@@ -26,6 +26,6 @@ pub use app::{
 };
 pub use fonts::setup_fonts;
 pub use particles::{Particle, ParticleManager, extract_deleted_line_segment};
-pub use theme::{apply_theme, colors, setup_visuals, to_color32};
+pub use theme::{GuiPalette, apply_theme, colors, setup_visuals, to_color32};
 pub use visualize::ForceGraph;
 pub use window_state::WindowState;

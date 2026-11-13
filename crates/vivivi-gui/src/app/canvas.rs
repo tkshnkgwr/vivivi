@@ -2,13 +2,12 @@
 
 use eframe::egui;
 use egui::{Align2, Color32, CornerRadius, FontId, Frame, Pos2, Rect, Stroke, Vec2};
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_width::UnicodeWidthChar;
 use vivivi_app::LogicalRect;
 use vivivi_modes::{LineChangeState, TokenType};
 use vivivi_vi::ViMode;
 
 use super::ViviviGuiApp;
-use crate::theme::colors;
 
 #[inline]
 fn compute_line_syntax_key(text: &str, lang: vivivi_modes::SyntaxLang) -> u64 {
@@ -19,9 +18,185 @@ fn compute_line_syntax_key(text: &str, lang: vivivi_modes::SyntaxLang) -> u64 {
     hasher.finish()
 }
 
+/// 文字の視覚幅を計算します（タブは `tab_width` 境界まで展開）。
+#[inline]
+fn char_display_width(ch: char, visual_col: usize, tab_width: usize) -> usize {
+    if ch == '\t' {
+        tab_width - (visual_col % tab_width)
+    } else {
+        UnicodeWidthChar::width(ch).unwrap_or(1).max(1)
+    }
+}
+
+/// 折り返し幅 `wrap_cols` に基づき、現在位置 `(sub_row, local_col)` を必要に応じて次サブ行へ折り返します。
+///
+/// 折り返しが発生した場合は `true` を返します。
+#[inline]
+fn advance_wrap_cursor(
+    sub_row: &mut usize,
+    local_col: &mut usize,
+    ch_cols: usize,
+    wrap_cols: Option<usize>,
+) -> bool {
+    if let Some(max_cols) = wrap_cols
+        && *local_col > 0
+        && *local_col + ch_cols > max_cols
+    {
+        *sub_row += 1;
+        *local_col = 0;
+        true
+    } else {
+        false
+    }
+}
+
+/// 1 論理行が指定された折り返し幅で占める視覚サブ行数（最低 1 行）を計算します。
+fn count_line_visual_rows(chars: &[char], tab_width: usize, wrap_cols: Option<usize>) -> usize {
+    let Some(max_cols) = wrap_cols else {
+        return 1;
+    };
+    let mut sub_row = 0usize;
+    let mut local_col = 0usize;
+    let mut abs_col = 0usize;
+    for &ch in chars {
+        let w = char_display_width(ch, abs_col, tab_width);
+        advance_wrap_cursor(&mut sub_row, &mut local_col, w, Some(max_cols));
+        local_col += w;
+        abs_col += w;
+    }
+    sub_row + 1
+}
+
+/// ソフトラップ有効時の視覚行内をクリックされた位置から、対象論理行内の文字インデックスを解決します。
+fn resolve_wrapped_char_col(
+    line_str: &str,
+    tab_width: usize,
+    wrap_cols: usize,
+    target_sub_row: usize,
+    target_local_col: usize,
+) -> usize {
+    let mut sub_row = 0usize;
+    let mut local_col = 0usize;
+    let mut abs_col = 0usize;
+    let mut last_idx_in_target_row = 0usize;
+    let mut saw_target_row = target_sub_row == 0;
+
+    for (c_idx, ch) in line_str.chars().enumerate() {
+        let w = char_display_width(ch, abs_col, tab_width);
+        let wrapped = advance_wrap_cursor(&mut sub_row, &mut local_col, w, Some(wrap_cols));
+        if wrapped && sub_row == target_sub_row {
+            saw_target_row = true;
+            last_idx_in_target_row = c_idx;
+        }
+        if sub_row > target_sub_row {
+            return last_idx_in_target_row;
+        }
+        if sub_row == target_sub_row {
+            if local_col + w > target_local_col {
+                return c_idx;
+            }
+            last_idx_in_target_row = c_idx + 1;
+        }
+        local_col += w;
+        abs_col += w;
+    }
+
+    if saw_target_row {
+        last_idx_in_target_row
+    } else {
+        line_str.chars().count()
+    }
+}
+
+/// Unicode 罫線文字（`U+2500..=U+254B`, `╭╮╯╰`）を 1 セル矩形内のベクター線分として描画します。
+///
+/// 日本語フォールバックフォントでは罫線グリフが全角幅として描画され列ズレや行間隙間が生じるため、
+/// 文字グリフではなくセル境界いっぱいのベクター線分で描画します。
+fn draw_keisen_glyph(painter: &egui::Painter, cell_rect: Rect, ch: char, color: Color32) -> bool {
+    let state = match vivivi_modes::keisen::char_to_keisen_state(ch) {
+        Some(s) => s,
+        None => match ch {
+            '╭' => vivivi_modes::keisen::KT_RIGHT_THIN | vivivi_modes::keisen::KT_DOWN_THIN,
+            '╮' => vivivi_modes::keisen::KT_LEFT_THIN | vivivi_modes::keisen::KT_DOWN_THIN,
+            '╯' => vivivi_modes::keisen::KT_LEFT_THIN | vivivi_modes::keisen::KT_UP_THIN,
+            '╰' => vivivi_modes::keisen::KT_RIGHT_THIN | vivivi_modes::keisen::KT_UP_THIN,
+            _ => return false,
+        },
+    };
+    let cx = cell_rect.center().x;
+    let cy = cell_rect.center().y;
+    let thin_w = (cell_rect.width() * 0.14).clamp(1.2, 2.0);
+    let thick_w = (thin_w * 2.1).clamp(2.4, 4.0);
+
+    let arm_width = |mask: u8, thin: u8, thick: u8| -> f32 {
+        let bits = state & mask;
+        if bits == thick {
+            thick_w
+        } else if bits == thin || bits != 0 {
+            thin_w
+        } else {
+            0.0
+        }
+    };
+
+    let up_w = arm_width(
+        vivivi_modes::keisen::KT_UP_MASK,
+        vivivi_modes::keisen::KT_UP_THIN,
+        vivivi_modes::keisen::KT_UP_THICK,
+    );
+    let left_w = arm_width(
+        vivivi_modes::keisen::KT_LEFT_MASK,
+        vivivi_modes::keisen::KT_LEFT_THIN,
+        vivivi_modes::keisen::KT_LEFT_THICK,
+    );
+    let down_w = arm_width(
+        vivivi_modes::keisen::KT_DOWN_MASK,
+        vivivi_modes::keisen::KT_DOWN_THIN,
+        vivivi_modes::keisen::KT_DOWN_THICK,
+    );
+    let right_w = arm_width(
+        vivivi_modes::keisen::KT_RIGHT_MASK,
+        vivivi_modes::keisen::KT_RIGHT_THIN,
+        vivivi_modes::keisen::KT_RIGHT_THICK,
+    );
+
+    let h_half = left_w.max(right_w) * 0.5;
+    let v_half = up_w.max(down_w) * 0.5;
+
+    if up_w > 0.0 {
+        painter.line_segment(
+            [Pos2::new(cx, cell_rect.top()), Pos2::new(cx, cy + h_half)],
+            Stroke::new(up_w, color),
+        );
+    }
+    if down_w > 0.0 {
+        painter.line_segment(
+            [
+                Pos2::new(cx, cy - h_half),
+                Pos2::new(cx, cell_rect.bottom()),
+            ],
+            Stroke::new(down_w, color),
+        );
+    }
+    if left_w > 0.0 {
+        painter.line_segment(
+            [Pos2::new(cell_rect.left(), cy), Pos2::new(cx + v_half, cy)],
+            Stroke::new(left_w, color),
+        );
+    }
+    if right_w > 0.0 {
+        painter.line_segment(
+            [Pos2::new(cx - v_half, cy), Pos2::new(cell_rect.right(), cy)],
+            Stroke::new(right_w, color),
+        );
+    }
+    true
+}
+
 impl ViviviGuiApp {
     /// 4. 中央エディタ分割ビュー ＆ ミニマップ領域の描画（`ui.painter()` によるカスタム等幅レンダリング）
-    pub(crate) fn render_central_panel(&mut self, ctx: &egui::Context) {
+    pub fn render_central_panel(&mut self, ctx: &egui::Context) {
+        let pal = self.palette();
         // 4.1 入力イベント (`Event::Key`, `Event::Text`, `Event::Ime`) の取得とディスパッチ
         let (events, current_modifiers, dropped_files, hovered_files) = ctx.input(|i| {
             (
@@ -33,9 +208,10 @@ impl ViviviGuiApp {
         });
         self.process_egui_events(&events, current_modifiers);
         self.handle_drag_and_drop_files(&dropped_files);
+        self.core.sync_treesitter_if_dirty();
 
         egui::CentralPanel::default()
-            .frame(Frame::NONE.fill(colors::BG_EDITOR))
+            .frame(Frame::NONE.fill(pal.bg_editor))
             .show(ctx, |ui| {
                 let available_rect = ui.available_rect_before_wrap();
 
@@ -174,6 +350,13 @@ impl ViviviGuiApp {
                     let gutter_px = gutter_cols * char_width;
                     let text_start_x = win_rect.min.x + padding + gutter_px;
                     let text_start_y = win_rect.min.y + padding;
+                    let wrap_cols = if self.core.wrap {
+                        let text_area_w =
+                            (win_rect.right() - text_start_x - padding).max(char_width * 2.0);
+                        Some((text_area_w / char_width).floor().max(2.0) as usize)
+                    } else {
+                        None
+                    };
 
                     // クリックされた場合、そのウィンドウへフォーカスを切り替えカーソルを移動
                     if let Some(click_pos) = pointer_click_pos
@@ -185,35 +368,79 @@ impl ViviviGuiApp {
                             .max(0.0) as usize;
                         let clicked_vis_col =
                             ((click_pos.x - text_start_x) / char_width).floor().max(0.0) as usize;
+                        let tab_w = self.core.tab_width.max(1);
 
-                        let target_line = (self.core.scroll.0 + clicked_vis_row)
-                            .min(self.core.buffer.line_count().saturating_sub(1));
-
-                        // 水平スクロールと全角/タブ文字幅を考慮して正確な文字インデックス（Char Index）へ解決
-                        let scroll_col = self.core.scroll.1;
-                        let target_vis_col = scroll_col + clicked_vis_col;
-                        let resolved_col =
-                            if let Some(line_str) = self.core.buffer.get_line(target_line) {
-                                let tab_w = self.core.tab_width.max(1);
-                                let mut cur_vcol = 0;
-                                let mut found_idx = 0;
-                                for (c_idx, ch) in line_str.chars().enumerate() {
-                                    let w = if ch == '\t' {
-                                        tab_w - (cur_vcol % tab_w)
-                                    } else {
-                                        UnicodeWidthChar::width(ch).unwrap_or(1).max(1)
-                                    };
-                                    if cur_vcol + w > target_vis_col {
-                                        found_idx = c_idx;
-                                        break;
-                                    }
-                                    cur_vcol += w;
-                                    found_idx = c_idx + 1;
+                        let (target_line, resolved_col) = if let Some(max_cols) = wrap_cols {
+                            let mut cur_line = self.core.scroll.0;
+                            let mut rem_rows = clicked_vis_row;
+                            let max_line_idx = self.core.buffer.line_count().saturating_sub(1);
+                            let mut target_sub_row = 0usize;
+                            while cur_line < max_line_idx {
+                                if self.core.vi.fold_manager.is_line_hidden(cur_line + 1) {
+                                    cur_line += 1;
+                                    continue;
                                 }
-                                found_idx
-                            } else {
-                                0
-                            };
+                                let line_chars: Vec<char> = self
+                                    .core
+                                    .buffer
+                                    .get_line(cur_line)
+                                    .unwrap_or_default()
+                                    .chars()
+                                    .collect();
+                                let row_span =
+                                    count_line_visual_rows(&line_chars, tab_w, Some(max_cols));
+                                if rem_rows < row_span {
+                                    target_sub_row = rem_rows;
+                                    break;
+                                }
+                                rem_rows -= row_span;
+                                cur_line += 1;
+                            }
+                            if cur_line >= max_line_idx {
+                                cur_line = max_line_idx;
+                                target_sub_row = rem_rows;
+                            }
+                            let resolved = self
+                                .core
+                                .buffer
+                                .get_line(cur_line)
+                                .map(|s| {
+                                    resolve_wrapped_char_col(
+                                        &s,
+                                        tab_w,
+                                        max_cols,
+                                        target_sub_row,
+                                        clicked_vis_col,
+                                    )
+                                })
+                                .unwrap_or(0);
+                            (cur_line, resolved)
+                        } else {
+                            let target_line = (self.core.scroll.0 + clicked_vis_row)
+                                .min(self.core.buffer.line_count().saturating_sub(1));
+
+                            // 水平スクロールと全角/タブ文字幅を考慮して正確な文字インデックス（Char Index）へ解決
+                            let scroll_col = self.core.scroll.1;
+                            let target_vis_col = scroll_col + clicked_vis_col;
+                            let resolved_col =
+                                if let Some(line_str) = self.core.buffer.get_line(target_line) {
+                                    let mut cur_vcol = 0;
+                                    let mut found_idx = 0;
+                                    for (c_idx, ch) in line_str.chars().enumerate() {
+                                        let w = char_display_width(ch, cur_vcol, tab_w);
+                                        if cur_vcol + w > target_vis_col {
+                                            found_idx = c_idx;
+                                            break;
+                                        }
+                                        cur_vcol += w;
+                                        found_idx = c_idx + 1;
+                                    }
+                                    found_idx
+                                } else {
+                                    0
+                                };
+                            (target_line, resolved_col)
+                        };
 
                         self.core.cursor.pos.line = target_line;
                         self.core.cursor.pos.col = resolved_col;
@@ -236,17 +463,17 @@ impl ViviviGuiApp {
                     let painter = ui.painter().with_clip_rect(win_rect);
 
                     // ウィンドウ背景
-                    painter.rect_filled(win_rect, 0.0, colors::BG_EDITOR);
+                    painter.rect_filled(win_rect, 0.0, pal.bg_editor);
 
                     // ガター（行番号 ＆ 変更マーカー領域）の背景と境界線
                     let gutter_rect = Rect::from_min_size(
                         win_rect.min,
                         Vec2::new(padding + gutter_px - 4.0, win_rect.height()),
                     );
-                    painter.rect_filled(gutter_rect, 0.0, Color32::from_rgb(24, 25, 36));
+                    painter.rect_filled(gutter_rect, 0.0, pal.bg_gutter);
                     painter.line_segment(
                         [gutter_rect.right_top(), gutter_rect.right_bottom()],
-                        Stroke::new(1.0_f32, colors::BG_STATUSLINE),
+                        Stroke::new(1.0_f32, pal.bg_statusline),
                     );
 
                     let visible_lines = ((win_rect.height() - padding * 2.0) / line_height)
@@ -273,7 +500,7 @@ impl ViviviGuiApp {
                                 Align2::LEFT_TOP,
                                 "~",
                                 font_id.clone(),
-                                colors::FG_DIMMED,
+                                pal.fg_dimmed,
                             );
                             vis_row += 1;
                             line_idx += 1;
@@ -288,15 +515,6 @@ impl ViviviGuiApp {
 
                         let is_current_line = line_idx == cur.line;
 
-                        // カレント行のハイライト背景
-                        if is_current_line && is_active_window {
-                            let cur_line_rect = Rect::from_min_size(
-                                Pos2::new(gutter_rect.right(), row_y),
-                                Vec2::new(win_rect.right() - gutter_rect.right(), line_height),
-                            );
-                            painter.rect_filled(cur_line_rect, 0.0, Color32::from_rgb(31, 35, 53));
-                        }
-
                         // 行番号の描画
                         if self.core.show_line_numbers {
                             let line_num_val = if self.core.relative_number && !is_current_line {
@@ -306,9 +524,9 @@ impl ViviviGuiApp {
                             };
                             let line_num_str = format!("{:>4}", line_num_val);
                             let num_color = if is_current_line && is_active_window {
-                                colors::ACCENT_YELLOW
+                                pal.accent_yellow
                             } else {
-                                colors::FG_LINENUMBER
+                                pal.fg_linenumber
                             };
                             painter.text(
                                 Pos2::new(win_rect.min.x + padding, row_y),
@@ -326,9 +544,9 @@ impl ViviviGuiApp {
                         let marker = self.core.change_tracker.marker_at(line_idx, &raw_line);
                         let marker_color = match marker {
                             LineChangeState::Added | LineChangeState::Modified => {
-                                Some(colors::ACCENT_YELLOW)
+                                Some(pal.gutter_modified)
                             }
-                            LineChangeState::SavedModified => Some(colors::ACCENT_GREEN),
+                            LineChangeState::SavedModified => Some(pal.gutter_saved),
                             LineChangeState::Unchanged => None,
                         };
                         if let Some(mc) = marker_color {
@@ -368,6 +586,22 @@ impl ViviviGuiApp {
                         chars_buf.clear();
                         chars_buf.extend(processed_line.chars());
                         let chars = &chars_buf;
+                        let line_sub_rows = count_line_visual_rows(chars, tab_width, wrap_cols);
+
+                        // カレント行のハイライト背景（折り返し時は占有する全視覚サブ行にまたがって描画）
+                        if is_current_line && is_active_window {
+                            let bg_rows = line_sub_rows.min(visible_lines.saturating_sub(vis_row));
+                            if bg_rows > 0 {
+                                let cur_line_rect = Rect::from_min_size(
+                                    Pos2::new(gutter_rect.right(), row_y),
+                                    Vec2::new(
+                                        win_rect.right() - gutter_rect.right(),
+                                        (bg_rows as f32) * line_height,
+                                    ),
+                                );
+                                painter.rect_filled(cur_line_rect, 0.0, pal.bg_cur_line);
+                            }
+                        }
                         let tokens = if is_fold_start {
                             vec![vivivi_modes::SyntaxToken {
                                 text: processed_line.clone(),
@@ -410,12 +644,12 @@ impl ViviviGuiApp {
                                 char_colors.push(c);
                             }
                         }
-                        char_colors.resize(chars.len(), colors::FG_TEXT);
+                        char_colors.resize(chars.len(), pal.fg_text);
 
                         if let Some(ref inv) = inv_info {
                             for (idx, item) in inv.iter().enumerate() {
                                 if idx < char_colors.len() && item.is_invisible {
-                                    char_colors[idx] = colors::FG_DIMMED;
+                                    char_colors[idx] = pal.fg_dimmed;
                                 }
                             }
                         }
@@ -492,65 +726,112 @@ impl ViviviGuiApp {
                             }
                         }
 
-                        // 文字単位のグリッド整列描画 ＆ IME Preedit インライン挿入
-                        let mut visual_col: usize = 0;
-                        let scroll_col = scroll.1;
-                        let mut text_batch: Option<(String, f32, Color32)> = None;
+                        // 文字単位のグリッド整列描画 ＆ IME Preedit インライン挿入（ソフトラップ対応）
+                        let mut abs_col: usize = 0;
+                        let mut sub_row: usize = 0;
+                        let mut local_col: usize = 0;
+                        let scroll_col = if wrap_cols.is_some() { 0 } else { scroll.1 };
+                        let mut text_batch: Option<(String, f32, f32, Color32)> = None;
+                        let mut cursor_vis_pos: Option<(usize, usize)> = None;
+                        let flush_text_batch = |batch: &mut Option<(String, f32, f32, Color32)>| {
+                            if let Some((b_text, b_x, b_y, b_fg)) = batch.take() {
+                                painter.text(
+                                    Pos2::new(b_x, b_y),
+                                    Align2::LEFT_TOP,
+                                    b_text,
+                                    font_id.clone(),
+                                    b_fg,
+                                );
+                            }
+                        };
 
                         for idx in 0..=chars.len() {
                             // アクティブカーソル位置に到達した場合、IME Preedit（未確定文字列）をインライン描画
                             if is_active_window
                                 && is_current_line
                                 && idx == cur.col.min(chars.len())
-                                && !self.ime_preedit.is_empty()
                             {
-                                if let Some((b_text, b_x, b_fg)) = text_batch.take() {
-                                    painter.text(
-                                        Pos2::new(b_x, row_y),
-                                        Align2::LEFT_TOP,
-                                        b_text,
-                                        font_id.clone(),
-                                        b_fg,
-                                    );
-                                }
-                                let preedit_start_col = visual_col;
-                                for pch in self.ime_preedit.chars() {
-                                    let pw = UnicodeWidthChar::width(pch).unwrap_or(1).max(1);
-                                    if visual_col >= scroll_col {
-                                        let px = text_start_x
-                                            + ((visual_col - scroll_col) as f32) * char_width;
-                                        let cell_rect = Rect::from_min_size(
-                                            Pos2::new(px, row_y),
-                                            Vec2::new((pw as f32) * char_width, line_height),
-                                        );
-                                        painter.rect_filled(
-                                            cell_rect,
-                                            0.0,
-                                            Color32::from_rgb(45, 58, 92),
-                                        );
-                                        painter.text(
-                                            Pos2::new(px, row_y),
-                                            Align2::LEFT_TOP,
-                                            pch.to_string(),
-                                            font_id.clone(),
-                                            colors::ACCENT_CYAN,
+                                if !self.ime_preedit.is_empty() {
+                                    flush_text_batch(&mut text_batch);
+                                    let mut ul_sub_row = sub_row;
+                                    let mut ul_start_col = local_col;
+                                    for pch in self.ime_preedit.chars() {
+                                        let pw = UnicodeWidthChar::width(pch).unwrap_or(1).max(1);
+                                        if advance_wrap_cursor(
+                                            &mut sub_row,
+                                            &mut local_col,
+                                            pw,
+                                            wrap_cols,
+                                        ) {
+                                            // 折り返し前の行に下線を描画して次行へリセット
+                                            let prev_max_col = wrap_cols.unwrap_or(usize::MAX);
+                                            if vis_row + ul_sub_row < visible_lines
+                                                && prev_max_col > scroll_col
+                                            {
+                                                let ul_y = text_start_y
+                                                    + ((vis_row + ul_sub_row) as f32) * line_height
+                                                    + line_height
+                                                    - 2.0;
+                                                let x1 = text_start_x
+                                                    + ((ul_start_col.max(scroll_col) - scroll_col)
+                                                        as f32)
+                                                        * char_width;
+                                                let x2 = text_start_x
+                                                    + ((prev_max_col - scroll_col) as f32)
+                                                        * char_width;
+                                                if x2 > x1 {
+                                                    painter.line_segment(
+                                                        [Pos2::new(x1, ul_y), Pos2::new(x2, ul_y)],
+                                                        Stroke::new(2.0_f32, pal.accent_cyan),
+                                                    );
+                                                }
+                                            }
+                                            ul_sub_row = sub_row;
+                                            ul_start_col = 0;
+                                        }
+                                        let sub_y = text_start_y
+                                            + ((vis_row + sub_row) as f32) * line_height;
+                                        if vis_row + sub_row < visible_lines
+                                            && local_col >= scroll_col
+                                        {
+                                            let px = text_start_x
+                                                + ((local_col - scroll_col) as f32) * char_width;
+                                            let cell_rect = Rect::from_min_size(
+                                                Pos2::new(px, sub_y),
+                                                Vec2::new((pw as f32) * char_width, line_height),
+                                            );
+                                            painter.rect_filled(cell_rect, 0.0, pal.bg_selection);
+                                            painter.text(
+                                                Pos2::new(px, sub_y),
+                                                Align2::LEFT_TOP,
+                                                pch.to_string(),
+                                                font_id.clone(),
+                                                pal.accent_cyan,
+                                            );
+                                        }
+                                        local_col += pw;
+                                        abs_col += pw;
+                                    }
+                                    // IME 未確定文字列の下線（Preedit Underline）を描画
+                                    if vis_row + ul_sub_row < visible_lines
+                                        && local_col > scroll_col
+                                    {
+                                        let ul_s = ul_start_col.max(scroll_col);
+                                        let ul_x1 = text_start_x
+                                            + ((ul_s - scroll_col) as f32) * char_width;
+                                        let ul_x2 = text_start_x
+                                            + ((local_col - scroll_col) as f32) * char_width;
+                                        let ul_y = text_start_y
+                                            + ((vis_row + ul_sub_row) as f32) * line_height
+                                            + line_height
+                                            - 2.0;
+                                        painter.line_segment(
+                                            [Pos2::new(ul_x1, ul_y), Pos2::new(ul_x2, ul_y)],
+                                            Stroke::new(2.0_f32, pal.accent_cyan),
                                         );
                                     }
-                                    visual_col += pw;
                                 }
-                                // IME 未確定文字列の下線（Preedit Underline）を描画
-                                if visual_col > scroll_col {
-                                    let ul_start_col = preedit_start_col.max(scroll_col);
-                                    let ul_x1 = text_start_x
-                                        + ((ul_start_col - scroll_col) as f32) * char_width;
-                                    let ul_x2 = text_start_x
-                                        + ((visual_col - scroll_col) as f32) * char_width;
-                                    let ul_y = row_y + line_height - 2.0;
-                                    painter.line_segment(
-                                        [Pos2::new(ul_x1, ul_y), Pos2::new(ul_x2, ul_y)],
-                                        Stroke::new(2.0_f32, colors::ACCENT_CYAN),
-                                    );
-                                }
+                                cursor_vis_pos = Some((sub_row, local_col));
                             }
 
                             if idx == chars.len() {
@@ -558,17 +839,18 @@ impl ViviviGuiApp {
                             }
 
                             let ch = chars[idx];
-                            let ch_cols = if ch == '\t' {
-                                tab_width - (visual_col % tab_width)
-                            } else {
-                                UnicodeWidthChar::width(ch).unwrap_or(1).max(1)
-                            };
+                            let ch_cols = char_display_width(ch, abs_col, tab_width);
+                            if advance_wrap_cursor(&mut sub_row, &mut local_col, ch_cols, wrap_cols)
+                            {
+                                flush_text_batch(&mut text_batch);
+                            }
 
-                            if visual_col >= scroll_col {
+                            let sub_y = text_start_y + ((vis_row + sub_row) as f32) * line_height;
+                            if vis_row + sub_row < visible_lines && local_col >= scroll_col {
                                 let char_x =
-                                    text_start_x + ((visual_col - scroll_col) as f32) * char_width;
+                                    text_start_x + ((local_col - scroll_col) as f32) * char_width;
                                 let cell_rect = Rect::from_min_size(
-                                    Pos2::new(char_x, row_y),
+                                    Pos2::new(char_x, sub_y),
                                     Vec2::new((ch_cols as f32) * char_width, line_height),
                                 );
 
@@ -586,65 +868,53 @@ impl ViviviGuiApp {
 
                                 // ビジュアル選択・検索ハイライト・対応括弧・全角スペース背景描画
                                 if *visual_selected.get(idx).unwrap_or(&false) {
-                                    painter.rect_filled(cell_rect, 0.0, colors::BG_SELECTION);
+                                    painter.rect_filled(cell_rect, 0.0, pal.bg_selection);
                                 } else if *search_matched.get(idx).unwrap_or(&false) {
+                                    let c = pal.accent_yellow;
                                     painter.rect_filled(
                                         cell_rect,
                                         2.0,
-                                        Color32::from_rgba_unmultiplied(224, 175, 104, 90),
+                                        Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), 90),
                                     );
                                 } else if is_paren_match {
-                                    painter.rect_filled(
-                                        cell_rect,
-                                        2.0,
-                                        Color32::from_rgb(65, 85, 130),
-                                    );
+                                    painter.rect_filled(cell_rect, 2.0, pal.bg_active);
                                 } else if is_zenkaku_space {
+                                    let c = pal.accent_red;
                                     painter.rect_filled(
                                         cell_rect.shrink(1.0),
                                         2.0,
-                                        Color32::from_rgba_unmultiplied(247, 118, 142, 60),
+                                        Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), 60),
                                     );
                                 }
 
                                 if ch != '\t' {
-                                    let fg =
-                                        char_colors.get(idx).copied().unwrap_or(colors::FG_TEXT);
-                                    if ch_cols == 1 {
+                                    let fg = char_colors.get(idx).copied().unwrap_or(pal.fg_text);
+                                    if vivivi_modes::keisen::char_to_keisen_state(ch).is_some()
+                                        || matches!(ch, '╭' | '╮' | '╯' | '╰')
+                                    {
+                                        // 罫線文字はフォールバックフォントの幅ズレ・隙間を防ぐためベクター線分で直接描画
+                                        flush_text_batch(&mut text_batch);
+                                        draw_keisen_glyph(&painter, cell_rect, ch, fg);
+                                    } else if ch_cols == 1 {
                                         // 半角文字（ASCII/等幅1桁）は同色連続バッチにまとめてアロケーションと描画回数を削減
-                                        if let Some((ref mut text, _, cur_fg)) = text_batch {
+                                        if let Some((ref mut text, _, _, cur_fg)) = text_batch {
                                             if cur_fg == fg {
                                                 text.push(ch);
                                             } else {
-                                                if let Some((b_text, b_x, b_fg)) = text_batch.take()
-                                                {
-                                                    painter.text(
-                                                        Pos2::new(b_x, row_y),
-                                                        Align2::LEFT_TOP,
-                                                        b_text,
-                                                        font_id.clone(),
-                                                        b_fg,
-                                                    );
-                                                }
-                                                text_batch = Some((String::from(ch), char_x, fg));
+                                                flush_text_batch(&mut text_batch);
+                                                text_batch =
+                                                    Some((String::from(ch), char_x, sub_y, fg));
                                             }
                                         } else {
-                                            text_batch = Some((String::from(ch), char_x, fg));
+                                            text_batch =
+                                                Some((String::from(ch), char_x, sub_y, fg));
                                         }
                                     } else {
                                         // 全角文字はバッチをフラッシュして個別描画
-                                        if let Some((b_text, b_x, b_fg)) = text_batch.take() {
-                                            painter.text(
-                                                Pos2::new(b_x, row_y),
-                                                Align2::LEFT_TOP,
-                                                b_text,
-                                                font_id.clone(),
-                                                b_fg,
-                                            );
-                                        }
+                                        flush_text_batch(&mut text_batch);
                                         if ch != ' ' {
                                             painter.text(
-                                                Pos2::new(char_x, row_y),
+                                                Pos2::new(char_x, sub_y),
                                                 Align2::LEFT_TOP,
                                                 ch.encode_utf8(&mut [0u8; 4]),
                                                 font_id.clone(),
@@ -652,30 +922,17 @@ impl ViviviGuiApp {
                                             );
                                         }
                                     }
-                                } else if let Some((b_text, b_x, b_fg)) = text_batch.take() {
-                                    painter.text(
-                                        Pos2::new(b_x, row_y),
-                                        Align2::LEFT_TOP,
-                                        b_text,
-                                        font_id.clone(),
-                                        b_fg,
-                                    );
+                                } else {
+                                    flush_text_batch(&mut text_batch);
                                 }
                             }
 
-                            visual_col += ch_cols;
+                            local_col += ch_cols;
+                            abs_col += ch_cols;
                         }
 
                         // 行末に残った半角テキストバッチを一括描画
-                        if let Some((b_text, b_x, b_fg)) = text_batch {
-                            painter.text(
-                                Pos2::new(b_x, row_y),
-                                Align2::LEFT_TOP,
-                                b_text,
-                                font_id.clone(),
-                                b_fg,
-                            );
-                        }
+                        flush_text_batch(&mut text_batch);
 
                         // 空行での VisualLine 選択表示
                         if chars.is_empty() && *visual_selected.first().unwrap_or(&false) {
@@ -683,26 +940,24 @@ impl ViviviGuiApp {
                                 Pos2::new(text_start_x, row_y),
                                 Vec2::new(char_width, line_height),
                             );
-                            painter.rect_filled(cell_rect, 0.0, colors::BG_SELECTION);
+                            painter.rect_filled(cell_rect, 0.0, pal.bg_selection);
                         }
 
                         // 4.3 現在のモードに応じたカーソル（ブロック／Iビーム／下線）の描画
                         if is_active_window && is_current_line {
-                            let base_vis_col = self.core.visual_col_at(cur.line, cur.col);
-                            let preedit_cols = if !self.ime_preedit.is_empty() {
-                                UnicodeWidthStr::width(self.ime_preedit.as_str())
-                            } else {
-                                0
-                            };
-                            let effective_vis_col = base_vis_col + preedit_cols;
+                            let (c_sub_row, c_local_col) = cursor_vis_pos.unwrap_or((0, 0));
+                            let cursor_row_y =
+                                text_start_y + ((vis_row + c_sub_row) as f32) * line_height;
 
-                            if effective_vis_col >= scroll_col {
-                                let cursor_x = text_start_x
-                                    + ((effective_vis_col - scroll_col) as f32) * char_width;
+                            if vis_row + c_sub_row < visible_lines && c_local_col >= scroll_col {
+                                let cursor_x =
+                                    text_start_x + ((c_local_col - scroll_col) as f32) * char_width;
                                 let char_under_cursor = chars.get(cur.col).copied();
                                 let cursor_cell_cols = char_under_cursor
                                     .and_then(|c| {
                                         if c == '\t' {
+                                            let base_vis_col =
+                                                self.core.visual_col_at(cur.line, cur.col);
                                             Some(tab_width - (base_vis_col % tab_width))
                                         } else {
                                             UnicodeWidthChar::width(c)
@@ -717,33 +972,33 @@ impl ViviviGuiApp {
                                     ViMode::Insert => {
                                         // Iビーム（縦バー）カーソル
                                         let ibeam_rect = Rect::from_min_size(
-                                            Pos2::new(cursor_x, row_y),
+                                            Pos2::new(cursor_x, cursor_row_y),
                                             Vec2::new(2.0, line_height),
                                         );
-                                        painter.rect_filled(ibeam_rect, 1.0, colors::ACCENT_GREEN);
+                                        painter.rect_filled(ibeam_rect, 1.0, pal.accent_green);
                                         active_cursor_screen_rect = Some(ibeam_rect);
                                     }
                                     ViMode::Replace => {
                                         // アンダースコア（下線）カーソル
                                         let under_rect = Rect::from_min_size(
-                                            Pos2::new(cursor_x, row_y + line_height - 3.0),
+                                            Pos2::new(cursor_x, cursor_row_y + line_height - 3.0),
                                             Vec2::new(block_w, 3.0),
                                         );
-                                        painter.rect_filled(under_rect, 1.0, colors::ACCENT_RED);
+                                        painter.rect_filled(under_rect, 1.0, pal.accent_red);
                                         active_cursor_screen_rect = Some(Rect::from_min_size(
-                                            Pos2::new(cursor_x, row_y),
+                                            Pos2::new(cursor_x, cursor_row_y),
                                             Vec2::new(block_w, line_height),
                                         ));
                                     }
                                     _ => {
                                         // ブロックカーソル（Normal / Visual / CommandLine）
                                         let block_color = if mode.is_visual() {
-                                            colors::ACCENT_PURPLE
+                                            pal.accent_purple
                                         } else {
-                                            colors::ACCENT_BLUE
+                                            pal.accent_blue
                                         };
                                         let block_rect = Rect::from_min_size(
-                                            Pos2::new(cursor_x, row_y),
+                                            Pos2::new(cursor_x, cursor_row_y),
                                             Vec2::new(block_w, line_height),
                                         );
                                         painter.rect_filled(block_rect, 2.0, block_color);
@@ -752,13 +1007,19 @@ impl ViviviGuiApp {
                                         if let Some(ch) = char_under_cursor
                                             && ch != '\t'
                                             && ch != ' '
+                                            && !draw_keisen_glyph(
+                                                &painter,
+                                                block_rect,
+                                                ch,
+                                                pal.bg_editor,
+                                            )
                                         {
                                             painter.text(
-                                                Pos2::new(cursor_x, row_y),
+                                                Pos2::new(cursor_x, cursor_row_y),
                                                 Align2::LEFT_TOP,
                                                 ch.encode_utf8(&mut [0u8; 4]),
                                                 font_id.clone(),
-                                                colors::BG_EDITOR,
+                                                pal.bg_editor,
                                             );
                                         }
                                         active_cursor_screen_rect = Some(block_rect);
@@ -767,15 +1028,15 @@ impl ViviviGuiApp {
                             }
                         }
 
-                        vis_row += 1;
+                        vis_row += (sub_row + 1).max(line_sub_rows);
                         line_idx += 1;
                     }
 
                     // ウィンドウ枠線（複数分割時またはアクティブ強調）
                     let stroke_color = if is_active_window && window_rects.len() > 1 {
-                        colors::ACCENT_BLUE
+                        pal.accent_blue
                     } else {
-                        colors::BG_STATUSLINE
+                        pal.bg_statusline
                     };
                     painter.rect_stroke(
                         win_rect,
@@ -866,10 +1127,10 @@ impl ViviviGuiApp {
                     }
 
                     let mm_painter = ui.painter().with_clip_rect(minimap_rect);
-                    mm_painter.rect_filled(minimap_rect, 0.0, colors::BG_PANEL);
+                    mm_painter.rect_filled(minimap_rect, 0.0, pal.bg_panel);
                     mm_painter.line_segment(
                         [minimap_rect.left_top(), minimap_rect.left_bottom()],
-                        Stroke::new(1.0_f32, colors::BG_STATUSLINE),
+                        Stroke::new(1.0_f32, pal.bg_statusline),
                     );
 
                     // ミニライン構造描画（0行目から最終行まで均等にサンプリングして端数の切り捨てを防止）
@@ -925,7 +1186,7 @@ impl ViviviGuiApp {
                             if x2 > x1 {
                                 mm_painter.line_segment(
                                     [Pos2::new(x1, y), Pos2::new(x2, y)],
-                                    Stroke::new(1.5_f32, colors::FG_LINENUMBER),
+                                    Stroke::new(1.5_f32, pal.fg_linenumber),
                                 );
                             }
                         }
@@ -945,15 +1206,19 @@ impl ViviviGuiApp {
                         Vec2::new(minimap_width - 4.0, vp_height),
                     );
 
+                    let vp_c = pal.accent_blue;
                     mm_painter.rect_filled(
                         vp_rect,
                         CornerRadius::same(2),
-                        Color32::from_rgba_unmultiplied(122, 162, 247, 40),
+                        Color32::from_rgba_unmultiplied(vp_c.r(), vp_c.g(), vp_c.b(), 40),
                     );
                     mm_painter.rect_stroke(
                         vp_rect,
                         CornerRadius::same(2),
-                        Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(122, 162, 247, 100)),
+                        Stroke::new(
+                            1.0_f32,
+                            Color32::from_rgba_unmultiplied(vp_c.r(), vp_c.g(), vp_c.b(), 100),
+                        ),
                         egui::StrokeKind::Inside,
                     );
                 }
@@ -961,15 +1226,16 @@ impl ViviviGuiApp {
                 // 4.6 ファイルホバー中のオーバーレイガイダンス（ドラッグ＆ドロップ受け入れ視覚フィードバック）
                 if !hovered_files.is_empty() {
                     let overlay_painter = ui.painter_at(available_rect);
+                    let ov_c = pal.bg_editor;
                     overlay_painter.rect_filled(
                         available_rect,
                         CornerRadius::ZERO,
-                        Color32::from_rgba_unmultiplied(26, 27, 38, 200),
+                        Color32::from_rgba_unmultiplied(ov_c.r(), ov_c.g(), ov_c.b(), 200),
                     );
                     overlay_painter.rect_stroke(
                         available_rect.shrink(8.0),
                         CornerRadius::same(8),
-                        Stroke::new(2.0_f32, colors::ACCENT_BLUE),
+                        Stroke::new(2.0_f32, pal.accent_blue),
                         egui::StrokeKind::Inside,
                     );
                     overlay_painter.text(
@@ -977,7 +1243,7 @@ impl ViviviGuiApp {
                         Align2::CENTER_CENTER,
                         "ここにファイルをドロップして開く",
                         FontId::proportional(20.0),
-                        colors::FG_TEXT,
+                        pal.fg_text,
                     );
                 }
             });
@@ -985,6 +1251,7 @@ impl ViviviGuiApp {
 
     /// GUI バイナリモード (Hex Editor) のレンダリング
     pub fn render_hex_editor(&mut self, ui: &mut egui::Ui, area: Rect) {
+        let pal = self.palette();
         let hex_doc = match &self.core.hex_doc {
             Some(doc) => doc,
             None => return,
@@ -1050,7 +1317,7 @@ impl ViviviGuiApp {
                         Align2::LEFT_TOP,
                         addr_text,
                         font_id.clone(),
-                        Color32::from_rgb(122, 162, 247), // 青
+                        pal.accent_blue, // 青
                     );
 
                     // 2. 16進ダンプ列
@@ -1060,7 +1327,7 @@ impl ViviviGuiApp {
                         Align2::LEFT_TOP,
                         &row_data.hex_dump,
                         font_id.clone(),
-                        Color32::from_rgb(192, 202, 245), // 白
+                        pal.fg_text, // 本文色
                     );
 
                     // 3. ASCII列
@@ -1070,7 +1337,7 @@ impl ViviviGuiApp {
                         Align2::LEFT_TOP,
                         &row_data.ascii_dump,
                         font_id.clone(),
-                        Color32::from_rgb(158, 206, 106), // 緑
+                        pal.accent_green, // 緑
                     );
 
                     // カーソルハイライト
@@ -1093,5 +1360,29 @@ impl ViviviGuiApp {
                     }
                 }
             });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_soft_wrap_row_counting_and_click_resolution() {
+        // wrap なし（None）では常に 1 視覚行
+        let chars: Vec<char> = "1234567890".chars().collect();
+        assert_eq!(count_line_visual_rows(&chars, 4, None), 1);
+
+        // wrap 幅 5 桁では 10 文字は 2 行になる
+        assert_eq!(count_line_visual_rows(&chars, 4, Some(5)), 2);
+        assert_eq!(resolve_wrapped_char_col("1234567890", 4, 5, 0, 2), 2);
+        assert_eq!(resolve_wrapped_char_col("1234567890", 4, 5, 1, 0), 5);
+        assert_eq!(resolve_wrapped_char_col("1234567890", 4, 5, 1, 3), 8);
+
+        // 全角文字（幅 2）が残り 1 桁に収まらない場合は手前で次行へ折り返す
+        let jp_chars: Vec<char> = "aあb".chars().collect();
+        assert_eq!(count_line_visual_rows(&jp_chars, 4, Some(2)), 3);
+        assert_eq!(resolve_wrapped_char_col("aあb", 4, 2, 1, 0), 1);
+        assert_eq!(resolve_wrapped_char_col("aあb", 4, 2, 2, 0), 2);
     }
 }

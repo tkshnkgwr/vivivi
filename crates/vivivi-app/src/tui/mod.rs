@@ -39,17 +39,15 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 /// // run(app).unwrap(); // ターミナル対話セッションを開始
 /// ```
 pub fn run(mut app: App) -> anyhow::Result<()> {
-    // 1. パニック時でも確実にターミナルを復元するフックを設定
-    let original_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |panic_info| {
+    // 1. パニック時でもターミナルを復元した上でパニックログを自動保存する共通フックを設定
+    crate::panic_log::install_panic_hook_with_cleanup("TUI", || {
         let _ = disable_raw_mode();
         let _ = execute!(
             stdout(),
             LeaveAlternateScreen,
             crossterm::cursor::SetCursorStyle::DefaultUserShape
         );
-        original_hook(panic_info);
-    }));
+    });
 
     // 2. ターミナルの初期化
     enable_raw_mode()?;
@@ -78,6 +76,11 @@ pub fn run(mut app: App) -> anyhow::Result<()> {
 
         // LSP イベントの定期ポーリング
         app.poll_lsp();
+        // バッファ変更時の AST 構文木・アウトライン自動同期
+        app.sync_treesitter_if_dirty();
+        if app.show_outline {
+            app.sync_outline_if_dirty();
+        }
 
         // 画面描画
         terminal.draw(|frame| {
@@ -101,6 +104,7 @@ pub fn run(mut app: App) -> anyhow::Result<()> {
         crossterm::cursor::SetCursorStyle::DefaultUserShape
     )?;
     terminal.show_cursor()?;
+    crate::panic_log::clear_panic_cleanup();
 
     Ok(())
 }

@@ -8,6 +8,18 @@ pub(crate) mod tools;
 use super::*;
 use substitute::execute_substitute_command;
 
+/// `:s` / `:%s` 置換コマンド形式かを判定する（`:set` や `:sort` 等と衝突させない）。
+fn is_substitute_command(trimmed: &str) -> bool {
+    let rest = if let Some(r) = trimmed.strip_prefix("%s") {
+        r
+    } else if let Some(r) = trimmed.strip_prefix('s') {
+        r
+    } else {
+        return false;
+    };
+    matches!(rest.chars().next(), Some(c) if c.is_ascii_punctuation()) || trimmed == "%s"
+}
+
 /// exコマンドの実行処理 (:w, :q, :wq, :s, etc.)
 pub fn execute_ex_command(app: &mut App, cmd: &str) {
     let trimmed = cmd.trim();
@@ -135,10 +147,7 @@ pub fn execute_ex_command(app: &mut App, cmd: &str) {
         }
 
         // --- 文字列置換 & 式置換 (:%s/before/after/[flags], :s/before/after/[flags]) ---
-        _ if trimmed.starts_with("%s/")
-            || trimmed.starts_with("s/")
-            || trimmed.starts_with("%s") =>
-        {
+        _ if is_substitute_command(trimmed) => {
             execute_substitute_command(app, trimmed);
         }
 

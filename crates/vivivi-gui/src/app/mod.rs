@@ -196,6 +196,17 @@ impl ViviviGuiApp {
         }
     }
 
+    /// テーマ名比較用に英数字のみの小文字キーへ正規化します。
+    pub(crate) fn theme_name_matches(a: &str, b: &str) -> bool {
+        let norm = |s: &str| s.to_lowercase().replace(['-', '_', ' '], "");
+        norm(a) == norm(b)
+    }
+
+    /// 現在のアクティブテーマから導出した描画パレットを取得します。
+    pub fn palette(&self) -> crate::theme::GuiPalette {
+        crate::theme::GuiPalette::from_theme(&self.active_theme)
+    }
+
     /// 現在のモードに応じたステータスバッジの背景色と文字色を取得します。
     pub(crate) fn mode_badge_color(&self, mode: ViMode) -> (Color32, Color32) {
         let bg_theme = match mode {
@@ -230,25 +241,43 @@ impl ViviviGuiApp {
         };
         crate::theme::to_color32(tc)
     }
+
+    /// Ex コマンド等（`:tree`, `:explore`, `:outline`, `F8`）によるサイドバー開閉要求を GUI 状態へ同期します。
+    pub fn sync_sidebar_requests(&mut self) {
+        if self.core.toggle_tree_request {
+            if !self.sidebar_open || self.sidebar_tab != SidebarTab::Files {
+                self.sidebar_open = true;
+                self.sidebar_tab = SidebarTab::Files;
+            } else {
+                self.sidebar_open = false;
+            }
+            self.core.toggle_tree_request = false;
+        }
+
+        if self.core.toggle_outline_request {
+            if !self.sidebar_open || self.sidebar_tab != SidebarTab::Outline {
+                self.sidebar_open = true;
+                self.sidebar_tab = SidebarTab::Outline;
+                self.core.show_outline = true;
+                self.core.sync_outline_if_dirty();
+            } else {
+                self.sidebar_open = false;
+                self.core.show_outline = false;
+            }
+            // GUI サイドバーではエディタ側のキー操作を阻害しないようフォーカスフラグを解除
+            self.core.outline_focus = false;
+            self.core.toggle_outline_request = false;
+        }
+    }
 }
 
 impl eframe::App for ViviviGuiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // テーマや外観設定（Exコマンドや外部設定ファイル読込等）の動的同期
-        let cfg_theme_norm = self
-            .core
-            .config
-            .appearance
-            .theme
-            .to_lowercase()
-            .replace(['-', '_', ' '], "");
-        let cur_theme_norm = self
-            .active_theme
-            .meta
-            .name
-            .to_lowercase()
-            .replace(['-', '_', ' '], "");
-        if cfg_theme_norm != cur_theme_norm {
+        if !Self::theme_name_matches(
+            &self.core.config.appearance.theme,
+            &self.active_theme.meta.name,
+        ) {
             self.active_theme =
                 vivivi_app::theme::Theme::load_by_name(&self.core.config.appearance.theme);
             crate::theme::apply_theme(ctx, &self.active_theme);
@@ -269,11 +298,8 @@ impl eframe::App for ViviviGuiApp {
         // LSP バックグラウンドメッセージのポーリング
         self.core.poll_lsp();
 
-        // Exコマンド (:tree, :explore) によるサイドバートグル
-        if self.core.toggle_tree_request {
-            self.sidebar_open = !self.sidebar_open;
-            self.core.toggle_tree_request = false;
-        }
+        // Exコマンド (:tree, :explore, :outline, F8) によるサイドバー連動
+        self.sync_sidebar_requests();
 
         // Exコマンド (:visualize, :graph) によるプロジェクト可視化グラフの同期
         if self.core.show_visualize_graph && self.visualize_graph.is_none() {

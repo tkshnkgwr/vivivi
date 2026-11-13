@@ -20,6 +20,7 @@ impl App {
     /// ```
     pub fn toggle_outline(&mut self) {
         self.show_outline = !self.show_outline;
+        self.toggle_outline_request = true;
         if self.show_outline {
             self.refresh_outline();
             self.outline_focus = true;
@@ -52,8 +53,22 @@ impl App {
             self.syntax_lang = detected;
         }
         self.outline_items = parse_outline(&lines, self.syntax_lang);
+        self.outline_revision = Some(self.buffer.revision());
+        self.outline_lang = self.syntax_lang;
         if self.selected_outline_idx >= self.outline_items.len() {
             self.selected_outline_idx = 0;
+        }
+    }
+
+    /// バッファ内容または言語設定に変化があった場合のみアウトラインを再解析します。
+    ///
+    /// # 副作用
+    /// 未解析状態・バッファ変更・言語切替のいずれかを検知した場合に [`Self::refresh_outline`] を呼び出します。
+    pub fn sync_outline_if_dirty(&mut self) {
+        if self.outline_revision != Some(self.buffer.revision())
+            || self.outline_lang != self.syntax_lang
+        {
+            self.refresh_outline();
         }
     }
 

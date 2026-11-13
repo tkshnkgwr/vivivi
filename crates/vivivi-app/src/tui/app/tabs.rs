@@ -42,6 +42,7 @@ impl App {
                 self.vi.current_file_path = String::new();
             }
             self.refresh_outline();
+            self.reinit_treesitter();
         }
     }
 

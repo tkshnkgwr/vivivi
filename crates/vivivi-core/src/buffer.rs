@@ -30,6 +30,8 @@ pub struct TextBuffer {
     undo_mgr: UndoMgr,
     /// 各行の先頭文字オフセットキャッシュ（行 0 は常に 0）
     line_starts: Vec<usize>,
+    /// バッファ内容の変更回数リビジョン（AST 再同期等のダーティ検知用）
+    revision: u64,
 }
 
 impl TextBuffer {
@@ -60,6 +62,7 @@ impl TextBuffer {
             data: GapBuffer::new(),
             undo_mgr: UndoMgr::new(),
             line_starts: vec![0],
+            revision: 0,
         }
     }
 
@@ -88,9 +91,15 @@ impl TextBuffer {
             data,
             undo_mgr,
             line_starts: Vec::new(),
+            revision: 0,
         };
         buf.rebuild_line_starts();
         buf
+    }
+
+    /// バッファ内容の変更リビジョン番号を返します（編集・Undo/Redo ごとに増加）。
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 
     /// バッファ内に格納されている文字数（Unicode スカラー値数）を返します。
@@ -321,6 +330,9 @@ impl TextBuffer {
                 *start += delta;
             }
         }
+        if delta > 0 {
+            self.revision = self.revision.wrapping_add(1);
+        }
     }
 
     /// Undo 履歴を記録せずに直接テキストを削除し、削除された文字列を返します。
@@ -351,6 +363,9 @@ impl TextBuffer {
             for start in self.line_starts.iter_mut().skip(line_idx + 1) {
                 *start = start.saturating_sub(len);
             }
+        }
+        if !deleted.is_empty() {
+            self.revision = self.revision.wrapping_add(1);
         }
         deleted
     }

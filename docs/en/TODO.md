@@ -308,6 +308,28 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
     - [x] **Eliminate `Box::leak` Memory Leak**: Replace `zenkaku_space: Box::leak(...)` in `App::new` with `Cow<'static, str>` or `Arc<str>` to prevent heap leakage during long sessions or bulk instantiation.
     - [x] **Isolate Real User Directory I/O in Tests**: Refactor `App::new` to avoid writing to `%USERPROFILE%\.vivivi\recent_files.json` and reading real `config.toml` during automated tests by introducing a sandbox/mock builder.
     - [x] **Ensure TUI Settings Modal Rollback on Cancel**: Unify behavior so dismissing the TUI settings modal with `Esc` or `q` completely restores pre-modal backup settings, matching the GUI dialog.
+- [ ] **[Hands-on Feedback Bugs & Feature Requests] (2026-11-13)**:
+  - [x] **Window & UI Colors Not Updating on Theme Change**: Fix issue where changing the theme only updates text foreground colors while leaving window background and overall UI colors unchanged.
+  - [x] **Settings Screen Display Failure (Dimmed Overlay Only)**: Fix issue where opening the settings dialog only darkens the entire screen and blocks interaction (overlay display / z-order issue hiding the underlying settings dialog).
+  - [x] **Keisen Mode Drawing Failure**: Fix issue where drawing box lines in Keisen (box-drawing) mode fails to input or render lines properly.
+  - [x] **Substitute Command (`:s`) Match Count Display Bug**: Fix counting logic where executing commands like `:s/abc/xyz/g` reports "0 replacements made" even though text was actually replaced.
+  - [x] **Missing Feature: Implement `:sort` Command**: Implement text line sorting functionality via the `sort` command.
+- [x] **[Stability & Operations] Automatic Panic Log Persistence (Shared GUI/TUI Hook)**:
+  - Install a shared panic hook (`std::panic::set_hook`) across GUI and TUI entrypoints to automatically persist panic messages, source locations, backtraces, and app version metadata under `%USERPROFILE%\.vivivi\logs\` for streamlined crash diagnostics.
+- [x] **[GUI Settings Dialog] Fixed Window Width & Long Error Wrapping**:
+  - Fix settings dialog width expanding on long Update check error strings or fluctuating across left-pane category switches by enforcing a fixed dialog width and wrapped error labels.
+- [x] **[Syntax Highlighting] Fix Tree-sitter AST Color Offset Drift & Missing Comments**:
+  - Fix token gaps causing syntax highlight colors to shift left on lines with whitespace/punctuation, fix non-leaf comment/literal nodes (`line_comment`, `block_comment`, `string_literal`, `char_literal`) losing colors, and keep AST synchronized on edits/tab switches with UTF-8 boundary safety.
+- [x] **[GUI Help Viewer] Double Help Window Width & Prevent Unwanted Wrapping**:
+  - Widen the help viewer default width by 2x (1240px baseline, clamped to screen bounds) and prevent premature line wrapping with horizontal scroll support.
+- [x] **[Outline Auto-Sync] Fix Missing Outline Refresh on Startup, File Open, and GUI Tab Switch**:
+  - Automatically refresh/sync outline symbols via `refresh_outline` / `sync_outline_if_dirty` during `App::new`, `open_file_with_encoding`, GUI `🔖 Outline` tab switch/render, and buffer edits.
+- [x] **[GUI Sync] Connect `:outline` / `F8` Key with GUI Outline Sidebar**:
+  - Sync `toggle_outline()` requests (`:outline` / `F8`) with `ViviviGuiApp` so the GUI sidebar opens/toggles directly onto `SidebarTab::Outline`.
+- [x] **[GUI Modal] Implement External Command Execution Dialog (`:cmd` / `:cmdexec`) in GUI**:
+  - Add an `egui::Window` modal for `show_cmd_exec_dialog` supporting execution mode switching (run only / `:r!` / range replace), command input, and output preview.
+- [x] **[GUI Rendering] Support Word Wrap (`:set wrap` / Settings Option) on GUI Canvas**:
+  - Render soft-wrapped visual lines in the GUI monospace canvas when `self.core.wrap` is enabled, keeping cursor, click hit-testing, selection, gutter, and IME coordinates aligned.
 
 ---
 

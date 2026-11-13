@@ -359,8 +359,8 @@ impl ForceGraph {
         let center = view_rect.center();
         let painter = ui.painter_at(view_rect);
 
-        // 背景描画（Tokyo Night ダーク背景）
-        painter.rect_filled(view_rect, 0.0, Color32::from_rgb(18, 20, 30));
+        // 背景描画（アクティブテーマの背景色を使用）
+        painter.rect_filled(view_rect, 0.0, ui.visuals().window_fill);
 
         // パン & ズームの入力受付
         let response = ui.allocate_rect(view_rect, Sense::click_and_drag());
@@ -480,9 +480,9 @@ impl ForceGraph {
             // ノード名テキスト描画
             let font_size = (11.0 * self.zoom).clamp(8.0, 16.0);
             let text_color = if is_hovered {
-                Color32::WHITE
+                ui.visuals().strong_text_color()
             } else {
-                colors::FG_TEXT
+                ui.visuals().text_color()
             };
 
             let text_pos = screen_pos + Vec2::new(0.0, screen_radius + 3.0 * self.zoom);
@@ -500,17 +500,14 @@ impl ForceGraph {
             view_rect.min + Vec2::new(12.0, 12.0),
             Vec2::new(view_rect.width() - 24.0, 28.0),
         );
-        painter.rect_filled(
-            guide_rect,
-            4.0,
-            Color32::from_rgba_unmultiplied(26, 27, 38, 220),
-        );
+        let badge_bg = ui.visuals().panel_fill.gamma_multiply(0.9);
+        painter.rect_filled(guide_rect, 4.0, badge_bg);
         painter.text(
             guide_rect.left_center() + Vec2::new(10.0, 0.0),
             egui::Align2::LEFT_CENTER,
             "💡 左ドラッグ: ノード移動 | クリック: ファイルを開く | 右ドラッグ: パン | ホイール: ズーム | Esc: エディタへ戻る",
             FontId::proportional(12.0),
-            colors::FG_DIMMED,
+            ui.visuals().weak_text_color(),
         );
 
         file_to_open

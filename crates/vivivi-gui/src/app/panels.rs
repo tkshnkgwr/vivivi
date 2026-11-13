@@ -6,20 +6,20 @@ use std::path::PathBuf;
 use vivivi_vi::ViMode;
 
 use super::{SidebarTab, ViviviGuiApp};
-use crate::theme::colors;
 
 /// Zed 風のメニューポップアップ共通スタイル（最小幅・余白・セパレータ境界線）を適用します。
 fn apply_menu_popup_style(ui: &mut egui::Ui, min_width: f32) {
     ui.set_min_width(min_width);
     ui.spacing_mut().item_spacing = Vec2::new(0.0, 2.0);
     ui.spacing_mut().button_padding = Vec2::new(8.0, 4.0);
-    ui.visuals_mut().widgets.noninteractive.bg_stroke =
-        egui::Stroke::new(1.0_f32, Color32::from_rgb(45, 51, 74));
+    ui.visuals_mut().popup_shadow = egui::epaint::Shadow::NONE;
+    let border_color = ui.visuals().widgets.noninteractive.bg_stroke.color;
+    ui.visuals_mut().widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0_f32, border_color);
 }
 
 /// Zed 風の左寄せラベル＋右寄せショートカット付きメニュー項目を描画します。
 fn menu_item(ui: &mut egui::Ui, label: &str, shortcut: &str) -> bool {
-    let shortcut_color = Color32::from_rgb(125, 134, 172);
+    let shortcut_color = ui.visuals().weak_text_color();
     let mut btn = egui::Button::new(label);
     if !shortcut.is_empty() {
         btn = btn.shortcut_text(egui::RichText::new(shortcut).color(shortcut_color));
@@ -29,7 +29,7 @@ fn menu_item(ui: &mut egui::Ui, label: &str, shortcut: &str) -> bool {
 
 /// Zed 風のチェック状態付き左寄せラベル＋右寄せショートカット付きメニュー項目を描画します。
 fn menu_toggle_item(ui: &mut egui::Ui, checked: &mut bool, label: &str, shortcut: &str) -> bool {
-    let shortcut_color = Color32::from_rgb(125, 134, 172);
+    let shortcut_color = ui.visuals().weak_text_color();
     let prefix = if *checked { "✓ " } else { "  " };
     let mut btn = egui::Button::new(format!("{prefix}{label}")).selected(*checked);
     if !shortcut.is_empty() {
@@ -47,13 +47,14 @@ impl ViviviGuiApp {
     /// 1. メニューバー ＆ マルチタブバーの描画
     pub(crate) fn render_top_panel(&mut self, ctx: &egui::Context) {
         self.core.sync_active_tab_state();
+        let pal = self.palette();
 
         egui::TopBottomPanel::top("top_panel")
-            .frame(Frame::NONE.fill(colors::BG_PANEL))
+            .frame(Frame::NONE.fill(pal.bg_panel))
             .show(ctx, |ui| {
                 egui::menu::bar(ui, |ui| {
                     ui.visuals_mut().widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
-                    ui.visuals_mut().widgets.hovered.bg_fill = colors::BG_HOVER;
+                    ui.visuals_mut().widgets.hovered.bg_fill = pal.bg_hover;
 
                     ui.menu_button("File", |ui| {
                         apply_menu_popup_style(ui, 220.0);
@@ -121,6 +122,13 @@ impl ViviviGuiApp {
                         if menu_toggle_item(ui, &mut self.sidebar_open, "Sidebar", "ctrl-e") {
                             ui.close_menu();
                         }
+                        let mut outline_open =
+                            self.sidebar_open && self.sidebar_tab == SidebarTab::Outline;
+                        if menu_toggle_item(ui, &mut outline_open, "Outline", "f8") {
+                            self.core.toggle_outline();
+                            self.sync_sidebar_requests();
+                            ui.close_menu();
+                        }
                         if menu_toggle_item(
                             ui,
                             &mut self.core.show_visualize_graph,
@@ -162,6 +170,10 @@ impl ViviviGuiApp {
                             self.core.config.appearance.relative_number = self.core.relative_number;
                             ui.close_menu();
                         }
+                        if menu_toggle_item(ui, &mut self.core.wrap, "Word Wrap", ":set wrap") {
+                            self.core.config.appearance.wrap = self.core.wrap;
+                            ui.close_menu();
+                        }
                         if menu_toggle_item(
                             ui,
                             &mut self.core.list_chars_config.enabled,
@@ -187,10 +199,11 @@ impl ViviviGuiApp {
                         ui.menu_button("Color Theme", |ui| {
                             apply_menu_popup_style(ui, 180.0);
                             let available = vivivi_app::theme::Theme::list_available_themes();
-                            let current_name = self.active_theme.meta.name.to_lowercase();
                             for theme_name in available {
-                                let is_active =
-                                    current_name.contains(&theme_name.replace('-', " "));
+                                let is_active = Self::theme_name_matches(
+                                    &self.active_theme.meta.name,
+                                    &theme_name,
+                                );
                                 if ui.selectable_label(is_active, &theme_name).clicked() {
                                     self.active_theme =
                                         vivivi_app::theme::Theme::load_by_name(&theme_name);
@@ -264,6 +277,10 @@ impl ViviviGuiApp {
                             ui.close_menu();
                         }
                         ui.separator();
+                        if menu_item(ui, "External Command...", ":cmd") {
+                            self.core.open_cmd_exec_dialog();
+                            ui.close_menu();
+                        }
                         if menu_item(ui, "Trim Trailing Whitespace", ":trim") {
                             self.core.execute_ex("trim");
                             ui.close_menu();
@@ -295,7 +312,7 @@ impl ViviviGuiApp {
                         ui.separator();
                         ui.label(
                             egui::RichText::new("vivivi - Vi-like Editor in Rust")
-                                .color(Color32::from_rgb(125, 134, 172))
+                                .color(pal.fg_dimmed)
                                 .size(11.5),
                         );
                     });
@@ -354,15 +371,15 @@ impl ViviviGuiApp {
                         let tab_label = format!("{}{}", file_name, dirty_badge);
 
                         let bg_color = if is_active {
-                            colors::BG_EDITOR
+                            pal.bg_editor
                         } else {
-                            colors::BG_PANEL
+                            pal.bg_panel
                         };
 
                         let text_color = if is_active {
-                            colors::FG_TEXT
+                            pal.fg_text
                         } else {
-                            colors::FG_DIMMED
+                            pal.fg_dimmed
                         };
 
                         Frame::NONE
@@ -397,7 +414,7 @@ impl ViviviGuiApp {
                                             .add(
                                                 egui::Label::new(
                                                     egui::RichText::new("×")
-                                                        .color(colors::FG_DIMMED)
+                                                        .color(pal.fg_dimmed)
                                                         .size(12.0),
                                                 )
                                                 .selectable(false)
@@ -413,7 +430,7 @@ impl ViviviGuiApp {
                     }
 
                     let add_tab_btn = ui.add(
-                        egui::Button::new(egui::RichText::new(" + ").color(colors::FG_DIMMED))
+                        egui::Button::new(egui::RichText::new(" + ").color(pal.fg_dimmed))
                             .frame(false),
                     );
                     if add_tab_btn.clicked() {
@@ -446,17 +463,17 @@ impl ViviviGuiApp {
     }
 
     /// 2. ファイルツリー / アウトライン用折りたたみサイドバーの描画
-    pub(crate) fn render_sidebar(&mut self, ctx: &egui::Context) {
+    ///
+    /// # 引数
+    /// - `ctx`: 描画先の `egui::Context`
+    pub fn render_sidebar(&mut self, ctx: &egui::Context) {
+        let pal = self.palette();
         if !self.sidebar_open {
             return;
         }
 
         egui::SidePanel::left("sidebar_panel")
-            .frame(
-                Frame::NONE
-                    .fill(colors::BG_PANEL)
-                    .inner_margin(Margin::same(6)),
-            )
+            .frame(Frame::NONE.fill(pal.bg_panel).inner_margin(Margin::same(6)))
             .default_width(self.sidebar_width)
             .width_range(160.0..=450.0)
             .resizable(true)
@@ -464,7 +481,16 @@ impl ViviviGuiApp {
                 ui.style_mut().interaction.selectable_labels = false;
                 ui.horizontal(|ui| {
                     ui.selectable_value(&mut self.sidebar_tab, SidebarTab::Files, " 📁 Files ");
-                    ui.selectable_value(&mut self.sidebar_tab, SidebarTab::Outline, " 🔖 Outline ");
+                    if ui
+                        .selectable_value(
+                            &mut self.sidebar_tab,
+                            SidebarTab::Outline,
+                            " 🔖 Outline ",
+                        )
+                        .clicked()
+                    {
+                        self.core.sync_outline_if_dirty();
+                    }
                 });
 
                 ui.separator();
@@ -473,7 +499,7 @@ impl ViviviGuiApp {
                     SidebarTab::Files => {
                         ui.label(
                             egui::RichText::new("PROJECT EXPLORER")
-                                .color(colors::FG_DIMMED)
+                                .color(pal.fg_dimmed)
                                 .size(11.0),
                         );
                         ui.add_space(4.0);
@@ -487,7 +513,7 @@ impl ViviviGuiApp {
                         ui.label(
                             egui::RichText::new(format!("📂 {}", current_dir_name))
                                 .strong()
-                                .color(colors::FG_TEXT),
+                                .color(pal.fg_text),
                         );
 
                         let mut dir_to_navigate: Option<PathBuf> = None;
@@ -499,7 +525,7 @@ impl ViviviGuiApp {
                             let up_label = ui
                                 .add(
                                     egui::Label::new(
-                                        egui::RichText::new("  ⬆ ..").color(colors::ACCENT_BLUE),
+                                        egui::RichText::new("  ⬆ ..").color(pal.accent_blue),
                                     )
                                     .selectable(false)
                                     .sense(Sense::click()),
@@ -517,7 +543,7 @@ impl ViviviGuiApp {
                                     ui.spinner();
                                     ui.label(
                                         egui::RichText::new("読み込み中...")
-                                            .color(colors::ACCENT_BLUE)
+                                            .color(pal.accent_blue)
                                             .size(11.0),
                                     );
                                 });
@@ -526,12 +552,12 @@ impl ViviviGuiApp {
                             crate::app::async_tree::ScanStatus::Timeout => {
                                 ui.label(
                                     egui::RichText::new("⚠️ 読込タイムアウト (2.0s)")
-                                        .color(colors::ACCENT_YELLOW)
+                                        .color(pal.accent_yellow)
                                         .size(11.0),
                                 );
                                 ui.label(
                                     egui::RichText::new("クラウド/SMB共有が遅延しています")
-                                        .color(colors::FG_DIMMED)
+                                        .color(pal.fg_dimmed)
                                         .size(10.0),
                                 );
                                 if ui.button("🔄 再試行").clicked() {
@@ -542,7 +568,7 @@ impl ViviviGuiApp {
                             crate::app::async_tree::ScanStatus::Error(err) => {
                                 ui.label(
                                     egui::RichText::new(format!("⚠️ {err}"))
-                                        .color(colors::ACCENT_RED)
+                                        .color(pal.accent_red)
                                         .size(11.0),
                                 );
                                 if ui.button("🔄 再試行").clicked() {
@@ -569,7 +595,7 @@ impl ViviviGuiApp {
                                 let label = ui
                                     .add(
                                         egui::Label::new(
-                                            egui::RichText::new(label_text).color(colors::FG_TEXT),
+                                            egui::RichText::new(label_text).color(pal.fg_text),
                                         )
                                         .selectable(false)
                                         .sense(Sense::click()),
@@ -594,7 +620,7 @@ impl ViviviGuiApp {
                                 let label = ui
                                     .add(
                                         egui::Label::new(
-                                            egui::RichText::new(label_text).color(colors::FG_TEXT),
+                                            egui::RichText::new(label_text).color(pal.fg_text),
                                         )
                                         .selectable(false)
                                         .sense(Sense::click()),
@@ -621,17 +647,17 @@ impl ViviviGuiApp {
                         }
                     }
                     SidebarTab::Outline => {
+                        self.core.sync_outline_if_dirty();
                         ui.label(
                             egui::RichText::new("SYMBOLS / OUTLINE")
-                                .color(colors::FG_DIMMED)
+                                .color(pal.fg_dimmed)
                                 .size(11.0),
                         );
                         ui.add_space(4.0);
 
                         if self.core.outline_items.is_empty() {
                             ui.label(
-                                egui::RichText::new("(No symbols detected)")
-                                    .color(colors::FG_DIMMED),
+                                egui::RichText::new("(No symbols detected)").color(pal.fg_dimmed),
                             );
                         } else {
                             let mut jump_line = None;
@@ -642,8 +668,7 @@ impl ViviviGuiApp {
                                 let label = ui
                                     .add(
                                         egui::Label::new(
-                                            egui::RichText::new(symbol_label)
-                                                .color(colors::FG_TEXT),
+                                            egui::RichText::new(symbol_label).color(pal.fg_text),
                                         )
                                         .selectable(false)
                                         .sense(Sense::click()),
@@ -668,12 +693,13 @@ impl ViviviGuiApp {
 
     /// 3. ステータスバー ＆ 最下段コマンドラインの描画（`TextEdit` 不使用）
     pub(crate) fn render_bottom_panel(&mut self, ctx: &egui::Context) {
+        let pal = self.palette();
         egui::TopBottomPanel::bottom("bottom_status_panel")
-            .frame(Frame::NONE.fill(colors::BG_PANEL))
+            .frame(Frame::NONE.fill(pal.bg_panel))
             .show(ctx, |ui| {
                 // 上段: ステータスライン
                 Frame::NONE
-                    .fill(colors::BG_STATUSLINE)
+                    .fill(pal.bg_statusline)
                     .inner_margin(Margin::symmetric(8, 3))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
@@ -698,7 +724,7 @@ impl ViviviGuiApp {
                                 ui.add_space(4.0);
                                 ui.label(
                                     egui::RichText::new("[KEISEN]")
-                                        .color(colors::ACCENT_CYAN)
+                                        .color(pal.accent_cyan)
                                         .strong()
                                         .size(11.0),
                                 );
@@ -708,7 +734,7 @@ impl ViviviGuiApp {
                                 ui.add_space(4.0);
                                 ui.label(
                                     egui::RichText::new("[CSV]")
-                                        .color(colors::ACCENT_GREEN)
+                                        .color(pal.accent_green)
                                         .strong()
                                         .size(11.0),
                                 );
@@ -718,7 +744,7 @@ impl ViviviGuiApp {
                                 ui.add_space(4.0);
                                 ui.label(
                                     egui::RichText::new("[HEX]")
-                                        .color(colors::ACCENT_YELLOW)
+                                        .color(pal.accent_yellow)
                                         .strong()
                                         .size(11.0),
                                 );
@@ -759,11 +785,11 @@ impl ViviviGuiApp {
                                     "[LSP]".to_string()
                                 };
                                 let lsp_color = if errs > 0 {
-                                    colors::ACCENT_RED
+                                    pal.accent_red
                                 } else if warns > 0 {
-                                    colors::ACCENT_YELLOW
+                                    pal.accent_yellow
                                 } else {
-                                    colors::ACCENT_CYAN
+                                    pal.accent_cyan
                                 };
                                 ui.add_space(4.0);
                                 ui.label(
@@ -778,7 +804,7 @@ impl ViviviGuiApp {
                                 ui.add_space(4.0);
                                 ui.label(
                                     egui::RichText::new("[REC]")
-                                        .color(colors::ACCENT_RED)
+                                        .color(pal.accent_red)
                                         .strong()
                                         .size(11.0),
                                 );
@@ -801,7 +827,7 @@ impl ViviviGuiApp {
                             };
                             ui.label(
                                 egui::RichText::new(format!("{}{}", file_name, dirty_badge))
-                                    .color(colors::FG_TEXT)
+                                    .color(pal.fg_text)
                                     .strong(),
                             );
 
@@ -814,11 +840,11 @@ impl ViviviGuiApp {
                                             let label = format!("⬆ v{} 利用可能", rel.version);
                                             let btn = egui::Button::new(
                                                 egui::RichText::new(label)
-                                                    .color(colors::BG_PANEL)
+                                                    .color(pal.bg_panel)
                                                     .strong()
                                                     .size(11.0),
                                             )
-                                            .fill(colors::ACCENT_CYAN);
+                                            .fill(pal.accent_cyan);
                                             if ui
                                                 .add(btn)
                                                 .on_hover_text(
@@ -844,7 +870,7 @@ impl ViviviGuiApp {
                                             };
                                             ui.label(
                                                 egui::RichText::new(text)
-                                                    .color(colors::ACCENT_YELLOW)
+                                                    .color(pal.accent_yellow)
                                                     .size(11.0),
                                             );
                                             ui.separator();
@@ -859,11 +885,11 @@ impl ViviviGuiApp {
                                             );
                                             let btn = egui::Button::new(
                                                 egui::RichText::new(label)
-                                                    .color(colors::BG_PANEL)
+                                                    .color(pal.bg_panel)
                                                     .strong()
                                                     .size(11.0),
                                             )
-                                            .fill(colors::ACCENT_GREEN);
+                                            .fill(pal.accent_green);
                                             if ui
                                                 .add(btn)
                                                 .on_hover_text(
@@ -881,7 +907,7 @@ impl ViviviGuiApp {
                                     let lang_str = format!("{:?}", self.core.syntax_lang);
                                     ui.label(
                                         egui::RichText::new(lang_str)
-                                            .color(colors::FG_DIMMED)
+                                            .color(pal.fg_dimmed)
                                             .size(11.0),
                                     );
                                     ui.separator();
@@ -889,14 +915,14 @@ impl ViviviGuiApp {
                                     let nl_name = format!("[{}]", self.core.newline.name());
                                     ui.label(
                                         egui::RichText::new(nl_name)
-                                            .color(colors::FG_DIMMED)
+                                            .color(pal.fg_dimmed)
                                             .size(11.0),
                                     );
 
                                     let enc_name = format!("[{}]", self.core.encoding.name());
                                     ui.label(
                                         egui::RichText::new(enc_name)
-                                            .color(colors::FG_DIMMED)
+                                            .color(pal.fg_dimmed)
                                             .size(11.0),
                                     );
                                     ui.separator();
@@ -906,7 +932,7 @@ impl ViviviGuiApp {
                                         format!("Ln {}, Col {}", cursor.line + 1, cursor.col + 1);
                                     ui.label(
                                         egui::RichText::new(pos_str)
-                                            .color(colors::FG_TEXT)
+                                            .color(pal.fg_text)
                                             .strong()
                                             .size(11.0),
                                     );
@@ -917,7 +943,7 @@ impl ViviviGuiApp {
 
                 // 下段: 最下段コマンドライン / メッセージ表示行（共通 App コアのパーサーバッファを直接描画）
                 Frame::NONE
-                    .fill(colors::BG_PANEL)
+                    .fill(pal.bg_panel)
                     .inner_margin(Margin::symmetric(8, 3))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
@@ -927,7 +953,7 @@ impl ViviviGuiApp {
                                         "g/{}{}",
                                         self.core.migemo_query, self.ime_preedit
                                     ))
-                                    .color(colors::ACCENT_YELLOW)
+                                    .color(pal.accent_yellow)
                                     .family(egui::FontFamily::Monospace),
                                 );
                             } else if self.core.mode() == ViMode::CommandLine {
@@ -942,7 +968,7 @@ impl ViviviGuiApp {
                                     .unwrap_or_else(|| ":".to_string());
                                 ui.label(
                                     egui::RichText::new(cmd_str)
-                                        .color(colors::FG_TEXT)
+                                        .color(pal.fg_text)
                                         .family(egui::FontFamily::Monospace),
                                 );
                             } else if let Some(ref msg) = self.core.status_message {
@@ -950,17 +976,11 @@ impl ViviviGuiApp {
                                     || msg.contains("エラー")
                                     || msg.contains("見つかりません")
                                     || msg.starts_with('E');
-                                let color = if is_err {
-                                    colors::ACCENT_RED
-                                } else {
-                                    colors::FG_TEXT
-                                };
+                                let color = if is_err { pal.accent_red } else { pal.fg_text };
                                 ui.label(egui::RichText::new(msg).color(color));
                             } else {
                                 ui.label(
-                                    egui::RichText::new("ready")
-                                        .color(colors::FG_DIMMED)
-                                        .size(11.0),
+                                    egui::RichText::new("ready").color(pal.fg_dimmed).size(11.0),
                                 );
                             }
                         });

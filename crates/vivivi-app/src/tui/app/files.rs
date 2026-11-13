@@ -108,6 +108,7 @@ impl App {
 
             self.syntax_lang = SyntaxLang::from_path(&path);
             self.refresh_outline();
+            self.sync_treesitter_if_dirty();
 
             self.status_message = Some(format!(
                 "\"{path:?}\" 書込完了 [{}/{}] (DiffLog & Undo永続化)",
@@ -200,13 +201,8 @@ impl App {
         let recent_file_path = get_recent_file_path();
         let _ = self.recent_manager.save_to_file(&recent_file_path);
 
-        let mut ts_engine = vivivi_modes::TreeSitterEngine::new();
-        if ts_engine.set_language(self.syntax_lang) {
-            ts_engine.parse(&content);
-            self.treesitter = Some(ts_engine);
-        } else {
-            self.treesitter = None;
-        }
+        self.reinit_treesitter();
+        self.refresh_outline();
         self.current_smart_selection = None;
 
         self.status_message = Some(format!(

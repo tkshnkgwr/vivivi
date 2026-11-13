@@ -164,6 +164,66 @@ fn test_outline_toggle_and_jump() {
 }
 
 #[test]
+fn test_outline_auto_sync_on_startup_open_and_edit() {
+    // 1. 起動直後（App::new）に Rust / Markdown それぞれのアウトラインが自動解析される
+    let rust_app = App::new(
+        "fn alpha() {}\nstruct Beta;\n",
+        Some(PathBuf::from("main.rs")),
+        CharEncoding::Utf8,
+        NewlineType::Lf,
+    );
+    assert_eq!(rust_app.outline_items.len(), 2);
+    assert!(rust_app.outline_items[0].title.contains("alpha"));
+    assert!(rust_app.outline_items[1].title.contains("Beta"));
+
+    let md_app = App::new(
+        "# Heading\n## Sub\n",
+        Some(PathBuf::from("doc.md")),
+        CharEncoding::Utf8,
+        NewlineType::Lf,
+    );
+    assert_eq!(md_app.outline_items.len(), 2);
+    assert_eq!(md_app.outline_items[0].title, "Heading");
+    assert_eq!(md_app.outline_items[1].title, "Sub");
+
+    // 2. ファイルオープン時（open_file_with_encoding）に自動更新される
+    let temp_dir = std::env::temp_dir().join(format!("vivivi_outline_test_{}", std::process::id()));
+    std::fs::create_dir_all(&temp_dir).expect("テスト用一時ディレクトリの作成に失敗");
+    let file_path = temp_dir.join("opened.rs");
+    std::fs::write(
+        &file_path,
+        "pub fn opened_fn() {}\nenum OpenedEnum {\n    A,\n}\n",
+    )
+    .expect("一時テストファイルの書き込みに失敗");
+
+    let mut app = App::new("", None, CharEncoding::Utf8, NewlineType::Lf);
+    assert!(app.outline_items.is_empty());
+
+    app.open_file_with_encoding(file_path.clone(), None)
+        .expect("テスト用ファイルの読み込みに失敗");
+    assert_eq!(app.outline_items.len(), 2);
+    assert!(app.outline_items[0].title.contains("opened_fn"));
+    assert!(app.outline_items[1].title.contains("OpenedEnum"));
+
+    // 3. バッファ編集後の sync_outline_if_dirty で自動追従する
+    let insert_pos = app.buffer.len();
+    let appended = "fn added_later() {}\n";
+    app.buffer.basic_insert_text(insert_pos, appended);
+    app.sync_outline_if_dirty();
+    assert_eq!(app.outline_items.len(), 3);
+    assert!(app.outline_items[2].title.contains("added_later"));
+
+    // 編集を戻して再同期すると削除されたシンボルが消える
+    app.buffer
+        .basic_delete_text(insert_pos, appended.chars().count());
+    app.sync_outline_if_dirty();
+    assert_eq!(app.outline_items.len(), 2);
+
+    let _ = std::fs::remove_file(&file_path);
+    let _ = std::fs::remove_dir(&temp_dir);
+}
+
+#[test]
 fn test_open_help() {
     let mut app = App::new("test", None, CharEncoding::Utf8, NewlineType::Lf);
     assert!(!app.show_help);

@@ -152,19 +152,27 @@ impl KeisenMode {
         keisen_type: KeisenType,
     ) -> u8 {
         let mut mask = 0u8;
+        let vis_col = Self::visual_col_at(buffer, pos.line, pos.col);
 
-        // 上のセルが下への接続を持っているか
-        if pos.line > 0 {
-            let up_state = Self::get_cell_keisen_state(buffer, pos.line - 1, pos.col);
+        // 上のセルが下への接続を持っているか（表示桁基準）
+        if pos.line > 0
+            && let Some(up_line) = buffer.get_line(pos.line - 1)
+            && let Some(up_col) = Self::char_col_at_visual(&up_line, vis_col)
+        {
+            let up_state = Self::get_cell_keisen_state(buffer, pos.line - 1, up_col);
             if (up_state & (KT_DOWN_THIN | KT_DOWN_THICK)) != 0 {
                 mask |= KeisenDirection::Up.flag(keisen_type);
             }
         }
 
-        // 下のセルが上への接続を持っているか
-        let down_state = Self::get_cell_keisen_state(buffer, pos.line + 1, pos.col);
-        if (down_state & (KT_UP_THIN | KT_UP_THICK)) != 0 {
-            mask |= KeisenDirection::Down.flag(keisen_type);
+        // 下のセルが上への接続を持っているか（表示桁基準）
+        if let Some(down_line) = buffer.get_line(pos.line + 1)
+            && let Some(down_col) = Self::char_col_at_visual(&down_line, vis_col)
+        {
+            let down_state = Self::get_cell_keisen_state(buffer, pos.line + 1, down_col);
+            if (down_state & (KT_UP_THIN | KT_UP_THICK)) != 0 {
+                mask |= KeisenDirection::Down.flag(keisen_type);
+            }
         }
 
         // 左のセルが右への接続を持っているか
@@ -228,18 +236,20 @@ impl KeisenMode {
             }
             KeisenDirection::Left => CursorPosition::new(pos.line, pos.col.saturating_sub(1)),
             KeisenDirection::Down => {
+                let vis_col = Self::visual_col_at(buffer, pos.line, pos.col);
                 let next_line = pos.line + 1;
                 while buffer.line_count() <= next_line {
                     let end_pos = buffer.len();
                     buffer.insert_char(end_pos, '\n');
                 }
-                Self::pad_line_to_col(buffer, next_line, pos.col);
-                CursorPosition::new(next_line, pos.col)
+                let target_col = Self::pad_line_to_visual_col(buffer, next_line, vis_col);
+                CursorPosition::new(next_line, target_col)
             }
             KeisenDirection::Up => {
+                let vis_col = Self::visual_col_at(buffer, pos.line, pos.col);
                 let prev_line = pos.line.saturating_sub(1);
-                Self::pad_line_to_col(buffer, prev_line, pos.col);
-                CursorPosition::new(prev_line, pos.col)
+                let target_col = Self::pad_line_to_visual_col(buffer, prev_line, vis_col);
+                CursorPosition::new(prev_line, target_col)
             }
         }
     }
@@ -254,6 +264,54 @@ impl KeisenMode {
                 let padding = " ".repeat(spaces_needed);
                 buffer.insert_text(end_of_line_pos, &padding);
             }
+        }
+    }
+
+    fn visual_col_at(buffer: &TextBuffer, line: usize, char_col: usize) -> usize {
+        let Some(line_text) = buffer.get_line(line) else {
+            return char_col;
+        };
+        line_text
+            .chars()
+            .take(char_col)
+            .map(|c| UnicodeWidthChar::width(c).unwrap_or(1).max(1))
+            .sum()
+    }
+
+    fn char_col_at_visual(line_text: &str, target_vis: usize) -> Option<usize> {
+        let mut vis = 0usize;
+        for (idx, ch) in line_text.chars().enumerate() {
+            if vis == target_vis {
+                return Some(idx);
+            }
+            let w = UnicodeWidthChar::width(ch).unwrap_or(1).max(1);
+            if vis + w > target_vis {
+                return None;
+            }
+            vis += w;
+        }
+        None
+    }
+
+    fn pad_line_to_visual_col(buffer: &mut TextBuffer, line: usize, target_vis: usize) -> usize {
+        if let Some(line_text) = buffer.get_line(line) {
+            let mut vis = 0usize;
+            let mut char_count = 0usize;
+            for (idx, ch) in line_text.chars().enumerate() {
+                if vis >= target_vis {
+                    return idx;
+                }
+                let w = UnicodeWidthChar::width(ch).unwrap_or(1).max(1);
+                vis += w;
+                char_count = idx + 1;
+            }
+            let spaces_needed = target_vis.saturating_sub(vis) + 1;
+            let end_of_line_pos = buffer.line_start_position(line) + char_count;
+            let padding = " ".repeat(spaces_needed);
+            buffer.insert_text(end_of_line_pos, &padding);
+            char_count + target_vis.saturating_sub(vis)
+        } else {
+            0
         }
     }
 }

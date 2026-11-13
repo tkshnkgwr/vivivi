@@ -253,3 +253,18 @@ fn test_keisen_protected_edit() {
     ));
     assert_eq!(tight_box_buffer.get_line(0), Some("│1234 │".to_string()));
 }
+
+#[test]
+fn test_keisen_vertical_draw_aligns_with_fullwidth_chars() {
+    let mut keisen = KeisenMode::new();
+    keisen.is_active = true;
+    // "│あ│" は表示桁: │(0), あ(1..3), │(3) -> 文字インデックス col=2 が表示桁 3
+    let mut buffer = TextBuffer::from_text("┌──┐\n│あ│\n");
+    let mut cursor = CursorPosition::new(1, 2);
+
+    keisen.step(&mut buffer, &mut cursor, KeisenDirection::Down, false);
+    assert_eq!(cursor.line, 2);
+    // 表示桁 3 に揃うため先頭に半角スペース 3 つ + '│' が配置される
+    assert_eq!(buffer.get_line(2), Some("   │".to_string()));
+    assert_eq!(buffer.get_line(1), Some("│あ│".to_string()));
+}

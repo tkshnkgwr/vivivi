@@ -74,7 +74,7 @@ pub use hex::{
 pub use invisible::{InvisibleChar, ListCharsConfig, format_line_invisibles};
 pub use keisen::{BoxAlignment, KeisenDirection, KeisenMode, KeisenType};
 pub use lex_edit::{LexEditEngine, WordEditRecord};
-pub use line_edit::insert_beg_end_lines;
+pub use line_edit::{SortOptions, insert_beg_end_lines, parse_sort_flags, sort_lines};
 pub use lsp::{
     CompletionItemKind, DiagnosticSeverity, JsonRpcError, JsonRpcMessage, LspClient,
     LspCompletionItem, LspDiagnostic, LspHover, LspLocation, LspManager, LspPosition, LspRange,

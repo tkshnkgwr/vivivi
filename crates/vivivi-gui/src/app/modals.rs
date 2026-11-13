@@ -1,10 +1,9 @@
-﻿//! モーダルウィンドウ（ヘルプ・印刷/Diffプレビュー・クリップボード履歴・最近使ったファイル・2ペインファイラー）描画モジュール。
+//! モーダルウィンドウ（ヘルプ・印刷/Diffプレビュー・クリップボード履歴・最近使ったファイル・2ペインファイラー）描画モジュール。
 
 use eframe::egui;
 use std::path::PathBuf;
 
 use super::ViviviGuiApp;
-use crate::theme::colors;
 
 impl ViviviGuiApp {
     /// いずれかのモーダルウィンドウが開いているかどうかを返します。
@@ -14,6 +13,7 @@ impl ViviviGuiApp {
             || self.core.show_clipboard_hist
             || self.core.show_recent_modal
             || self.core.show_filer
+            || self.core.show_cmd_exec_dialog
             || self.settings_dialog.is_open
     }
 
@@ -27,12 +27,19 @@ impl ViviviGuiApp {
         if self.core.show_filer {
             self.core.close_filer();
         }
+        if self.core.show_cmd_exec_dialog {
+            self.core.close_cmd_exec_dialog();
+        }
         self.settings_dialog.close();
     }
 
     /// 共通 `App` コアのモーダル状態（ヘルプ・印刷プレビュー・履歴・クリップボード・ファイラー）を
     /// フローティングウィンドウとして描画します。
-    pub(crate) fn render_modals(&mut self, ctx: &egui::Context) {
+    ///
+    /// # 引数
+    /// - `ctx`: 描画先の `egui::Context`
+    pub fn render_modals(&mut self, ctx: &egui::Context) {
+        let pal = self.palette();
         // 5.1 ヘルプビューア (:help / F1)
         if self.core.show_help {
             let mut open = self.core.show_help;
@@ -41,19 +48,28 @@ impl ViviviGuiApp {
             } else {
                 self.core.help_title.clone()
             };
+            let screen_rect = ctx.screen_rect();
+            let help_width = (screen_rect.width() - 32.0).clamp(620.0, 1240.0);
+            let help_height = (screen_rect.height() - 48.0).clamp(360.0, 560.0);
             egui::Window::new(title)
+                .id(egui::Id::new("vivivi_help_modal_v2"))
                 .open(&mut open)
-                .default_size([620.0, 460.0])
+                .default_size([help_width, help_height])
                 .show(ctx, |ui| {
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        for line in &self.core.help_lines {
-                            ui.label(
-                                egui::RichText::new(line)
-                                    .color(colors::FG_TEXT)
-                                    .family(egui::FontFamily::Monospace),
-                            );
-                        }
-                    });
+                    egui::ScrollArea::both()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            for line in &self.core.help_lines {
+                                ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(line)
+                                            .color(pal.fg_text)
+                                            .family(egui::FontFamily::Monospace),
+                                    )
+                                    .wrap_mode(egui::TextWrapMode::Extend),
+                                );
+                            }
+                        });
                 });
             self.core.show_help = open;
         }
@@ -77,7 +93,7 @@ impl ViviviGuiApp {
                         for line in &self.core.preview_lines {
                             ui.label(
                                 egui::RichText::new(line)
-                                    .color(colors::FG_TEXT)
+                                    .color(pal.fg_text)
                                     .family(egui::FontFamily::Monospace),
                             );
                         }
@@ -103,9 +119,7 @@ impl ViviviGuiApp {
                         .map(|rc| rc.content.preview_text(60))
                         .collect();
                     if items.is_empty() {
-                        ui.label(
-                            egui::RichText::new("(履歴はありません)").color(colors::FG_DIMMED),
-                        );
+                        ui.label(egui::RichText::new("(履歴はありません)").color(pal.fg_dimmed));
                     } else {
                         egui::ScrollArea::vertical().show(ui, |ui| {
                             for (idx, preview) in items.iter().enumerate() {
@@ -142,9 +156,7 @@ impl ViviviGuiApp {
                     }
 
                     if all_entries.is_empty() {
-                        ui.label(
-                            egui::RichText::new("(履歴はありません)").color(colors::FG_DIMMED),
-                        );
+                        ui.label(egui::RichText::new("(履歴はありません)").color(pal.fg_dimmed));
                     } else {
                         egui::ScrollArea::vertical().show(ui, |ui| {
                             for (idx, (is_fav, path)) in all_entries.iter().enumerate() {
@@ -242,7 +254,7 @@ impl ViviviGuiApp {
                         for line in hover_text.lines() {
                             ui.label(
                                 egui::RichText::new(line)
-                                    .color(colors::FG_TEXT)
+                                    .color(pal.fg_text)
                                     .family(egui::FontFamily::Monospace),
                             );
                         }
@@ -275,19 +287,19 @@ impl ViviviGuiApp {
                         if diags.is_empty() {
                             ui.label(
                                 egui::RichText::new("(診断エラー・警告はありません)")
-                                    .color(colors::FG_DIMMED),
+                                    .color(pal.fg_dimmed),
                             );
                         } else {
                             egui::ScrollArea::vertical().show(ui, |ui| {
                                 for diag in diags {
                                     let (prefix, col) = match diag.severity {
                                         Some(vivivi_modes::lsp::DiagnosticSeverity::Error) => {
-                                            ("[ERR]", colors::ACCENT_RED)
+                                            ("[ERR]", pal.accent_red)
                                         }
                                         Some(vivivi_modes::lsp::DiagnosticSeverity::Warning) => {
-                                            ("[WRN]", colors::ACCENT_YELLOW)
+                                            ("[WRN]", pal.accent_yellow)
                                         }
-                                        _ => ("[INF]", colors::ACCENT_CYAN),
+                                        _ => ("[INF]", pal.accent_cyan),
                                     };
                                     let line_no = diag.range.start.line as usize;
                                     let char_no = diag.range.start.character as usize;
@@ -323,6 +335,85 @@ impl ViviviGuiApp {
                     }
                 });
             self.core.lsp_show_diagnostics_panel = open;
+        }
+
+        // 5.8 外部コマンド実行ダイアログ (:cmd / :cmdexec)
+        if self.core.show_cmd_exec_dialog {
+            let mut open = self.core.show_cmd_exec_dialog;
+            let mut should_execute = false;
+            let mut should_close = false;
+            egui::Window::new("外部コマンド実行 (cmdExecDlg)")
+                .id(egui::Id::new("vivivi_cmd_exec_dialog"))
+                .open(&mut open)
+                .default_size([620.0, 420.0])
+                .resizable(true)
+                .show(ctx, |ui| {
+                    ui.label(
+                        egui::RichText::new("実行モード")
+                            .color(pal.fg_dimmed)
+                            .strong(),
+                    );
+                    ui.horizontal_wrapped(|ui| {
+                        let modes = [
+                            (0usize, "1. 実行のみ (結果確認)"),
+                            (1usize, "2. バッファ挿入 (:r!)"),
+                            (2usize, "3. 選択行置換 (:[range]!)"),
+                        ];
+                        for (idx, label) in modes {
+                            ui.selectable_value(&mut self.core.cmd_exec_mode, idx, label);
+                        }
+                    });
+
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("コマンド:").color(pal.fg_text));
+                        let edit_resp = ui.add_sized(
+                            [ui.available_width() - 140.0, 24.0],
+                            egui::TextEdit::singleline(&mut self.core.cmd_exec_input)
+                                .font(egui::FontId::monospace(13.0))
+                                .hint_text("例: git status, date, sort"),
+                        );
+                        if edit_resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                            should_execute = true;
+                        }
+                        if ui.button("▶ 実行 (Enter)").clicked() {
+                            should_execute = true;
+                        }
+                        if ui.button("閉じる").clicked() {
+                            should_close = true;
+                        }
+                    });
+
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.label(
+                        egui::RichText::new("実行結果 / プレビュー")
+                            .color(pal.fg_dimmed)
+                            .size(12.0),
+                    );
+                    egui::ScrollArea::both()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            let preview = self.core.cmd_exec_output_preview.as_deref().unwrap_or(
+                                "(まだ実行されていません - コマンドを入力して Enter または「実行」を押してください)",
+                            );
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(preview)
+                                        .color(pal.fg_text)
+                                        .family(egui::FontFamily::Monospace),
+                                )
+                                .wrap_mode(egui::TextWrapMode::Extend),
+                            );
+                        });
+                });
+
+            if should_execute {
+                self.core.execute_cmd_exec_dialog();
+            }
+            if should_close || !open {
+                self.core.close_cmd_exec_dialog();
+            }
         }
     }
 }

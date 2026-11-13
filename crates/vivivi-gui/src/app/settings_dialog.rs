@@ -8,7 +8,6 @@ use vivivi_app::config::AppConfig;
 use vivivi_app::theme::Theme;
 
 use super::ViviviGuiApp;
-use crate::theme::colors;
 
 /// 設定ダイアログの 6 大カテゴリ定義
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,19 +119,19 @@ impl ViviviGuiApp {
         }
 
         let screen_rect = ctx.screen_rect();
+        let pal = self.palette();
 
-        // 1. エディタ全体を暗転（Dim / ぼかし風）し、背後を操作不能にする半透明バックドロップ
-        let painter = ctx.layer_painter(egui::LayerId::new(
-            egui::Order::Middle,
-            egui::Id::new("settings_modal_backdrop_painter"),
-        ));
-        painter.rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(150));
-
-        // 2. 背後へのマウスクリック・ドラッグを100%遮断する透明ブロッカー
+        // 1. エディタ全体を暗転（Dim）し、背後へのマウス操作を遮断するモーダルバックドロップ（Order::Middle）
+        let backdrop_alpha = if pal.is_dark { 150 } else { 110 };
         egui::Area::new(egui::Id::new("settings_modal_backdrop_area"))
             .order(egui::Order::Middle)
             .fixed_pos(screen_rect.min)
             .show(ctx, |ui| {
+                ui.painter().rect_filled(
+                    screen_rect,
+                    0.0,
+                    egui::Color32::from_black_alpha(backdrop_alpha),
+                );
                 ui.allocate_response(screen_rect.size(), egui::Sense::click_and_drag());
             });
 
@@ -142,14 +141,28 @@ impl ViviviGuiApp {
         let mut should_cancel = false;
         let mut should_save = false;
 
+        const SETTINGS_DIALOG_WIDTH: f32 = 680.0;
+        const SETTINGS_DIALOG_HEIGHT: f32 = 600.0;
+        let dialog_width = (screen_rect.width() - 32.0).clamp(480.0, SETTINGS_DIALOG_WIDTH);
+        let dialog_height = (screen_rect.height() - 32.0).clamp(420.0, SETTINGS_DIALOG_HEIGHT);
+
+        let default_pos = egui::pos2(
+            (screen_rect.center().x - dialog_width * 0.5).max(16.0),
+            (screen_rect.center().y - dialog_height * 0.5).max(16.0),
+        );
+
         egui::Window::new(format!("設定 (Preferences) - [{active_theme_name}]"))
             .id(egui::Id::new("vivivi_preferences_modal_v2"))
+            .order(egui::Order::Foreground)
+            .default_pos(default_pos)
             .open(&mut is_open)
-            .default_size([580.0, 620.0])
-            .min_size([480.0, 480.0])
-            .max_width(660.0)
+            .fixed_size([dialog_width, dialog_height])
+            .min_width(dialog_width)
+            .max_width(dialog_width)
+            .min_height(dialog_height)
+            .max_height(dialog_height)
             .collapsible(false)
-            .resizable(true)
+            .resizable(false)
             .show(ctx, |ui| {
                 ui.vertical(|ui| {
                     // --- 上部・中央: 左右 2 ペイン領域 ---
@@ -158,27 +171,34 @@ impl ViviviGuiApp {
                         egui::Vec2::new(ui.available_width(), available_height),
                         egui::Layout::left_to_right(egui::Align::TOP),
                         |ui| {
-                            // [左ペイン: カテゴリツリー] (幅 180px)
+                            // [左ペイン: カテゴリツリー] (幅 180px 固定)
                             ui.allocate_ui_with_layout(
                                 egui::Vec2::new(180.0, available_height),
                                 egui::Layout::top_down(egui::Align::LEFT),
                                 |ui| {
+                                    ui.set_width(180.0);
                                     self.render_settings_left_pane(ui);
                                 },
                             );
 
                             ui.separator();
 
-                            // [右ペイン: カテゴリ別詳細設定] (残り幅、縦スクロール & 確実な上から下配置)
-                            let right_pane_width = (ui.available_width() - 8.0).max(260.0);
+                            // [右ペイン: カテゴリ別詳細設定] (固定残余幅、長文は右ペイン幅で折り返し)
+                            let right_pane_width = (dialog_width - 180.0 - 44.0).max(260.0);
                             ui.allocate_ui_with_layout(
                                 egui::Vec2::new(right_pane_width, available_height),
                                 egui::Layout::top_down(egui::Align::LEFT),
                                 |ui| {
+                                    ui.set_width(right_pane_width);
+                                    ui.set_max_width(right_pane_width);
+                                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
                                     egui::ScrollArea::vertical()
                                         .id_salt("settings_right_pane_scroll")
                                         .auto_shrink([false, false])
                                         .show(ui, |ui| {
+                                            let inner_w = (right_pane_width - 14.0).max(240.0);
+                                            ui.set_width(inner_w);
+                                            ui.set_max_width(inner_w);
                                             ui.vertical(|ui| {
                                                 self.render_settings_right_pane(ui, ctx);
                                             });
@@ -239,12 +259,13 @@ impl ViviviGuiApp {
 
     /// 1. 一般 (General)
     fn render_category_general(&mut self, ui: &mut egui::Ui) {
+        let pal = self.palette();
         ui.heading("⚙ 1. 一般設定 (General)");
         ui.label(
             egui::RichText::new(
                 "エディタの基本動作、エンコーディング、および安全制御を設定します。",
             )
-            .color(colors::FG_DIMMED),
+            .color(pal.fg_dimmed),
         );
         ui.separator();
 
@@ -334,16 +355,17 @@ impl ViviviGuiApp {
         );
 
         ui.add_space(8.0);
-        ui.horizontal(|ui| {
+        let status = self.core.update_status();
+        ui.horizontal_wrapped(|ui| {
             if ui.button("🔄 今すぐ更新を確認 (:checkupdate)").clicked() {
                 self.core.check_for_updates(true);
             }
 
-            match self.core.update_status() {
+            match status {
                 moult_update::UpdateStatus::UpdateAvailable(ref rel) => {
                     ui.label(
                         egui::RichText::new(format!("⬆ v{} が利用可能です", rel.version))
-                            .color(colors::ACCENT_CYAN)
+                            .color(pal.accent_cyan)
                             .strong(),
                     );
                     if ui.button("ダウンロード").clicked() {
@@ -357,12 +379,12 @@ impl ViviviGuiApp {
                     } else {
                         "ダウンロード中...".to_string()
                     };
-                    ui.label(egui::RichText::new(text).color(colors::ACCENT_YELLOW));
+                    ui.label(egui::RichText::new(text).color(pal.accent_yellow));
                 }
                 moult_update::UpdateStatus::ReadyToApply { ref release, .. } => {
                     ui.label(
                         egui::RichText::new(format!("✨ v{} 準備完了", release.version))
-                            .color(colors::ACCENT_GREEN)
+                            .color(pal.accent_green)
                             .strong(),
                     );
                     if ui.button("反映して再起動").clicked() {
@@ -371,27 +393,34 @@ impl ViviviGuiApp {
                 }
                 moult_update::UpdateStatus::UpToDate => {
                     ui.label(
-                        egui::RichText::new("✓ 最新バージョンを利用中です")
-                            .color(colors::FG_DIMMED),
+                        egui::RichText::new("✓ 最新バージョンを利用中です").color(pal.fg_dimmed),
                     );
                 }
                 moult_update::UpdateStatus::Checking => {
-                    ui.label(egui::RichText::new("照会中...").color(colors::ACCENT_BLUE));
+                    ui.label(egui::RichText::new("照会中...").color(pal.accent_blue));
                 }
-                moult_update::UpdateStatus::Failed(ref err) => {
-                    ui.label(egui::RichText::new(format!("⚠️ {err}")).color(colors::ACCENT_RED));
-                }
+                moult_update::UpdateStatus::Failed(_) => {}
                 _ => {}
             }
         });
+
+        // 長いネットワーク/TLS エラー文は別行で確実に折り返し表示し、ウィンドウ幅の拡張を防止
+        if let moult_update::UpdateStatus::Failed(ref err) = status {
+            ui.add_space(4.0);
+            ui.add(
+                egui::Label::new(egui::RichText::new(format!("⚠️ {err}")).color(pal.accent_red))
+                    .wrap_mode(egui::TextWrapMode::Wrap),
+            );
+        }
     }
 
     /// 2. 表示・外観 (Appearance)
     fn render_category_appearance(&mut self, ui: &mut egui::Ui, _ctx: &egui::Context) {
+        let pal = self.palette();
         ui.heading("☼ 2. 表示・外観設定 (Appearance)");
         ui.label(
             egui::RichText::new("カラーテーマ、行番号、ガター、およびGUIフォントを設定します。")
-                .color(colors::FG_DIMMED),
+                .color(pal.fg_dimmed),
         );
         ui.separator();
 
@@ -500,10 +529,11 @@ impl ViviviGuiApp {
 
     /// 3. 不可視文字・空白 (Invisibles)
     fn render_category_invisibles(&mut self, ui: &mut egui::Ui) {
+        let pal = self.palette();
         ui.heading("👁 3. 不可視文字・空白設定 (Invisibles)");
         ui.label(
             egui::RichText::new("全角スペース、タブ文字、改行記号の可視化スタイルを設定します。")
-                .color(colors::FG_DIMMED),
+                .color(pal.fg_dimmed),
         );
         ui.separator();
 
@@ -538,7 +568,7 @@ impl ViviviGuiApp {
                     {
                         self.settings_dialog.draft_config.invisibles.space = ch;
                     }
-                    ui.label(egui::RichText::new("（例: · や 空白）").color(colors::FG_DIMMED));
+                    ui.label(egui::RichText::new("（例: · や 空白）").color(pal.fg_dimmed));
                 });
                 ui.end_row();
 
@@ -550,7 +580,7 @@ impl ViviviGuiApp {
                         )
                         .desired_width(60.0),
                     );
-                    ui.label(egui::RichText::new("（例: ▸--- や >---）").color(colors::FG_DIMMED));
+                    ui.label(egui::RichText::new("（例: ▸--- や >---）").color(pal.fg_dimmed));
                 });
                 ui.end_row();
 
@@ -566,7 +596,7 @@ impl ViviviGuiApp {
                     {
                         self.settings_dialog.draft_config.invisibles.eol = ch;
                     }
-                    ui.label(egui::RichText::new("（例: $ や ↵）").color(colors::FG_DIMMED));
+                    ui.label(egui::RichText::new("（例: $ や ↵）").color(pal.fg_dimmed));
                 });
                 ui.end_row();
             });
@@ -574,16 +604,17 @@ impl ViviviGuiApp {
         ui.add_space(8.0);
         ui.label(
             egui::RichText::new("※ 全角スペースは2マス幅・ワインレッド背景で強調表示されます。")
-                .color(colors::FG_DIMMED),
+                .color(pal.fg_dimmed),
         );
     }
 
     /// 4. 入力・編集 (Editing)
     fn render_category_editing(&mut self, ui: &mut egui::Ui) {
+        let pal = self.palette();
         ui.heading("✏ 4. 入力・編集設定 (Editing)");
         ui.label(
             egui::RichText::new("タブ幅、インデント、および検索のマッチング挙動を設定します。")
-                .color(colors::FG_DIMMED),
+                .color(pal.fg_dimmed),
         );
         ui.separator();
 
@@ -635,10 +666,11 @@ impl ViviviGuiApp {
 
     /// 5. 独自ツール (Tools)
     fn render_category_tools(&mut self, ui: &mut egui::Ui) {
+        let pal = self.palette();
         ui.heading("⚒ 5. 独自ツール設定 (Tools / OpenViVi)");
         ui.label(
             egui::RichText::new("OpenViVi 特有のビジュアルギミックや入力支援ツールを設定します。")
-                .color(colors::FG_DIMMED),
+                .color(pal.fg_dimmed),
         );
         ui.separator();
 
@@ -653,7 +685,7 @@ impl ViviviGuiApp {
         );
         ui.label(
             egui::RichText::new("  ※Normalモードでの 'x' や削除時に、文字が物理演算で落下します。")
-                .color(colors::FG_DIMMED),
+                .color(pal.fg_dimmed),
         );
 
         ui.add_space(5.0);
@@ -670,7 +702,7 @@ impl ViviviGuiApp {
             egui::RichText::new(
                 "  ※キー入力やアニメーションがない待機時のCPU消費をゼロに抑えます。",
             )
-            .color(colors::FG_DIMMED),
+            .color(pal.fg_dimmed),
         );
 
         ui.add_space(5.0);
@@ -685,10 +717,11 @@ impl ViviviGuiApp {
 
     /// 6. キーマップ (Keymap)
     fn render_category_keymap(&mut self, ui: &mut egui::Ui) {
+        let pal = self.palette();
         ui.heading("⌨ 6. キーマップ・ショートカット (Keymap)");
         ui.label(
             egui::RichText::new("主要な操作モードおよびキーバインドの確認リファレンスです。")
-                .color(colors::FG_DIMMED),
+                .color(pal.fg_dimmed),
         );
         ui.separator();
 
@@ -742,7 +775,7 @@ impl ViviviGuiApp {
                     ui.label(
                         egui::RichText::new(keys)
                             .family(egui::FontFamily::Monospace)
-                            .color(colors::ACCENT_CYAN),
+                            .color(pal.accent_cyan),
                     );
                     ui.label(desc);
                     ui.end_row();
@@ -758,6 +791,7 @@ impl ViviviGuiApp {
         should_save: &mut bool,
         should_cancel: &mut bool,
     ) {
+        let pal = self.palette();
         ui.horizontal(|ui| {
             // [デフォルトに戻す]
             let reset_btn = ui
@@ -777,12 +811,15 @@ impl ViviviGuiApp {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // [保存して閉じる]
+                let save_fg = if pal.is_dark {
+                    pal.bg_panel
+                } else {
+                    egui::Color32::WHITE
+                };
                 let save_btn = ui
                     .add(
-                        egui::Button::new(
-                            egui::RichText::new("💾 保存して閉じる").color(egui::Color32::WHITE),
-                        )
-                        .fill(egui::Color32::from_rgb(45, 120, 200)),
+                        egui::Button::new(egui::RichText::new("💾 保存して閉じる").color(save_fg))
+                            .fill(pal.accent_blue),
                     )
                     .on_hover_cursor(egui::CursorIcon::PointingHand);
                 if save_btn.clicked() {
@@ -816,7 +853,7 @@ impl ViviviGuiApp {
         self.minimap_open = backup.appearance.gui.show_minimap;
         self.minimap_width = backup.appearance.gui.minimap_width;
         self.particles.enabled = backup.appearance.gui.enable_gravity_drop;
-        if self.active_theme.meta.name != backup.appearance.theme {
+        if !Self::theme_name_matches(&self.active_theme.meta.name, &backup.appearance.theme) {
             self.active_theme = Theme::load_by_name(&backup.appearance.theme);
             if let Some(ctx) = ctx {
                 crate::theme::apply_theme(ctx, &self.active_theme);
@@ -848,7 +885,7 @@ impl ViviviGuiApp {
         self.minimap_open = draft.appearance.gui.show_minimap;
         self.minimap_width = draft.appearance.gui.minimap_width;
         self.particles.enabled = draft.appearance.gui.enable_gravity_drop;
-        if self.active_theme.meta.name != draft.appearance.theme {
+        if !Self::theme_name_matches(&self.active_theme.meta.name, &draft.appearance.theme) {
             self.active_theme = Theme::load_by_name(&draft.appearance.theme);
             crate::theme::apply_theme(ctx, &self.active_theme);
             self.syntax_cache.clear();

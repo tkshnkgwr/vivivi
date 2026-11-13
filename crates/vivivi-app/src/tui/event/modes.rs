@@ -394,11 +394,13 @@ pub(crate) fn handle_command_line_mode(app: &mut App, key: KeyEvent) {
             }
 
             // コマンド実行前にViEngineをノーマルモードに戻す
-            app.feed_vi_char('\n');
-
-            // exコマンドの解釈 (':' の場合のみ実行)
             if prefix == ':' {
+                // ':' コマンドは parser 側の履歴登録とモード復帰のみ行い、
+                // 実行は execute_ex_command で1度だけ行う（多重実行による置換件数0件上書きを防止）
+                let _ = app.vi.feed_char('\n');
                 execute_ex_command(app, &cmd_text);
+            } else {
+                app.feed_vi_char('\n');
             }
         }
         KeyCode::Char(c) => {

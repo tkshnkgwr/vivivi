@@ -8,7 +8,6 @@ use vivivi_vi::ViMode;
 
 use super::ViviviGuiApp;
 use crate::particles::extract_deleted_line_segment;
-use crate::theme::colors;
 
 impl ViviviGuiApp {
     /// OS からドラッグ＆ドロップされたファイルを処理します。
@@ -80,8 +79,9 @@ impl ViviviGuiApp {
                     if idx >= start_char_idx && idx < start_char_idx + deleted_chars.len() {
                         let char_x = self.last_active_text_origin.x
                             + (vis_col.saturating_sub(scroll_col) as f32) * self.last_char_width;
+                        let drop_color = self.palette().accent_red;
                         self.particles
-                            .spawn_char(ch, Pos2::new(char_x, row_y), colors::ACCENT_RED);
+                            .spawn_char(ch, Pos2::new(char_x, row_y), drop_color);
                     }
                     vis_col += ch_w;
                 }
@@ -97,8 +97,9 @@ impl ViviviGuiApp {
                 };
                 let char_x = self.last_active_text_origin.x
                     + (vis_col.saturating_sub(scroll_col) as f32) * self.last_char_width;
+                let drop_color = self.palette().accent_red;
                 self.particles
-                    .spawn_char(ch, Pos2::new(char_x, row_y), colors::ACCENT_RED);
+                    .spawn_char(ch, Pos2::new(char_x, row_y), drop_color);
                 vis_col += ch_w;
             }
         }
@@ -144,6 +145,7 @@ impl ViviviGuiApp {
         }
 
         let is_modal_active = self.is_any_modal_open();
+        let is_text_widget_modal = self.core.show_cmd_exec_dialog || self.settings_dialog.is_open;
 
         for event in events {
             match event {
@@ -161,6 +163,9 @@ impl ViviviGuiApp {
                     ImeEvent::Commit(text) => {
                         self.ime_preedit.clear();
                         self.ime_enabled = false;
+                        if is_modal_active {
+                            continue;
+                        }
                         for ch in text.chars() {
                             if ch != '\r' && ch != '\n' {
                                 self.dispatch_key_with_particles(AppKeyEvent::char(ch));
@@ -185,9 +190,11 @@ impl ViviviGuiApp {
 
                     // モーダル表示中はモーダル操作キーのみを転送し本文への入力をブロック
                     if is_modal_active {
-                        for ch in text.chars() {
-                            if matches!(ch, 'q' | 'j' | 'k' | 'f' | 'd' | ' ' | 'g' | 'G') {
-                                self.core.handle_key(AppKeyEvent::char(ch));
+                        if !is_text_widget_modal {
+                            for ch in text.chars() {
+                                if matches!(ch, 'q' | 'j' | 'k' | 'f' | 'd' | ' ' | 'g' | 'G') {
+                                    self.core.handle_key(AppKeyEvent::char(ch));
+                                }
                             }
                         }
 
@@ -285,16 +292,18 @@ impl ViviviGuiApp {
                         if is_modal_active {
                             if app_key.code == KeyCode::Esc {
                                 self.close_all_modals();
-                            } else if matches!(
-                                app_key.code,
-                                KeyCode::Enter
-                                    | KeyCode::Up
-                                    | KeyCode::Down
-                                    | KeyCode::PageUp
-                                    | KeyCode::PageDown
-                                    | KeyCode::Tab
-                                    | KeyCode::Char('q')
-                            ) {
+                            } else if !is_text_widget_modal
+                                && matches!(
+                                    app_key.code,
+                                    KeyCode::Enter
+                                        | KeyCode::Up
+                                        | KeyCode::Down
+                                        | KeyCode::PageUp
+                                        | KeyCode::PageDown
+                                        | KeyCode::Tab
+                                        | KeyCode::Char('q')
+                                )
+                            {
                                 self.core.handle_key(app_key);
                             }
                         } else {

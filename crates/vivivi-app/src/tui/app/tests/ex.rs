@@ -740,3 +740,105 @@ fn test_command_and_search_history_up_down_in_app() {
         KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
     );
 }
+
+#[test]
+fn test_key_entry_substitute_reports_exact_count() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let mut app = App::new(
+        "abc foo abc\nabc bar\n",
+        None,
+        CharEncoding::Utf8,
+        NewlineType::Lf,
+    );
+
+    let send_cmd = |app: &mut App, text: &str| {
+        crate::tui::event::handle_key_event(
+            app,
+            KeyEvent::new(KeyCode::Char(':'), KeyModifiers::empty()),
+        );
+        for ch in text.chars() {
+            crate::tui::event::handle_key_event(
+                app,
+                KeyEvent::new(KeyCode::Char(ch), KeyModifiers::empty()),
+            );
+        }
+        crate::tui::event::handle_key_event(
+            app,
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+        );
+    };
+
+    // 現在行の :s/abc/xyz/g が2件置換し、ステータスも2件であること
+    send_cmd(&mut app, "s/abc/xyz/g");
+    assert_eq!(app.buffer.get_line(0).as_deref(), Some("xyz foo xyz"));
+    assert_eq!(app.buffer.get_line(1).as_deref(), Some("abc bar"));
+    assert_eq!(
+        app.status_message.as_deref(),
+        Some("2 箇所の置換を行いました")
+    );
+
+    // 任意デリミタ (:s#bar#baz#) と全体置換 (:%s/xyz/XYZ/g) の確認
+    send_cmd(&mut app, "%s#xyz#XYZ#g");
+    assert_eq!(app.buffer.get_line(0).as_deref(), Some("XYZ foo XYZ"));
+    assert_eq!(
+        app.status_message.as_deref(),
+        Some("2 箇所の置換を行いました")
+    );
+
+    // コマンド履歴も保持されていること
+    crate::tui::event::handle_key_event(
+        &mut app,
+        KeyEvent::new(KeyCode::Char(':'), KeyModifiers::empty()),
+    );
+    crate::tui::event::handle_key_event(
+        &mut app,
+        KeyEvent::new(KeyCode::Up, KeyModifiers::empty()),
+    );
+    assert_eq!(
+        app.vi.parser().command_line_buffer(),
+        Some((&':', "%s#xyz#XYZ#g"))
+    );
+}
+
+#[test]
+fn test_ex_sort_command_variants() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let mut app = App::new(
+        "cherry\napple\nBanana\napple\n",
+        None,
+        CharEncoding::Utf8,
+        NewlineType::Lf,
+    );
+
+    // 1. :sort（末尾の改行後空行はソート対象に含めない）
+    crate::tui::event::execute_ex_command(&mut app, "sort");
+    assert_eq!(app.buffer.to_string(), "Banana\napple\napple\ncherry\n");
+    assert_eq!(app.status_message.as_deref(), Some("4 行をソートしました"));
+
+    // 2. :sort! i u（逆順・大文字小文字無視・重複除去）
+    crate::tui::event::execute_ex_command(&mut app, "sort! iu");
+    assert_eq!(app.buffer.to_string(), "cherry\nBanana\napple\n");
+
+    // 3. 範囲指定 :2,4sort および数値ソート :sort n
+    let mut num_app = App::new(
+        "header\n20 beta\n3 alpha\n100 gamma\n",
+        None,
+        CharEncoding::Utf8,
+        NewlineType::Lf,
+    );
+    crate::tui::event::execute_ex_command(&mut num_app, "2,4sort n");
+    assert_eq!(
+        num_app.buffer.to_string(),
+        "header\n3 alpha\n20 beta\n100 gamma\n"
+    );
+
+    // 4. Undo で元に戻せること
+    crate::tui::event::handle_key_event(
+        &mut num_app,
+        KeyEvent::new(KeyCode::Char('u'), KeyModifiers::empty()),
+    );
+    assert_eq!(
+        num_app.buffer.to_string(),
+        "header\n20 beta\n3 alpha\n100 gamma\n"
+    );
+}

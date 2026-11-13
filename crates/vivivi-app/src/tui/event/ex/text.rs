@@ -226,6 +226,71 @@ pub(crate) fn handle_text_command(app: &mut App, trimmed: &str) -> bool {
             true
         }
 
+        // --- 行ソート (:sort, :%sort, :'<,'>sort, :1,5sort [!/i/r/u/n]) ---
+        _ if try_execute_sort_command(app, trimmed) => true,
+
         _ => false,
     }
+}
+
+/// `:sort` 系コマンド（範囲指定および `!`/`i`/`r`/`u`/`n` フラグ付き）を解析・実行します。
+fn try_execute_sort_command(app: &mut App, trimmed: &str) -> bool {
+    let parse_line_ref = |token: &str, app: &App| -> Option<usize> {
+        let t = token.trim();
+        if t == "." {
+            Some(app.cursor.pos.line)
+        } else if t == "$" {
+            let mut last = app.buffer.line_count().saturating_sub(1);
+            if last > 0 && app.buffer.get_line(last).as_deref() == Some("") {
+                last -= 1;
+            }
+            Some(last)
+        } else {
+            t.parse::<usize>().ok().map(|n| n.saturating_sub(1))
+        }
+    };
+
+    let (range_opt, after_sort) = if let Some(rest) = trimmed.strip_prefix("%sort") {
+        (None, rest)
+    } else if let Some(rest) = trimmed.strip_prefix("'<,'>sort") {
+        let range = match app.cursor.anchor {
+            Some(anchor) => (
+                anchor.line.min(app.cursor.pos.line),
+                anchor.line.max(app.cursor.pos.line),
+            ),
+            None => (app.cursor.pos.line, app.cursor.pos.line),
+        };
+        (Some(range), rest)
+    } else if let Some(rest) = trimmed.strip_prefix("sort") {
+        (None, rest)
+    } else if let Some((range_part, after)) = trimmed.split_once("sort")
+        && !range_part.is_empty()
+        && let Some((s_str, e_str)) = range_part.split_once(',')
+        && let (Some(s), Some(e)) = (parse_line_ref(s_str, app), parse_line_ref(e_str, app))
+    {
+        (Some((s, e)), after)
+    } else {
+        return false;
+    };
+
+    let is_sort_cmd = after_sort.is_empty()
+        || after_sort.starts_with('!')
+        || after_sort.chars().next().is_some_and(char::is_whitespace);
+    if !is_sort_cmd {
+        return false;
+    }
+
+    match vivivi_modes::parse_sort_flags(after_sort) {
+        Ok(options) => {
+            let sorted_len = app.sort_buffer_lines(range_opt, options);
+            if trimmed.starts_with("'<,'>") {
+                app.cursor.anchor = None;
+            }
+            app.status_message = Some(format!("{sorted_len} 行をソートしました"));
+        }
+        Err(err) => {
+            app.status_message = Some(format!("sort 構文エラー: {err}"));
+        }
+    }
+    true
 }

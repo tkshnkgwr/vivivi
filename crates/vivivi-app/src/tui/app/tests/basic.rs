@@ -1011,3 +1011,40 @@ fn test_gutter_change_markers_insert_line_diff() {
         vivivi_modes::LineChangeState::Unchanged
     );
 }
+
+#[test]
+fn test_keisen_does_not_hijack_uppercase_in_insert_or_cmdline() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let mut app = App::new("hello", None, CharEncoding::Utf8, NewlineType::Lf);
+    app.keisen_mode.is_active = true;
+
+    // 挿入モードでは Shift+H/J/K/L がそのまま大文字として入力されること
+    crate::tui::event::handle_key_event(
+        &mut app,
+        KeyEvent::new(KeyCode::Char('i'), KeyModifiers::empty()),
+    );
+    assert_eq!(app.mode(), ViMode::Insert);
+    for ch in ['H', 'J', 'K', 'L'] {
+        crate::tui::event::handle_key_event(
+            &mut app,
+            KeyEvent::new(KeyCode::Char(ch), KeyModifiers::SHIFT),
+        );
+    }
+    assert_eq!(app.buffer.get_line(0).as_deref(), Some("HJKLhello"));
+
+    // ノーマルモードへ戻し、コマンドラインモード中は Shift+H が入力を妨げないこと
+    crate::tui::event::handle_key_event(
+        &mut app,
+        KeyEvent::new(KeyCode::Esc, KeyModifiers::empty()),
+    );
+    assert_eq!(app.mode(), ViMode::Normal);
+    crate::tui::event::handle_key_event(
+        &mut app,
+        KeyEvent::new(KeyCode::Char(':'), KeyModifiers::empty()),
+    );
+    crate::tui::event::handle_key_event(
+        &mut app,
+        KeyEvent::new(KeyCode::Char('H'), KeyModifiers::SHIFT),
+    );
+    assert_eq!(app.vi.parser().command_line_buffer(), Some((&':', "H")));
+}
