@@ -22,7 +22,7 @@ pub mod window_state;
 
 pub use app::{
     AsyncFileTree, FileEntryNode, ScanStatus, SettingsCategory, SettingsDialogState, SidebarTab,
-    ViviviGuiApp, egui_key_to_app_key,
+    VisibleTreeRow, ViviviGuiApp, egui_key_to_app_key,
 };
 pub use fonts::setup_fonts;
 pub use particles::{Particle, ParticleManager, extract_deleted_line_segment};

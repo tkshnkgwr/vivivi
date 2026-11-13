@@ -854,14 +854,130 @@ fn test_settings_dialog_keeps_fixed_width_across_categories() {
 
     let first_width = observed_widths[0].1;
     assert!(
-        (680.0..=710.0).contains(&first_width),
-        "設定ダイアログ幅は固定値 680px（+枠余白）付近であること: {observed_widths:?}"
+        (920.0..=950.0).contains(&first_width),
+        "設定ダイアログ幅は固定値 920px（+枠余白）付近であること: {observed_widths:?}"
     );
     for (name, w) in &observed_widths {
         assert!(
             (*w - first_width).abs() <= 0.5,
             "カテゴリ {name} 切り替え前後で幅が変化しないこと: {observed_widths:?}"
         );
+    }
+}
+
+fn collect_text_galley_row_counts(
+    shape: &egui::epaint::Shape,
+    out: &mut std::collections::HashMap<String, usize>,
+) {
+    match shape {
+        egui::epaint::Shape::Text(text_shape) => {
+            let text = text_shape.galley.text().to_string();
+            let rows = text_shape.galley.rows.len();
+            out.entry(text)
+                .and_modify(|max_rows| *max_rows = (*max_rows).max(rows))
+                .or_insert(rows);
+        }
+        egui::epaint::Shape::Vec(shapes) => {
+            for child in shapes {
+                collect_text_galley_row_counts(child, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[test]
+fn test_settings_dialog_labels_stay_single_line() {
+    let core = App::new("hello", None, CharEncoding::Utf8, NewlineType::Lf);
+    let mut gui = ViviviGuiApp::from_core(core);
+    gui.settings_dialog.open(&gui.core.config);
+
+    let ctx = egui::Context::default();
+    let expected_single_line_by_category: &[(vivivi_gui::app::SettingsCategory, &[&str])] = &[
+        (
+            vivivi_gui::app::SettingsCategory::General,
+            &[
+                "デフォルト文字コード (Encoding):",
+                "デフォルト改行形式 (Fileformat):",
+                "クリップボード同期 (Clipboard):",
+            ],
+        ),
+        (
+            vivivi_gui::app::SettingsCategory::Appearance,
+            &[
+                "カラーテーマ (Color Theme):",
+                "フォントサイズ (Font Size):",
+                "行間倍率 (Line Height):",
+                "ミニマップ幅 (Minimap Width):",
+            ],
+        ),
+        (
+            vivivi_gui::app::SettingsCategory::Invisibles,
+            &[
+                "全角スペース記号:",
+                "半角スペース記号:",
+                "タブ文字記号 (Tab):",
+                "改行記号 (EOL):",
+            ],
+        ),
+        (
+            vivivi_gui::app::SettingsCategory::Editing,
+            &["タブ幅 (Tab Stop):"],
+        ),
+        (
+            vivivi_gui::app::SettingsCategory::Keymap,
+            &[
+                "モード / キー",
+                "機能・コマンド",
+                "Normal",
+                "v, V, Ctrl-v",
+                ":preferences",
+            ],
+        ),
+    ];
+
+    for (cat, targets) in expected_single_line_by_category {
+        gui.settings_dialog.active_category = *cat;
+        let mut last_output = None;
+        for _ in 0..2 {
+            let raw_input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1600.0, 900.0),
+                )),
+                ..Default::default()
+            };
+            last_output = Some(ctx.run(raw_input, |ctx| {
+                gui.render_settings_dialog(ctx);
+            }));
+        }
+        let output = last_output.expect("描画出力が得られること");
+        let mut row_counts = std::collections::HashMap::new();
+        for clipped in &output.shapes {
+            collect_text_galley_row_counts(&clipped.shape, &mut row_counts);
+        }
+
+        // 左ペインのカテゴリ一覧も 1 行で収まっていること
+        for c in vivivi_gui::app::SettingsCategory::all() {
+            let cat_label = format!("{} {}", c.icon(), c.display_name());
+            if let Some(&rows) = row_counts.get(&cat_label) {
+                assert_eq!(
+                    rows, 1,
+                    "左ペインのカテゴリ「{cat_label}」が改行されている (rows={rows})"
+                );
+            }
+        }
+
+        for target in *targets {
+            let rows = row_counts
+                .get(*target)
+                .copied()
+                .unwrap_or_else(|| panic!("対象ラベル「{target}」が見つかりません ({cat:?})"));
+            assert_eq!(
+                rows, 1,
+                "設定項目「{target}」({cat:?}) が改行されている (rows={rows})"
+            );
+        }
     }
 }
 
@@ -1068,5 +1184,211 @@ fn test_gui_word_wrap_wraps_long_line_and_cursor_position() {
         wrap_cursor.top(),
         gui.last_active_text_origin.y,
         gui.line_height
+    );
+}
+
+/// シナリオ 17: Files ツリーの全幅ホバー時の指カーソル、行余白でのシングルクリックファイルオープン、および階層展開。
+#[test]
+fn test_gui_sidebar_files_tree_full_row_hover_cursor_and_single_click() {
+    let temp_dir =
+        std::env::temp_dir().join(format!("vivivi_gui_tree_test_{}", std::process::id()));
+    let sub_dir = temp_dir.join("sub_dir");
+    let nested_file = sub_dir.join("inside.rs");
+    let top_file = temp_dir.join("hello.txt");
+    let _ = std::fs::remove_dir_all(&temp_dir);
+    std::fs::create_dir_all(&sub_dir).expect("一時テストディレクトリの作成に失敗");
+    std::fs::write(&nested_file, "fn inside() {}\n").expect("子ファイルの書込に失敗");
+    std::fs::write(&top_file, "hello world\n").expect("トップファイルの書込に失敗");
+
+    let core = App::new("", None, CharEncoding::Utf8, NewlineType::Lf);
+    let mut gui = ViviviGuiApp::from_core(core);
+    gui.sidebar_open = true;
+    gui.sidebar_tab = SidebarTab::Files;
+    gui.sidebar_width = 240.0;
+    gui.navigate_sidebar_dir(temp_dir.clone());
+
+    let start = std::time::Instant::now();
+    while gui.async_tree.is_scanning() && start.elapsed() < std::time::Duration::from_secs(3) {
+        gui.async_tree.poll();
+        std::thread::sleep(std::time::Duration::from_millis(15));
+    }
+    assert_eq!(gui.async_tree.status, vivivi_gui::ScanStatus::Ready);
+    assert_eq!(gui.async_tree.visible_rows().len(), 2);
+
+    let ctx = egui::Context::default();
+    let run_frame = |gui: &mut ViviviGuiApp, events: Vec<Event>| {
+        let raw_input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                Pos2::ZERO,
+                egui::vec2(1280.0, 800.0),
+            )),
+            events,
+            ..Default::default()
+        };
+        ctx.run(raw_input, |ctx| {
+            gui.render_sidebar(ctx);
+        })
+    };
+
+    // 初回描画
+    let _ = run_frame(&mut gui, vec![]);
+
+    // テキストが全く描かれていない右側余白 (x = 200.0) を走査し、最初の PointingHand 行 (..) を特定
+    let hover_x = 200.0;
+    let mut first_row_y = None;
+    for step in 0..40 {
+        let y = 30.0 + (step as f32) * 5.0;
+        let out = run_frame(&mut gui, vec![Event::PointerMoved(egui::pos2(hover_x, y))]);
+        if out.platform_output.cursor_icon == egui::CursorIcon::PointingHand {
+            first_row_y = Some(y + 4.0);
+            break;
+        }
+    }
+    let up_y = first_row_y.expect("行右側の余白でも指カーソル (PointingHand) になるべき");
+
+    // `..` の 1 行下 (+22px) が `sub_dir`、2 行下 (+44px) が `hello.txt`
+    let sub_dir_pos = egui::pos2(hover_x, up_y + 22.0);
+    let hello_pos = egui::pos2(hover_x, up_y + 44.0);
+
+    // 1. ファイル行の右端余白をシングルクリックして即座に開かれること
+    let hover_out = run_frame(&mut gui, vec![Event::PointerMoved(hello_pos)]);
+    assert_eq!(
+        hover_out.platform_output.cursor_icon,
+        egui::CursorIcon::PointingHand
+    );
+    let _ = run_frame(
+        &mut gui,
+        vec![
+            Event::PointerMoved(hello_pos),
+            Event::PointerButton {
+                pos: hello_pos,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Modifiers::NONE,
+            },
+        ],
+    );
+    let _ = run_frame(
+        &mut gui,
+        vec![Event::PointerButton {
+            pos: hello_pos,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        }],
+    );
+    assert_eq!(
+        gui.core.file_path.as_deref(),
+        Some(top_file.as_path()),
+        "ファイル行の余白シングルクリックでファイルが即開かれるべき"
+    );
+
+    // 2. ディレクトリ行の右端余白をシングルクリックして階層展開されること
+    let _ = run_frame(
+        &mut gui,
+        vec![
+            Event::PointerMoved(sub_dir_pos),
+            Event::PointerButton {
+                pos: sub_dir_pos,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Modifiers::NONE,
+            },
+        ],
+    );
+    let _ = run_frame(
+        &mut gui,
+        vec![Event::PointerButton {
+            pos: sub_dir_pos,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        }],
+    );
+    let sub_start = std::time::Instant::now();
+    while gui.async_tree.is_scanning() && sub_start.elapsed() < std::time::Duration::from_secs(3) {
+        gui.async_tree.poll();
+        std::thread::sleep(std::time::Duration::from_millis(15));
+    }
+    let rows = gui.async_tree.visible_rows();
+    assert!(
+        rows.iter()
+            .any(|r| r.depth == 1 && r.name == "inside.rs" && r.path == nested_file),
+        "ディレクトリクリックでツリーの次階層に inside.rs が展開されるべき"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+/// シナリオ 18: Outline タブでも全幅ホバーで指カーソルになり、余白シングルクリックでジャンプすること。
+#[test]
+fn test_gui_sidebar_outline_full_row_hover_and_single_click_jump() {
+    let core = App::new(
+        "fn first_fn() {}\n\n\nfn second_fn() {}\n",
+        Some(std::path::PathBuf::from("outline_click.rs")),
+        CharEncoding::Utf8,
+        NewlineType::Lf,
+    );
+    let mut gui = ViviviGuiApp::from_core(core);
+    gui.sidebar_open = true;
+    gui.sidebar_tab = SidebarTab::Outline;
+    gui.sidebar_width = 240.0;
+    assert_eq!(gui.core.outline_items.len(), 2);
+
+    let ctx = egui::Context::default();
+    let run_frame = |gui: &mut ViviviGuiApp, events: Vec<Event>| {
+        let raw_input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                Pos2::ZERO,
+                egui::vec2(1280.0, 800.0),
+            )),
+            events,
+            ..Default::default()
+        };
+        ctx.run(raw_input, |ctx| {
+            gui.render_sidebar(ctx);
+        })
+    };
+
+    let _ = run_frame(&mut gui, vec![]);
+
+    let hover_x = 200.0;
+    let mut first_row_y = None;
+    for step in 0..40 {
+        let y = 30.0 + (step as f32) * 5.0;
+        let out = run_frame(&mut gui, vec![Event::PointerMoved(egui::pos2(hover_x, y))]);
+        if out.platform_output.cursor_icon == egui::CursorIcon::PointingHand {
+            first_row_y = Some(y + 4.0);
+            break;
+        }
+    }
+    let first_y = first_row_y.expect("Outline タブでも余白ホバー時に指カーソルになるべき");
+    let second_pos = egui::pos2(hover_x, first_y + 22.0);
+
+    let _ = run_frame(
+        &mut gui,
+        vec![
+            Event::PointerMoved(second_pos),
+            Event::PointerButton {
+                pos: second_pos,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Modifiers::NONE,
+            },
+        ],
+    );
+    let _ = run_frame(
+        &mut gui,
+        vec![Event::PointerButton {
+            pos: second_pos,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        }],
+    );
+
+    assert_eq!(
+        gui.core.cursor.pos.line, 3,
+        "Outline 行の右端余白シングルクリックで対象シンボル行へジャンプするべき"
     );
 }

@@ -141,8 +141,9 @@ impl ViviviGuiApp {
         let mut should_cancel = false;
         let mut should_save = false;
 
-        const SETTINGS_DIALOG_WIDTH: f32 = 680.0;
-        const SETTINGS_DIALOG_HEIGHT: f32 = 600.0;
+        const SETTINGS_DIALOG_WIDTH: f32 = 920.0;
+        const SETTINGS_DIALOG_HEIGHT: f32 = 640.0;
+        const SETTINGS_LEFT_PANE_WIDTH: f32 = 236.0;
         let dialog_width = (screen_rect.width() - 32.0).clamp(480.0, SETTINGS_DIALOG_WIDTH);
         let dialog_height = (screen_rect.height() - 32.0).clamp(420.0, SETTINGS_DIALOG_HEIGHT);
 
@@ -171,12 +172,12 @@ impl ViviviGuiApp {
                         egui::Vec2::new(ui.available_width(), available_height),
                         egui::Layout::left_to_right(egui::Align::TOP),
                         |ui| {
-                            // [左ペイン: カテゴリツリー] (幅 180px 固定)
+                            // [左ペイン: カテゴリツリー] (幅固定・単一行表示)
                             ui.allocate_ui_with_layout(
-                                egui::Vec2::new(180.0, available_height),
-                                egui::Layout::top_down(egui::Align::LEFT),
+                                egui::Vec2::new(SETTINGS_LEFT_PANE_WIDTH, available_height),
+                                egui::Layout::top_down_justified(egui::Align::LEFT),
                                 |ui| {
-                                    ui.set_width(180.0);
+                                    ui.set_width(SETTINGS_LEFT_PANE_WIDTH);
                                     self.render_settings_left_pane(ui);
                                 },
                             );
@@ -184,7 +185,8 @@ impl ViviviGuiApp {
                             ui.separator();
 
                             // [右ペイン: カテゴリ別詳細設定] (固定残余幅、長文は右ペイン幅で折り返し)
-                            let right_pane_width = (dialog_width - 180.0 - 44.0).max(260.0);
+                            let right_pane_width =
+                                (dialog_width - SETTINGS_LEFT_PANE_WIDTH - 44.0).max(280.0);
                             ui.allocate_ui_with_layout(
                                 egui::Vec2::new(right_pane_width, available_height),
                                 egui::Layout::top_down(egui::Align::LEFT),
@@ -196,7 +198,7 @@ impl ViviviGuiApp {
                                         .id_salt("settings_right_pane_scroll")
                                         .auto_shrink([false, false])
                                         .show(ui, |ui| {
-                                            let inner_w = (right_pane_width - 14.0).max(240.0);
+                                            let inner_w = (right_pane_width - 14.0).max(260.0);
                                             ui.set_width(inner_w);
                                             ui.set_max_width(inner_w);
                                             ui.vertical(|ui| {
@@ -223,25 +225,34 @@ impl ViviviGuiApp {
         }
     }
 
+    /// 折り返しを禁止した単一行ラベル（項目名・コマンド列の文字途切れ防止用）
+    fn nowrap_label(ui: &mut egui::Ui, text: impl Into<egui::WidgetText>) -> egui::Response {
+        ui.add(egui::Label::new(text).wrap_mode(egui::TextWrapMode::Extend))
+    }
+
     /// 左ペイン: カテゴリ選択ボタン一覧
     fn render_settings_left_pane(&mut self, ui: &mut egui::Ui) {
         ui.add_space(4.0);
         egui::ScrollArea::vertical()
             .id_salt("settings_category_list")
             .show(ui, |ui| {
-                for cat in SettingsCategory::all() {
-                    let name = cat.display_name();
-                    let icon = cat.icon();
-                    let label = format!("{icon} {name}");
+                // 左ペインのカテゴリ項目名は途中改行させず均一幅の選択行として表示
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
+                    for cat in SettingsCategory::all() {
+                        let name = cat.display_name();
+                        let icon = cat.icon();
+                        let label = format!("{icon} {name}");
 
-                    let is_active = self.settings_dialog.active_category == *cat;
-                    let resp = ui
-                        .selectable_label(is_active, label)
-                        .on_hover_cursor(egui::CursorIcon::PointingHand);
-                    if resp.clicked() {
-                        self.settings_dialog.active_category = *cat;
+                        let is_active = self.settings_dialog.active_category == *cat;
+                        let resp = ui
+                            .selectable_label(is_active, label)
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                        if resp.clicked() {
+                            self.settings_dialog.active_category = *cat;
+                        }
                     }
-                }
+                });
             });
     }
 
@@ -271,9 +282,9 @@ impl ViviviGuiApp {
 
         egui::Grid::new("general_grid")
             .num_columns(2)
-            .spacing([20.0, 10.0])
+            .spacing([24.0, 10.0])
             .show(ui, |ui| {
-                ui.label("デフォルト文字コード (Encoding):");
+                Self::nowrap_label(ui, "デフォルト文字コード (Encoding):");
                 egui::ComboBox::from_id_salt("general_encoding")
                     .selected_text(&self.settings_dialog.draft_config.general.default_encoding)
                     .show_ui(ui, |ui| {
@@ -287,7 +298,7 @@ impl ViviviGuiApp {
                     });
                 ui.end_row();
 
-                ui.label("デフォルト改行形式 (Fileformat):");
+                Self::nowrap_label(ui, "デフォルト改行形式 (Fileformat):");
                 egui::ComboBox::from_id_salt("general_ff")
                     .selected_text(
                         match self
@@ -315,7 +326,7 @@ impl ViviviGuiApp {
                     });
                 ui.end_row();
 
-                ui.label("クリップボード同期 (Clipboard):");
+                Self::nowrap_label(ui, "クリップボード同期 (Clipboard):");
                 egui::ComboBox::from_id_salt("general_clipboard")
                     .selected_text(
                         match self.settings_dialog.draft_config.general.clipboard.as_str() {
@@ -363,7 +374,8 @@ impl ViviviGuiApp {
 
             match status {
                 moult_update::UpdateStatus::UpdateAvailable(ref rel) => {
-                    ui.label(
+                    Self::nowrap_label(
+                        ui,
                         egui::RichText::new(format!("⬆ v{} が利用可能です", rel.version))
                             .color(pal.accent_cyan)
                             .strong(),
@@ -379,10 +391,11 @@ impl ViviviGuiApp {
                     } else {
                         "ダウンロード中...".to_string()
                     };
-                    ui.label(egui::RichText::new(text).color(pal.accent_yellow));
+                    Self::nowrap_label(ui, egui::RichText::new(text).color(pal.accent_yellow));
                 }
                 moult_update::UpdateStatus::ReadyToApply { ref release, .. } => {
-                    ui.label(
+                    Self::nowrap_label(
+                        ui,
                         egui::RichText::new(format!("✨ v{} 準備完了", release.version))
                             .color(pal.accent_green)
                             .strong(),
@@ -392,12 +405,13 @@ impl ViviviGuiApp {
                     }
                 }
                 moult_update::UpdateStatus::UpToDate => {
-                    ui.label(
+                    Self::nowrap_label(
+                        ui,
                         egui::RichText::new("✓ 最新バージョンを利用中です").color(pal.fg_dimmed),
                     );
                 }
                 moult_update::UpdateStatus::Checking => {
-                    ui.label(egui::RichText::new("照会中...").color(pal.accent_blue));
+                    Self::nowrap_label(ui, egui::RichText::new("照会中...").color(pal.accent_blue));
                 }
                 moult_update::UpdateStatus::Failed(_) => {}
                 _ => {}
@@ -425,12 +439,13 @@ impl ViviviGuiApp {
         ui.separator();
 
         ui.group(|ui| {
+            ui.set_min_width(ui.available_width());
             ui.label(egui::RichText::new("【エディタ外観・テーマ】").strong());
             egui::Grid::new("appearance_grid")
                 .num_columns(2)
-                .spacing([20.0, 10.0])
+                .spacing([24.0, 10.0])
                 .show(ui, |ui| {
-                    ui.label("カラーテーマ (Color Theme):");
+                    Self::nowrap_label(ui, "カラーテーマ (Color Theme):");
                     let current_theme = self.settings_dialog.draft_config.appearance.theme.clone();
                     egui::ComboBox::from_id_salt("appearance_theme_combo")
                         .selected_text(&current_theme)
@@ -468,12 +483,14 @@ impl ViviviGuiApp {
 
         ui.add_space(10.0);
         ui.group(|ui| {
+            ui.set_min_width(ui.available_width());
             ui.label(egui::RichText::new("【GUI・フォント・ミニマップ】").strong());
+            ui.spacing_mut().slider_width = 180.0;
             egui::Grid::new("gui_appearance_grid")
                 .num_columns(2)
-                .spacing([20.0, 10.0])
+                .spacing([24.0, 10.0])
                 .show(ui, |ui| {
-                    ui.label("フォントサイズ (Font Size):");
+                    Self::nowrap_label(ui, "フォントサイズ (Font Size):");
                     ui.add(
                         egui::Slider::new(
                             &mut self.settings_dialog.draft_config.appearance.gui.font_size,
@@ -483,7 +500,7 @@ impl ViviviGuiApp {
                     );
                     ui.end_row();
 
-                    ui.label("行間倍率 (Line Height):");
+                    Self::nowrap_label(ui, "行間倍率 (Line Height):");
                     ui.add(
                         egui::Slider::new(
                             &mut self
@@ -498,7 +515,7 @@ impl ViviviGuiApp {
                     );
                     ui.end_row();
 
-                    ui.label("ミニマップ幅 (Minimap Width):");
+                    Self::nowrap_label(ui, "ミニマップ幅 (Minimap Width):");
                     ui.add(
                         egui::Slider::new(
                             &mut self
@@ -545,9 +562,9 @@ impl ViviviGuiApp {
         ui.add_space(10.0);
         egui::Grid::new("invisibles_grid")
             .num_columns(2)
-            .spacing([16.0, 10.0])
+            .spacing([24.0, 10.0])
             .show(ui, |ui| {
-                ui.label("全角スペース記号:");
+                Self::nowrap_label(ui, "全角スペース記号:");
                 ui.add(
                     egui::TextEdit::singleline(
                         &mut self.settings_dialog.draft_config.invisibles.zenkaku_space,
@@ -556,7 +573,7 @@ impl ViviviGuiApp {
                 );
                 ui.end_row();
 
-                ui.label("半角スペース記号:");
+                Self::nowrap_label(ui, "半角スペース記号:");
                 ui.horizontal(|ui| {
                     if ui
                         .add(
@@ -568,11 +585,14 @@ impl ViviviGuiApp {
                     {
                         self.settings_dialog.draft_config.invisibles.space = ch;
                     }
-                    ui.label(egui::RichText::new("（例: · や 空白）").color(pal.fg_dimmed));
+                    Self::nowrap_label(
+                        ui,
+                        egui::RichText::new("（例: · や 空白）").color(pal.fg_dimmed),
+                    );
                 });
                 ui.end_row();
 
-                ui.label("タブ文字記号 (Tab):");
+                Self::nowrap_label(ui, "タブ文字記号 (Tab):");
                 ui.horizontal(|ui| {
                     ui.add(
                         egui::TextEdit::singleline(
@@ -580,11 +600,14 @@ impl ViviviGuiApp {
                         )
                         .desired_width(60.0),
                     );
-                    ui.label(egui::RichText::new("（例: ▸--- や >---）").color(pal.fg_dimmed));
+                    Self::nowrap_label(
+                        ui,
+                        egui::RichText::new("（例: ▸--- や >---）").color(pal.fg_dimmed),
+                    );
                 });
                 ui.end_row();
 
-                ui.label("改行記号 (EOL):");
+                Self::nowrap_label(ui, "改行記号 (EOL):");
                 ui.horizontal(|ui| {
                     if ui
                         .add(
@@ -596,7 +619,10 @@ impl ViviviGuiApp {
                     {
                         self.settings_dialog.draft_config.invisibles.eol = ch;
                     }
-                    ui.label(egui::RichText::new("（例: $ や ↵）").color(pal.fg_dimmed));
+                    Self::nowrap_label(
+                        ui,
+                        egui::RichText::new("（例: $ や ↵）").color(pal.fg_dimmed),
+                    );
                 });
                 ui.end_row();
             });
@@ -618,11 +644,12 @@ impl ViviviGuiApp {
         );
         ui.separator();
 
+        ui.spacing_mut().slider_width = 180.0;
         egui::Grid::new("editing_grid")
             .num_columns(2)
-            .spacing([20.0, 10.0])
+            .spacing([24.0, 10.0])
             .show(ui, |ui| {
-                ui.label("タブ幅 (Tab Stop):");
+                Self::nowrap_label(ui, "タブ幅 (Tab Stop):");
                 ui.add(
                     egui::Slider::new(
                         &mut self.settings_dialog.draft_config.editing.tab_width,
@@ -728,11 +755,11 @@ impl ViviviGuiApp {
         egui::Grid::new("keymap_reference_grid")
             .striped(true)
             .num_columns(3)
-            .spacing([12.0, 6.0])
+            .spacing([20.0, 8.0])
             .show(ui, |ui| {
-                ui.label(egui::RichText::new("モード / キー").strong());
-                ui.label(egui::RichText::new("機能・コマンド").strong());
-                ui.label(egui::RichText::new("説明").strong());
+                Self::nowrap_label(ui, egui::RichText::new("モード / キー").strong());
+                Self::nowrap_label(ui, egui::RichText::new("機能・コマンド").strong());
+                Self::nowrap_label(ui, egui::RichText::new("説明").strong());
                 ui.end_row();
 
                 let keymaps = [
@@ -771,8 +798,9 @@ impl ViviviGuiApp {
                 ];
 
                 for (mode, keys, desc) in keymaps {
-                    ui.label(mode);
-                    ui.label(
+                    Self::nowrap_label(ui, mode);
+                    Self::nowrap_label(
+                        ui,
                         egui::RichText::new(keys)
                             .family(egui::FontFamily::Monospace)
                             .color(pal.accent_cyan),

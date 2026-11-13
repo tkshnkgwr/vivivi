@@ -330,6 +330,12 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - Add an `egui::Window` modal for `show_cmd_exec_dialog` supporting execution mode switching (run only / `:r!` / range replace), command input, and output preview.
 - [x] **[GUI Rendering] Support Word Wrap (`:set wrap` / Settings Option) on GUI Canvas**:
   - Render soft-wrapped visual lines in the GUI monospace canvas when `self.core.wrap` is enabled, keeping cursor, click hit-testing, selection, gutter, and IME coordinates aligned.
+- [x] **[GUI Sidebar] Zed-Style Hierarchical File Tree, Full-Row Hover Highlight & Single-Click Open (Files / Outline)**:
+  - Extend `AsyncFileTree` with per-directory expand/collapse state and async child scanning, rendering vertical indent guide lines like Zed
+  - Use full-width row hit-testing across both Files and Outline tabs for full-row hover highlight, active-row emphasis, `PointingHand` cursor anywhere on the row, and single-click open/jump
+- [x] **[GUI Settings Dialog] Wider Layout, Single-Line Labels & Aligned Group Frames**:
+  - Expand the settings dialog size (`920x640px`) and left category pane (`236px`), enforcing single-line labels (`TextWrapMode::Extend`) for categories, setting item labels, and keymap mode/key columns
+  - Unify group frame widths in Appearance across the right pane while keeping long error messages wrapped within the fixed dialog width
 
 ---
 

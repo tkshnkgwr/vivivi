@@ -11,7 +11,7 @@ mod modals;
 mod panels;
 mod settings_dialog;
 
-pub use async_tree::{AsyncFileTree, FileEntryNode, ScanStatus};
+pub use async_tree::{AsyncFileTree, FileEntryNode, ScanStatus, VisibleTreeRow};
 pub use settings_dialog::{SettingsCategory, SettingsDialogState};
 
 pub use input::egui_key_to_app_key;
