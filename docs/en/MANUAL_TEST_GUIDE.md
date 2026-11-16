@@ -7,11 +7,12 @@ This document serves as the **Manual Acceptance Testing Checklist** for `vivivi`
 ## 🚀 Setup & Launch
 
 ```powershell
-# 1. Build release binary
-cargo build --release
+# 1. Build release binaries (TUI & GUI)
+cargo build --release --workspace
 
-# 2. Launch
+# 2. Launch (TUI / GUI)
 .\target\release\vivivi.exe
+.\target\release\vivivi-gui.exe
 ```
 
 ---

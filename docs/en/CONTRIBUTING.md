@@ -7,8 +7,8 @@ We welcome contributions to the `vivivi` project! Please follow these guidelines
 ## 1. Development Flow
 1. Create a feature branch for your work.
 2. Implement changes and apply formatting (`cargo fmt`).
-3. Ensure all unit tests pass (`cargo test`).
-4. Ensure Clippy produces zero warnings (`cargo clippy --all-targets -- -D warnings`).
+3. Ensure all workspace unit, integration, and doc tests pass (`cargo test -j 4 --workspace --all-targets` and `cargo test -j 4 --workspace --doc`).
+4. Ensure Clippy produces zero warnings (`cargo clippy -j 4 --workspace --all-targets -- -D warnings`).
 5. Create commits following the conventional prefix format.
 
 ---

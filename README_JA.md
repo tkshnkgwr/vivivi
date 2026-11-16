@@ -6,7 +6,7 @@
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024%20Edition-orange.svg)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/version-v0.9.16--beta-brightgreen.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/version-v0.9.21--beta-brightgreen.svg)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/tkshnkgwr/vivivi)
 
 [English](./README.md) | [日本語](./README_JA.md)
@@ -27,7 +27,7 @@
 * **開発体制**:  
   Rustによるコード実装は、AI（Gemini）と相談しながら進めています。また、筆者自身GitHubの運用全般に不慣れな点が多く、至らない点があるかと思いますがご容赦ください。
 * **現在のステータス**:  
-  現在はβ版（`v0.9.18-beta`）です。共通のヘッドレスコア（`vivivi-app`）を基盤として、ターミナルTUI版（`vivivi`）とデスクトップGUI版（`vivivi-gui` / `egui` + `eframe`）の両方が動作します。
+  現在はβ版（`v0.9.21-beta`）です。共通のヘッドレスコア（`vivivi-app`）を基盤として、ターミナルTUI版（`vivivi`）とデスクトップGUI版（`vivivi-gui` / `egui` + `eframe`）の両方が動作します。
 * **TUI ＆ GUI ハイブリッド構成**:  
   コンソールやSSH環境では超軽量な `vivivi`（TUI）、デスクトップ環境では Tokyo Night テーマ・PlemolJP 等幅フォント・日本語IMEインライン変換・削除文字落下アニメーションを備えた `vivivi-gui`（GUI）をシームレスに使い分けられます。
 
@@ -96,7 +96,7 @@ Unicode罫線の自動結合、インラインCSV/TSV高速整列・編集、Mig
 - 🖥️ **ネイティブ・デスクトップ GUI (`vivivi-gui` / `egui` + `eframe`)**:
   - **Tokyo Night 3段階コントラスト外観**: エディタ背景 (`#1A1B26`)、パネル背景 (`#16161E`)、ステータスライン (`#292E42`) の3段階配色と角丸 2.0px によるフラットな視覚設計。
   - **PlemolJP フォント最優先ロード**: `fonts/` またはシステム導入済みの PlemolJP を自動検出し、BIZ UDゴシック / Consolas への多段フォールバックを構成。
-  - **`ui.painter()` カスタムグリッド描画 ＆ 日本語 IME インライン統合**: 標準 `TextEdit` を使わず、行番号・ガター変更マーカー・対応括弧・不可視文字・IME 未確定文字列（シアン下線付き）を等幅セルで直接描画し、OS の IME 候補ウィンドウ座標を毎フレーム同期。
+  - **`ui.painter()` カスタムグリッド描画 ＆ カーソル・IME 統合**: 標準 `TextEdit` を使わず、行番号・ガター変更マーカー・対応括弧・不可視文字・IME 未確定文字列（シアン下線付き）を等幅セルで直接描画し、OS の IME 候補ウィンドウ座標を毎フレーム同期。さらにカーソル形状（`auto` / `block` / `beam` / `underline`）・角丸半径のカスタマイズや Zed 風ファイルツリー・ミニマップを備えます。
   - **削除文字落下物理アニメーション ＆ 0% CPU 省電力制御**: 文字削除時にグリフが放物線を描いて落下・フェードアウト（0.5秒）し、消滅後は再描画要求を停止してアイドル時 CPU 0% のリアクティブ待機を維持。
 - 🪟 **Windowsライク操作体系 ＆ 外部プロセス連携 (`Shift+矢印`, `Ctrl+C/V`, `:!`, `:w !`)**:
   - `Shift+矢印` での範囲選択や `Ctrl+C/V/X/A/Z/Y/S` が Vi モードとシームレスに共存。外部シェルコマンド実行（`:!<cmd>`）やバッファ流し込み（`:w !<cmd>`）にも対応。
@@ -201,9 +201,9 @@ cargo build --release --workspace
 
 ### テスト実行
 ```powershell
-# 全クレートの単体・公開API統合・ドキュメントテスト実行
-cargo test --all-targets
-cargo test --doc
+# ワークスペース全クレートの単体・公開API統合・ドキュメントテスト実行
+cargo test -j 4 --workspace --all-targets
+cargo test -j 4 --workspace --doc
 ```
 
 ---

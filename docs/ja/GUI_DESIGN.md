@@ -173,7 +173,7 @@ vivivi/
 │   │   └── src/tui/         (Ratatui / Crossterm 専用描画・イベント層)
 │   └── vivivi-gui           (Phase 5: egui / eframe 専用デスクトップGUIフロントエンド)
 │       ├── src/main.rs      (GUI エントリポイント: vivivi-gui.exe)
-│       └── src/gui/         (egui ウィジェット・Painter 描画層)
+│       └── src/app/         (egui ウィジェット・Painter 描画層: canvas/, panels/, settings_dialog/ 等)
 ```
 
 ### 7.2 分離運用の原則と事前デカップリング要件

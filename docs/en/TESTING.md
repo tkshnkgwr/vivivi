@@ -23,14 +23,16 @@ The editor core (buffer, undo, vi state machine, special modes) is decoupled fro
 ## 2. Test Commands
 
 ```powershell
-# 1. Run all workspace tests
-cargo test
+# 1. Run all workspace tests (unit, integration, and doctests)
+cargo test -j 4 --workspace --all-targets
+cargo test -j 4 --workspace --doc
 
 # 2. Run specific crate tests
 cargo test -p vivivi-core
 cargo test -p vivivi-modes
 cargo test -p vivivi-vi
+cargo test -p vivivi-gui
 
 # 3. Verbose test output
-cargo test -- --nocapture
+cargo test --workspace -- --nocapture
 ```

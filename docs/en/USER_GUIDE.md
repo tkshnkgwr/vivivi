@@ -322,7 +322,7 @@ Persist user preferences and key mappings in `%USERPROFILE%\.vivivi\config.toml`
   - To save active settings permanently, run **`:mkvivivirc`** (or `:wconfig`).
   - To reload configuration from disk live, run **`:source`** (or `:so`).
 - **Dynamic Reloading**: Run `:source` (or `:so`, `:config`) to reload settings from disk on the fly.
-- **Runtime Set Options**: `:set number` / `:se nu` / `:se nonu` (line numbers), `:set wrap` / `:se wrap` / `:se nowrap` (line wrapping), `:set relativenumber` / `:se rnu`, `:set tabstop=4` (`:se ts=4`), `:set clipboard=unnamed`, `:set minimap` / `:set nominimap`, `:set particles` / `:set noparticles`, etc. Query current values by appending `?` (e.g. `:se wrap?`).
+- **Runtime Options & Version Info**: `:set number` / `:se nu` / `:se nonu` (line numbers), `:set wrap` / `:se wrap` / `:se nowrap` (line wrapping), `:set relativenumber` / `:se rnu`, `:set tabstop=4` (`:se ts=4`), `:set clipboard=unnamed`, `:set minimap` / `:set nominimap`, `:set particles` / `:set noparticles`, `:set cursor_shape=<auto|block|beam|underline>`, `:set cursor_radius=<px>` (default `0.0` for sharp corners), etc. Query current values by appending `?` (e.g. `:se wrap?`, `:se cursor_shape?`). Run `:version` (`:ver`) to display crate version and build info.
 
 ### (4) Early Encoding Auto-Detection & Format Conversion
 - **Ultra-Fast Early Detection**: Upon opening a file, BOM detection and exclusive signature bytes (Shift_JIS trails, EUC-JP kana, UTF-8 sequences) resolve character encoding on the very first character, while 3 consecutive identical endings resolve line format (CRLF / LF / CR) immediately. The active status appears in the bottom-right status bar (e.g. `[UTF-8/CRLF/...]`).
@@ -363,22 +363,22 @@ cargo run -p vivivi-gui -- path/to/file.rs
   - Access common operations via `File`, `Edit`, `View`, `Mode`, `Tools`, and `Help` menus (Save, Split/Vsplit, Character Conversions, Keisen Mode, CSV Mode, ToDo Extraction, PDF Export, Help viewer).
   - Click any tab in the tab bar to switch buffers, or click `+` to open a new tab page (`:tabnew`).
 - **Collapsible Left Sidebar (`Files` / `Outline`)**:
-  - `📁 Files` tab: Browse directory contents. Background asynchronous loading ensures that cloud folders (OneDrive, Dropbox) or network shares never freeze the GUI. Click `📁 ..` to move up, or click any file to open it immediately. Toggle sidebar via `Ctrl+e` or Ex commands `:tree`, `:explore`.
+  - `📁 Files` tab: Browse directory contents in a Zed-style indented, collapsible tree. Background asynchronous loading ensures that cloud folders (OneDrive, Dropbox) or network shares never freeze the GUI, while an isolated scroll container prevents sidebar wheel bleed-through. Click `📁 ..` to move up, or click any file to open it immediately. Toggle sidebar via `Ctrl+e` or Ex commands `:tree`, `:explore`.
   - `🌲 Outline` tab: Displays extracted Markdown headings and code symbols (`fn`, `struct`, `impl`, etc.); click any symbol to jump directly to its line.
 - **Project Visualizer Graph (`Visualize` / `:visualize`, `:graph`)**:
   - Activating View -> `Visualize (Project Graph)` or running `:visualize`, `:graph` switches the central editor canvas into an interactive 2D Force-Directed Graph.
   - Project files appear as nodes with radius reflecting file size and glow intensity encoding edit freshness. Dependency edges (`use`, `mod`, `#include`) pull related files together via simulated spring forces.
   - Nodes can be freely dragged; clicking any node opens the target file in the editor and returns to code view.
 - **Central Split Editor Canvas & Right Minimap**:
-  - Renders nested `:split` and `:vsplit` windows. Clicking inside any split pane switches active window focus and positions the cursor at the clicked cell.
-  - Clicking anywhere on the right-side Minimap jumps the viewport scroll directly to that proportional position in the document.
+  - Renders nested `:split` and `:vsplit` windows with isolated pane wheel scrolling. Clicking inside any split pane switches active window focus and positions the cursor at the clicked cell.
+  - Clicking or dragging along the right-side Minimap jumps the viewport scroll directly to the line-proportional document position.
 - **Inline Japanese IME Composition**:
   - In Insert, Replace, CommandLine (`:` / `/`), and Migemo (`g/`) modes, OS IME composition is automatically enabled.
   - Uncommitted preedit text is rendered inline at the cursor with a cyan underline, and the OS candidate window tracks the exact cursor coordinates every frame.
 - **Gravity-Drop Character Deletion Animation**:
   - Deleting characters (`x`, `dd`, `dw`, `Backspace`) spawns 2D physics glyphs that fall and fade out over 0.5 seconds (toggleable via `View` -> `💧 Drop Animation`). Once all particles fade out, rendering automatically returns to `0% CPU` reactive idle mode.
-- **Flat Modern Design & I-Beam Cursor**:
-  - Buttons, tabs, and dialog corners feature unified 2.0px rounding (`CornerRadius::same(2)`). Hovering over the central editor canvas dynamically activates the text input I-beam cursor (`CursorIcon::Text`).
+- **Flat Modern Design, Cursor Customization & I-Beam Pointer**:
+  - Buttons, tabs, and dialog corners feature unified 2.0px rounding (`CornerRadius::same(2)`). Hovering over the central editor canvas dynamically activates the text input I-beam cursor (`CursorIcon::Text`). Editor cursor shape (`auto` / `block` / `beam` / `underline`) and corner radius (`0.0px` = square) are customizable via Preferences or `:set cursor_shape=` / `:set cursor_radius=`.
 - **2-Pane Preferences Modal Dialog**:
   - Accessible via `Edit` -> `Preferences` (or `Ctrl+,`, `:preferences`), presenting a dimmed background overlay and input-blocking modal dialog.
   - Interactively tune 6 core categories with "Apply" (live preview) and "Save & Close" (persist to `%USERPROFILE%\.vivivi\config.toml`).

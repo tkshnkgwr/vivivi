@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [Unreleased]
+
+### Added / Changed / Fixed (2026-11-16)
+- **GUI Minimap, Split Scroll & Sidebar Scroll Isolation (`vivivi-gui`)**:
+  - Fixed Minimap last-line rendering, height-proportional viewport sync, and click/drag scroll accuracy.
+  - Improved split window rendering and per-pane independent mouse wheel scrolling (`last_editor_rect` / hover routing).
+  - Isolated left sidebar (Files / Outline) wheel events inside its own `ScrollArea` so scrolling no longer bleeds into the editor canvas.
+- **`:version` / `:ver` Command & GUI Cursor Shape / Corner Radius Customization (`vivivi-app`, `vivivi-gui`)**:
+  - Added `:version` / `:ver` Ex command displaying crate version and runtime configuration info.
+  - Added `CursorShape` (`auto` / `block` / `beam` / `underline`) and `cursor_corner_radius` (default `0.0px` square corners), exposed via Preferences UI and `:set cursor_shape=` / `:set cursor_radius=`.
+- **Large Module Split Refactoring (`vivivi-gui`, `vivivi-app`)**:
+  - Decomposed 6 large files into cohesive submodules: `canvas/`, `panels/`, `settings_dialog/`, `ex/settings/`, `tui/event/{modals.rs, hex.rs}`, and `tui/app/` helpers.
+- **Documentation & RustDoc Synchronization (`docs/`, `README*.md`, `doc/help/`, `crates/`)**:
+  - Synchronized `docs/{ja,en}/`, `doc/help/`, `README.md` / `README_JA.md`, and RustDoc comments with the modularized codebase and measured test results.
+
+---
+
 ## [0.9.21-beta] - 2026-11-13
 
 ### Added / Improved

@@ -92,13 +92,13 @@ Standalone application-agnostic self-update crate.
 ### 4.5 `vivivi-app`
 Provides the headless session layer and terminal TUI frontend.
 - `config.rs` / `theme.rs`: 6-category TOML configuration and 5 built-in color themes.
-- `tui/app/`: Session state, multi-tab management, window splitting, external process piping, Hex/LSP/Tree-sitter orchestration.
-- `tui/event/`: Key dispatch, Windows shortcuts, Ex command execution.
+- `tui/app/`: Session state (`mod.rs`), multi-tab management (`tabs.rs`), window splitting (`windows.rs`), file I/O (`files.rs`), external process piping (`process.rs`), Hex/LSP/Tree-sitter orchestration (`lsp_treesitter.rs`), and editing helpers (`editing_ops.rs`, `dialogs_and_config.rs`, `update.rs`, `tools/`).
+- `tui/event/`: Key dispatch (`mod.rs`, `modes.rs`), modals (`modals.rs`), Hex input (`hex.rs`), Windows shortcuts (`windows_keys.rs`), and Ex command execution (`ex/mod.rs`, `ex/settings/`, `ex/substitute.rs`, `ex/text.rs`, `ex/tools.rs`).
 - `tui/ui/`: Modular TUI widgets (`editor.rs`, `hex_view.rs`, `lsp_view.rs`, `outline.rs`, `status.rs`, `settings.rs`, `cmd_exec.rs`).
 
 ### 4.6 `vivivi-gui`
 Provides the native desktop GUI frontend powered by `egui` / `eframe`.
-- `app/`: Main update loop, `canvas.rs` (custom monospace grid, Hex grid, AST highlighting), `input.rs` (IME Preedit protection, particle spawning), `panels.rs`, `modals.rs`, `settings_dialog.rs`, `async_tree.rs`.
+- `app/`: Main update loop (`mod.rs`), canvas renderer (`canvas/`: `mod.rs`, `editor_pane.rs`, `cursor.rs`, `helpers.rs`, `hex.rs`, `minimap.rs`), input & IME protection & particles (`input.rs`), UI panels (`panels/`: `mod.rs`, `top_bar.rs`, `sidebar.rs`, `bottom_bar.rs`), modals (`modals.rs`), 2-pane preferences dialog (`settings_dialog/`: `mod.rs`, `tabs_basic.rs`, `tabs_advanced.rs`), and asynchronous file tree (`async_tree.rs`).
 - `visualize.rs`: 2D Force-Directed Graph for project dependency and freshness visualization.
 - `particles.rs`: Gravity-drop character deletion physics and 0% CPU reactive idle control.
 

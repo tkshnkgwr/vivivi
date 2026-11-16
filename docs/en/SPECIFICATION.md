@@ -528,21 +528,21 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
 ### 15.2 Visual Theme & Font Loader (`theme.rs`, `fonts.rs`)
 - **Tokyo Night 3-Tier Contrast Visuals**:
   - Avoids harsh pitch black (`#000000`) in favor of a 3-tier dark palette: Editor Canvas (`#1A1B26`), Side Panels & Command Line (`#16161E`), and Statusline & Active Tab (`#292E42`).
-  - Eliminates noisy widget borders (`Stroke::NONE`) and applies uniform `4px` corner rounding.
+  - Eliminates noisy widget borders (`Stroke::NONE`) and applies uniform `2.0px` flat-design corner rounding (editor cursor rounding is independently configurable via `cursor_corner_radius`, defaulting to `0.0px`).
 - **PlemolJP Priority Font Loader**:
   - Scans executable-relative `fonts/`, working directory `fonts/`, user font directory (`%LOCALAPPDATA%\Microsoft\Windows\Fonts`), and system fonts (`C:\Windows\Fonts`) to load `PlemolJP` first, with multi-stage fallback to `BIZ UD Gothic`, `Consolas`, and `Meiryo` for a strict 2:1 CJK/ASCII monospaced grid.
 
-### 15.3 4-Pane Layout & Custom `ui.painter()` Rendering (`app.rs`)
+### 15.3 4-Pane Layout & Custom `ui.painter()` Rendering (`app/panels/`, `app/canvas/`)
 - **4-Pane Workspace**:
   1. `TopBottomPanel::top`: Menu bar (File / Edit / View / Mode / Tools / Help) and interactive multi-tab bar (`+` new tab button & tab switching).
-  2. `SidePanel::left`: Collapsible left sidebar switching between `Files` (File Explorer with `..` parent traversal & directory navigation) and `Outline` (symbol tree with one-click line jump).
+  2. `SidePanel::left`: Collapsible left sidebar switching between `Files` (Zed-style indented & collapsible File Explorer with isolated wheel scrolling, `..` parent traversal & directory navigation) and `Outline` (symbol tree with one-click line jump).
   3. `TopBottomPanel::bottom`: 2-row footer comprising the status bar (mode badge, Keisen/CSV/Macro indicators, encoding/newline badges, line/col coordinates) and the bottom Ex command / Migemo search line.
-  4. `CentralPanel`: Nested split editor views computed via `WindowTreeNode::compute_logical_rects` alongside a right-side Minimap with Viewport Culling and click-to-jump scrolling.
+  4. `CentralPanel`: Nested split editor views computed via `WindowTreeNode::compute_logical_rects` (with independent per-pane wheel scrolling) alongside a right-side Minimap with Viewport Culling and height-proportional click/drag scrolling.
 - **Custom Grid Painting & Inline Japanese IME Integration**:
   - Completely bypasses `egui::TextEdit`; captures `Event::Key`, `Event::Text`, and `Event::Ime(Preedit/Commit)` via `ctx.input` and feeds the shared `App` core directly.
   - Guards IME composition keys (`Backspace`, `Enter`, `Escape`, arrow keys) while `ime_preedit` is non-empty so OS IME candidate selection never corrupts the buffer.
   - Uses `ui.painter()` to render visible line numbers, gutter change markers (yellow unsaved / green saved), code folding placeholders, CSV column alignment, invisible characters & full-width space highlights, matching parentheses, visual selections, search matches, and underlined inline IME preedit text.
-  - Draws mode-specific cursors (Block for Normal/Visual, I-beam for Insert, Underline for Replace) and updates `ctx.output_mut(|o| o.ime = ...)` every frame with the exact screen cursor rectangle.
+  - Draws mode-aware or explicitly configured cursors (`CursorShape`: `auto`/`block`/`beam`/`underline`) with adjustable corner radius (`cursor_corner_radius`, default `0.0px`) and updates `ctx.output_mut(|o| o.ime = ...)` every frame with the exact screen cursor rectangle.
 
 ### 15.4 Gravity-Drop Deletion Animation & 0% CPU Hybrid Control (`particles.rs`)
 - **2D Physics Particles (`ParticleManager`)**:
@@ -612,7 +612,7 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
 - **External Command Execution Dialog (`cmdExecDlg` / `:cmdexec`, `:cmd`)**:
   - Floating dialog allowing users to enter shell commands interactively, choosing execution mode ("Run only", "Read into buffer `:r !`", or "Filter range `:[range]!`").
 
-### 16.5 GUI / TUI Preferences Dialog Specifications (`settings_dialog.rs`, `settings.rs`)
+### 16.5 GUI / TUI Preferences Dialog Specifications (`settings_dialog/`, `settings.rs`)
 - **GUI Preferences Dialog (`580x620`, max `660px`)**:
   - Dimmed modal backdrop and 100% editor input blocking.
   - 2-pane layout separating 6-category sidebar from interactive controls.

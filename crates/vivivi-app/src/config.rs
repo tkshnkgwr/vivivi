@@ -44,7 +44,19 @@ fn default_cursor_corner_radius() -> f32 {
     0.0
 }
 
-/// GUI エディタのカーソル表示形状設定
+/// GUI エディタのカーソル表示形状設定。
+///
+/// デフォルトの [`CursorShape::Auto`] では Vi モードに応じて形状が切り替わり、
+/// 明示指定時はモードに関わらず指定された形状で描画されます。
+///
+/// # Examples
+/// ```
+/// use vivivi_app::config::CursorShape;
+///
+/// assert_eq!(CursorShape::parse("beam"), Some(CursorShape::Beam));
+/// assert_eq!(CursorShape::parse("box"), Some(CursorShape::Block));
+/// assert_eq!(CursorShape::Auto.as_str(), "auto");
+/// ```
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum CursorShape {

@@ -94,16 +94,16 @@ Run the following checks before committing code changes. Ensure all checks pass 
 
 ```powershell
 # 1. Workspace type & target check
-cargo check --all-targets
+cargo check -j 4 --workspace --all-targets
 
-# 2. Run unit and integration tests
-cargo test --all-targets
+# 2. Run workspace unit and integration tests
+cargo test -j 4 --workspace --all-targets
 
-# 3. Run documentation tests
-cargo test --doc
+# 3. Run workspace documentation tests
+cargo test -j 4 --workspace --doc
 
 # 4. Clippy linter check (zero warnings enforced)
-cargo clippy --all-targets -- -D warnings
+cargo clippy -j 4 --workspace --all-targets -- -D warnings
 
 # 5. Formatting check (format with `cargo fmt` if needed)
 cargo fmt --check

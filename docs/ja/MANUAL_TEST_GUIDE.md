@@ -7,11 +7,12 @@
 ## 🚀 準備と起動
 
 ```powershell
-# 1. 最新バイナリのビルド
-cargo build --release
+# 1. 最新バイナリのビルド (TUI & GUI)
+cargo build --release --workspace
 
-# 2. 起動
+# 2. 起動 (TUI / GUI)
 .\target\release\vivivi.exe
+.\target\release\vivivi-gui.exe
 ```
 
 ---

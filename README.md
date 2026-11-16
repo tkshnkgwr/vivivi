@@ -6,7 +6,7 @@
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024%20Edition-orange.svg)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/version-v0.9.16--beta-brightgreen.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/version-v0.9.21--beta-brightgreen.svg)](Cargo.toml)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://github.com/tkshnkgwr/vivivi)
 
 [English](./README.md) | [日本語](./README_JA.md)
@@ -27,7 +27,7 @@ It would be a privilege if former ViVi or OpenViVi users find a home here, thoug
 * **Development Approach**:  
   The Rust implementation is developed in active collaboration with AI (Gemini). As I am relatively new to GitHub and open-source workflows, I appreciate your patience and understanding.
 * **Current Status**:  
-  Currently in Beta (`v0.9.18-beta`). Both the full-featured terminal TUI (`vivivi`) and the native desktop GUI (`vivivi-gui`) powered by `egui` / `eframe` are implemented and share a unified headless core.
+  Currently in Beta (`v0.9.21-beta`). Both the full-featured terminal TUI (`vivivi`) and the native desktop GUI (`vivivi-gui`) powered by `egui` / `eframe` are implemented and share a unified headless core.
 * **GUI & TUI Dual Architecture**:  
   Use `vivivi` for ultra-fast terminal/SSH workflows, or launch `vivivi-gui` for a modern Tokyo Night desktop experience with PlemolJP typography, inline Japanese IME, minimap, and gravity-drop deletion animations.
 
@@ -95,7 +95,7 @@ It faithfully ports the core Vi editing mechanics and data structures while inte
 - 🖥️ **Native Desktop GUI (`vivivi-gui` via `egui` / `eframe`)**:
   - **Tokyo Night 3-Tier Contrast Theme**: Eye-friendly dark palette (`#1A1B26` editor, `#16161E` panels, `#292E42` statusline) with 2.0px flat design rounded corners.
   - **PlemolJP Monospace Priority Loader**: Automatically discovers bundled or system-installed PlemolJP fonts with BIZ UD Gothic / Consolas fallback.
-  - **Custom `ui.painter()` Grid & Inline Japanese IME**: Renders crisp CJK/ASCII 2:1 columns, underlined IME preedit strings, mode-aware cursors, and OS IME candidate window tracking without using `egui::TextEdit`.
+  - **Custom `ui.painter()` Grid, Cursor Customization & Inline Japanese IME**: Renders crisp CJK/ASCII 2:1 columns, underlined IME preedit strings, customizable cursors (`auto` / `block` / `beam` / `underline` with adjustable corner radius), Zed-style collapsible file tree & minimap, and OS IME candidate window tracking without using `egui::TextEdit`.
   - **Gravity-Drop Character Deletion Animation & 0% CPU Idle**: Deleted characters fall with 2D gravity and fade out over 0.5s, returning immediately to 0% CPU reactive idle once animations finish.
 - 🪟 **Windows-Style Editing & External Process Piping (`Shift+Arrows`, `Ctrl+C/V`, `:!`, `:w !`)**:
   - `Shift+Arrow` selection and `Ctrl+C/V/X/A/Z/Y/S` seamlessly coexist with Vi modes. Run shell commands directly (`:!<cmd>`) or stream buffers into external process stdin (`:w !<cmd>`).
@@ -200,9 +200,9 @@ cargo build --release --workspace
 
 ### Run Tests
 ```powershell
-# Run unit, public API integration, and doc tests across all crates
-cargo test --all-targets
-cargo test --doc
+# Run unit, public API integration, and doc tests across all workspace crates
+cargo test -j 4 --workspace --all-targets
+cargo test -j 4 --workspace --doc
 ```
 
 ---

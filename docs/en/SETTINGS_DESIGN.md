@@ -82,6 +82,8 @@ show_minimap = true
 minimap_width = 90.0
 enable_gravity_drop = true     # Character deletion physics animation (OpenViVi)
 reactive_idle_sleep = true     # 0% CPU reactive idle sleep control
+cursor_shape = "auto"          # "auto", "block", "beam", "underline"
+cursor_corner_radius = 0.0     # px (0.0 = right-angled corners)
 
 # ==========================================
 # 3. Invisibles
@@ -203,6 +205,8 @@ operator = "#89ddff"
 |                    | Font Size                     : [ 15.0 ] [▲][▼]       |
 |                    | Gravity-Drop Particle FX      : [x] Enabled           |
 |                    | Minimap Overview              : [x] Enabled (90px)    |
+|                    | Cursor Shape                  : [Auto (Mode-Linked)▼] |
+|                    | Cursor Corner Radius          : [ 0.0 px (0=Square) ] |
 |                    |                                                       |
 +-------------------+------------------------------------------------------+
 | [Reset to Defaults]                         [Cancel]  [Apply]  [Save & Close]|

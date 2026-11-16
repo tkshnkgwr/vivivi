@@ -23,14 +23,16 @@
 ## 2. テストコマンド
 
 ```powershell
-# 1. ワークスペース全体の単体テスト実行
-cargo test
+# 1. ワークスペース全体のテスト実行（単体・統合・ドキュメントテスト）
+cargo test -j 4 --workspace --all-targets
+cargo test -j 4 --workspace --doc
 
 # 2. 特定クレートのテスト実行
 cargo test -p vivivi-core
 cargo test -p vivivi-modes
 cargo test -p vivivi-vi
+cargo test -p vivivi-gui
 
 # 3. テスト出力の詳細表示
-cargo test -- --nocapture
+cargo test --workspace -- --nocapture
 ```

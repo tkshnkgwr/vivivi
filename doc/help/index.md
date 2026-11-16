@@ -113,6 +113,9 @@
 - `:set list` / `:set nolist`: 不可視文字（全角スペース□/タブ/改行$）表示切替
 - `:set minimap` / `:set nominimap`: ミニマップ表示切替（GUI）
 - `:set particles` / `:set noparticles`: 文字削除落下アニメーション切替（GUI）
+- `:set cursor_shape=<mode>`: GUI カーソル形状指定（`auto` / `block` / `beam` / `underline`、`:set cursor_shape?` で確認）
+- `:set cursor_radius=<px>`: GUI カーソル角丸半径指定（`0.0` で完全直角、`:set cursor_radius?` で確認）
+- `:version` / `:ver`: クレートバージョン、エディタ構成、ランタイム情報を一覧表示
 - `:set bg=dark` / `:set bg=light`: 背景明暗切替
 - `:set gutter` / `:set nogutter`: 変更行ガター強調（黄:未保存, 緑:保存済）切替
 - `:set fenc=<enc>`: 保存文字コード（`utf-8`, `sjis`, `euc-jp`）を指定

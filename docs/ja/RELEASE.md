@@ -6,8 +6,8 @@
 
 ## 1. リリース前チェックリスト
 
-- [ ] すべての単体テストが成功すること (`cargo test`)
-- [ ] Clippy の警告が 0 件であること (`cargo clippy --all-targets -- -D warnings`)
+- [ ] すべてのテストが成功すること (`cargo test -j 4 --workspace --all-targets` および `cargo test -j 4 --workspace --doc`)
+- [ ] Clippy の警告が 0 件であること (`cargo clippy -j 4 --workspace --all-targets -- -D warnings`)
 - [ ] コードフォーマットが整っていること (`cargo fmt --check`)
 - [ ] `Cargo.toml` のバージョン番号が更新されていること
 - [ ] `docs/ja/CHANGELOG.md` および `docs/en/CHANGELOG.md` に更新内容が記載されていること
@@ -17,9 +17,9 @@
 ## 2. リリースビルド手順
 
 ```powershell
-# 最適化リリースバイナリのビルド
-cargo build --release
+# 最適化リリースバイナリ（TUI & GUI）のビルド
+cargo build --release --workspace
 
 # 生成された実行ファイルの確認
-ls target/release/vivivi.exe
+ls target/release/vivivi.exe, target/release/vivivi-gui.exe
 ```

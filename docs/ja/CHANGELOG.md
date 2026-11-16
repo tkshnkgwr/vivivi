@@ -4,6 +4,23 @@
 
 ---
 
+## [Unreleased]
+
+### Added / Changed / Fixed (2026-11-16)
+- **GUI ミニマップ・画面分割スクロール・サイドバースクロール改善 (`vivivi-gui`)**:
+  - ミニマップの最終行・高さ比例計算およびドラッグ/クリック遷移の同期ズレを修正。
+  - 画面分割（`:split` / `:vsplit`）時の複数ペイン描画・マウスホイール独立スクロール（ホバー/アクティブペイン判定）を改善。
+  - 左サイドバー（Files / Outline）に専用独立スクロール領域（`ScrollArea` + ホイール遮断）を導入し、エディタ本体へのスクロール漏洩を解消。
+- **`:version` / `:ver` コマンド追加 & GUI カーソル形状・角丸カスタマイズ (`vivivi-app`, `vivivi-gui`)**:
+  - Ex コマンド `:version` / `:ver` を追加し、クレートバージョン・構成・ビルド情報を表示可能に。
+  - `CursorShape`（`auto` / `block` / `beam` / `underline`）および `cursor_corner_radius`（既定 `0.0px` で完全直角）を導入。Preferences ダイアログおよび `:set cursor_shape=` / `:set cursor_radius=` に対応。
+- **大規模モジュールの分割リファクタリング (`vivivi-gui`, `vivivi-app`)**:
+  - `canvas.rs` -> `canvas/`、`panels.rs` -> `panels/`、`settings_dialog.rs` -> `settings_dialog/`、`ex/settings.rs` -> `ex/settings/`、`tui/event/mod.rs`（`modals.rs`, `hex.rs` 分離）、`tui/app/mod.rs` 細分化を実施し、1,000行超の肥大化を解消。
+- **ドキュメント・RustDoc 最新化 (`docs/`, `README*.md`, `doc/help/`, `crates/`)**:
+  - `docs/{ja,en}/` 全般・`doc/help/`・`README.md` / `README_JA.md`・コード内 RustDoc / コメントを最新アーキテクチャおよび実測結果に合わせて更新。
+
+---
+
 ## [0.9.21-beta] - 2026-11-13
 
 ### Added / Improved

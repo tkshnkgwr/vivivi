@@ -39,7 +39,7 @@ impl ViviviGuiApp {
     }
 
     /// キーイベントを共通 `App` コアへ転送し、文字削除が発生した場合は
-    /// 該当グリフのスクリーン座標から落下アニメーション用パーティクルを生成します（ステップ 4）。
+    /// 該当グリフのスクリーン座標から落下アニメーション用パーティクルを生成します。
     pub(crate) fn dispatch_key_with_particles(&mut self, key: AppKeyEvent) {
         if !self.particles.enabled {
             self.core.handle_key(key);

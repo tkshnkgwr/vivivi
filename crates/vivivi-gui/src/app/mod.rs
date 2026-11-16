@@ -1,6 +1,7 @@
-//! エディタ画面骨格レイアウト ＆ 共通 App コア接続・日本語 IME 統合モジュール（ステップ 2, 3, 4）。
+//! エディタ画面レイアウト ＆ 共通 [`App`] コア接続・日本語 IME 統合モジュール。
 //!
-//! `eframe::App` のライフサイクル内で、Tokyo Night を基調としたレイアウトを構築し、
+//! `eframe::App` のライフサイクル内で、Tokyo Night を基調とした 4 ペイン構成
+//! （`panels` / `canvas` / `modals` / `settings_dialog`）を構築し、
 //! `egui` 標準の `TextEdit` を一切使用せず、`ui.painter()` による等幅グリッド描画、
 //! OS ネイティブの日本語 IME インライン入力・座標通知、および削除文字落下アニメーションを実現します。
 
@@ -88,7 +89,7 @@ pub struct ViviviGuiApp {
     pub font_size: f32,
     /// エディタの行高（px）
     pub line_height: f32,
-    /// 削除文字の落下アニメーション用パーティクルマネージャ（ステップ 4）
+    /// 削除文字の落下アニメーション用パーティクルマネージャ
     pub particles: ParticleManager,
     /// 直近フレームにおけるアクティブウィンドウ本文領域の左上スクリーン座標
     pub last_active_text_origin: Pos2,

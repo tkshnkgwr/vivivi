@@ -70,6 +70,8 @@ show_minimap = true
 minimap_width = 90.0
 enable_gravity_drop = true     # 文字削除時の物理重力落下演出 (OpenViVi)
 reactive_idle_sleep = true     # アイドル時CPU 0%省電力制御
+cursor_shape = "auto"          # "auto", "block", "beam", "underline"
+cursor_corner_radius = 0.0     # px (0.0 で直角)
 
 # ==========================================
 # 3. 不可視文字・空白 (Invisibles)

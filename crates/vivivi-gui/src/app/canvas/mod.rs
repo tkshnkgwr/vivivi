@@ -240,7 +240,7 @@ impl ViviviGuiApp {
                     }
                 }
 
-                // 4.4 削除文字落下パーティクルの物理更新 ＆ オーバーレイ描画（ステップ 4）
+                // 4.4 削除文字落下パーティクルの物理更新 ＆ オーバーレイ描画
                 if self.particles.is_active() {
                     let dt = ctx.input(|i| i.stable_dt);
                     self.particles.update(dt);

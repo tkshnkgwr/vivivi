@@ -93,17 +93,17 @@ strip = true
 コード変更時は以下の手順で品質検証を行います。全項目が警告ゼロでパスすることを担保してください。
 
 ```powershell
-# 1. 型チェック・依存関係検証
-cargo check --all-targets
+# 1. ワークスペース型チェック・依存関係検証
+cargo check -j 4 --workspace --all-targets
 
 # 2. 全クレートの単体・統合テスト実行
-cargo test --all-targets
+cargo test -j 4 --workspace --all-targets
 
 # 3. ドキュメントテスト（Doc-test）実行
-cargo test --doc
+cargo test -j 4 --workspace --doc
 
 # 4. Clippy 静的リント解析（警告ゼロを担保）
-cargo clippy --all-targets -- -D warnings
+cargo clippy -j 4 --workspace --all-targets -- -D warnings
 
 # 5. フォーマット検証（不適合時は cargo fmt で整形）
 cargo fmt --check

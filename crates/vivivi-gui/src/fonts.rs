@@ -1,4 +1,4 @@
-//! フォント初期化モジュール（PlemolJP 優先設定・ステップ 1）。
+//! フォント初期化モジュール（PlemolJP 最優先設定）。
 //!
 //! 1. 実行ファイル同階層 / カレントディレクトリの `fonts/PlemolJP*.ttf`
 //! 2. システムインストール済み PlemolJP（`%LOCALAPPDATA%\Microsoft\Windows\Fonts`）

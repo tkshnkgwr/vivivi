@@ -92,13 +92,13 @@ ViVi特有のキラー編集支援機能およびモダンツール機能エン�
 ### 4.5 `vivivi-app`
 ヘッドレス共通セッション層および Ratatui/Crossterm 端末フロントエンドを担当します。
 - `config.rs` / `theme.rs`: 6大カテゴリ TOML 設定管理と 5大ビルトインテーマ。
-- `tui/app/`: アプリケーション状態、マルチタブ管理、画面分割、外部プロセス連携、Hex/LSP/Tree-sitter 統合。
-- `tui/event/`: キーイベントディスパッチ、Windows ショートカット共存、Ex コマンド実行。
+- `tui/app/`: アプリケーション状態 (`mod.rs`)、マルチタブ管理 (`tabs.rs`)、画面分割 (`windows.rs`)、ファイル I/O (`files.rs`)、外部プロセス連携 (`process.rs`)、LSP/Tree-sitter 統合 (`lsp_treesitter.rs`)、編集・ダイアログ支援 (`editing_ops.rs`, `dialogs_and_config.rs`, `update.rs`, `tools/`)。
+- `tui/event/`: キーイベントディスパッチ (`mod.rs`, `modes.rs`)、モーダル制御 (`modals.rs`)、Hex 入力 (`hex.rs`)、Windows ショートカット共存 (`windows_keys.rs`)、Ex コマンド実行 (`ex/mod.rs`, `ex/settings/`, `ex/substitute.rs`, `ex/text.rs`, `ex/tools.rs`)。
 - `tui/ui/`: TUI ウィジェット描画（`editor.rs`, `hex_view.rs`, `lsp_view.rs`, `outline.rs`, `status.rs`, `settings.rs`, `cmd_exec.rs` 等）。
 
 ### 4.6 `vivivi-gui`
 `egui` / `eframe` によるネイティブ・デスクトップ GUI フロントエンドを担当します。
-- `app/`: メインループ、`canvas.rs`（カスタム等幅グリッド描画・Hex描画・ASTハイライト）、`input.rs`（日本語IME Preedit保護・パーティクル発火）、`panels.rs`、`modals.rs`、`settings_dialog.rs`、`async_tree.rs`。
+- `app/`: メインループ (`mod.rs`)、キャンバス描画 (`canvas/`: `mod.rs`, `editor_pane.rs`, `cursor.rs`, `helpers.rs`, `hex.rs`, `minimap.rs`)、入力・IME 保護・パーティクル発火 (`input.rs`)、UI ペイン (`panels/`: `mod.rs`, `top_bar.rs`, `sidebar.rs`, `bottom_bar.rs`)、モーダル (`modals.rs`)、2ペイン設定ダイアログ (`settings_dialog/`: `mod.rs`, `tabs_basic.rs`, `tabs_advanced.rs`)、非同期クラウド耐障害ツリー (`async_tree.rs`)。
 - `visualize.rs`: 2D 力学モデル（Force-Directed Graph）によるプロジェクト可視化グラフ。
 - `particles.rs`: 削除文字の物理重力落下アニメーションと 0% CPU アイドル制御。
 

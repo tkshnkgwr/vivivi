@@ -576,22 +576,22 @@ stateDiagram-v2
 ### 15.2 スタイル・テーマ ＆ フォント初期化 (`theme.rs`, `fonts.rs`)
 - **Tokyo Night 3段階コントラスト外観**:
   - 目の疲労を招く完全な黒（`#000000`）を排除し、エディタ背景（`#1A1B26`）、サイドバー・コマンドライン背景（`#16161E`）、ステータスライン・アクティブタブ背景（`#292E42`）の3段階の明淡を構成。
-  - ウィジェットの不要な枠線（`Stroke::NONE`）を排除し、角丸（`CornerRadius`）を `4px` に統一。
+  - ウィジェットの不要な枠線（`Stroke::NONE`）を排除し、角丸（`CornerRadius`）を `2.0px` のフラットデザインに統一（エディタカーソルの角丸は `cursor_corner_radius` で個別設定可能、既定 `0.0px`）。
 - **PlemolJP 最優先フォントローダー**:
   - 実行ファイル同階層の `fonts/`、カレントディレクトリの `fonts/`、ユーザーフォント（`%LOCALAPPDATA%\Microsoft\Windows\Fonts`）、システムフォント（`C:\Windows\Fonts`）を走査し、`PlemolJP`（Console / NF / Regular）を最優先でロード。
   - フォールバックとして `BIZ UDゴシック`、`Consolas`、`Meiryo` 等を多段構成し、日本語全角文字と半角英数字の美しい 2:1 等幅グリッドを保証。
 
-### 15.3 4ペイン画面骨格 ＆ カスタム等幅レンダリング (`app.rs`)
+### 15.3 4ペイン画面骨格 ＆ カスタム等幅レンダリング (`app/panels/`, `app/canvas/`)
 - **4ペイン構成**:
   1. `TopBottomPanel::top`: メニューバー（File / Edit / View / Mode / Tools / Help）およびマルチタブバー（`+` 新規タブ追加・タブ切替）。
-  2. `SidePanel::left`: 折りたたみ可能な左サイドバー（`Files` ファイルエクスプローラー：親ディレクトリ `..` 移動・サブフォルダ展開・クリックオープン ／ `Outline` シンボルツリー＆行ジャンプ）。
+  2. `SidePanel::left`: 折りたたみ可能な左サイドバー（`Files` Zed風インデント・ツリー展開/折りたたみファイルエクスプローラー：独立スクロール領域・親ディレクトリ `..` 移動・クリックオープン ／ `Outline` シンボルツリー＆行ジャンプ）。
   3. `TopBottomPanel::bottom`: モードバッジ、罫線/CSV/マクロ状態、文字コード・改行・行/列番号を表示するステータスラインと、最下段の Ex コマンドライン / Migemo 検索バー。
-  4. `CentralPanel`: `WindowTreeNode::compute_logical_rects` に基づく分割エディタビューと、右端のミニマップ領域（Viewport Culling による可視構造俯瞰＆クリックジャンプ）。
+  4. `CentralPanel`: `WindowTreeNode::compute_logical_rects` に基づく分割エディタビュー（アクティブペイン独立ホイールスクロール対応）と、右端のミニマップ領域（Viewport Culling による可視構造俯瞰＆実コード割合に同期したクリック/ドラッグスクロールジャンプ）。
 - **`ui.painter()` カスタム描画と日本語 IME インライン統合**:
   - `egui` 標準の `TextEdit` ウィジェットは一切使用せず、`ctx.input` から `Event::Key`、`Event::Text`、`Event::Ime(Preedit/Commit)` を直接捕捉して共通 `App` コアへディスパッチ。
   - IME 変換中（`Preedit` 非空）は `Backspace` / `Enter` / `Escape` 等の制御キーをエディタ側で消費せず OS の IME 変換操作として保護。
   - 可視行のみを計算して `ui.painter()` で行番号、変更追跡ガターマーカー（未保存黄・保存済緑）、コード折り畳み、CSV整列、不可視文字・全角スペース強調、対応括弧、ビジュアル選択、検索マッチ、および IME 未確定文字列（シアン下線付き）を等幅セル単位で描画。
-  - モードに応じたカーソル（Normal/Visual=ブロック、Insert=Iビーム縦線、Replace=下線）を描画し、テキスト入力モード時は `ctx.output_mut(|o| o.ime = ...)` でカーソル矩形座標を毎フレーム OS の IME へ通知。
+  - モード連動（Normal/Visual=ブロック、Insert=Iビーム縦線、Replace=下線）または明示設定可能なカーソル形状（`CursorShape`: `auto`/`block`/`beam`/`underline`）と角丸半径（`cursor_corner_radius`, 既定 `0.0px`）を描画し、テキスト入力モード時は `ctx.output_mut(|o| o.ime = ...)` でカーソル矩形座標を毎フレーム OS の IME へ通知。
 
 ### 15.4 削除文字落下アニメーション ＆ 省電力ハイブリッド制御 (`particles.rs`)
 - **2D 物理パーティクル (`ParticleManager`)**:
@@ -662,7 +662,7 @@ stateDiagram-v2
 - **外部コマンド実行ダイアログ (`cmdExecDlg` / `:cmdexec`, `:cmd`)**:
   - フローティングモーダルからコマンドを入力し、「実行のみ（結果プレビュー）」、「バッファへの挿入 (`:r !`)」、「選択テキスト置換 (`:[range]!`)」を対話的に選択・実行可能。
 
-### 16.5 GUI/TUI設定ダイアログ仕様 (`settings_dialog.rs`, `settings.rs`)
+### 16.5 GUI/TUI設定ダイアログ仕様 (`settings_dialog/`, `settings.rs`)
 - **GUI設定ダイアログ (`580x620`, 最大 `660px`)**:
   - モーダル暗転（Dim）オーバーレイとエディタキー入力完全遮断（Input Block）。
   - 左ペイン（6大カテゴリツリー）と右ペイン（各設定ウィジェット）の2ペイン構成。

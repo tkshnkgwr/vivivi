@@ -172,7 +172,7 @@ vivivi/
 │   │   └── src/tui/         (Ratatui / Crossterm rendering & event handlers)
 │   └── vivivi-gui           (Phase 5: egui / eframe desktop GUI frontend)
 │       ├── src/main.rs      (GUI binary entry: vivivi-gui.exe)
-│       └── src/gui/         (egui widgets & Painter rendering layer)
+│       └── src/app/         (egui widgets & Painter rendering layer: canvas/, panels/, settings_dialog/, etc.)
 ```
 
 ### 7.2 Core Architectural Principles & Decoupling Prerequisites

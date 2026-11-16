@@ -42,9 +42,10 @@
 # ==========================================
 [general]
 default_encoding = "utf-8"       # 起動時の既定文字コード ("utf-8", "sjis", "euc-jp")
-default_newline = "lf"           # 既定の改行コード ("lf", "crlf")
+default_fileformat = "unix"      # 既定の改行コード ("unix" / "dos" / "mac")
 clipboard = "unnamedplus"        # クリップボード連携 ("unnamedplus", "unnamed", "none")
-backup = false                   # 保存時バックアップ作成の有無
+crash_recovery = true            # スワップ (.swp) によるクラッシュ復元を有効化
+check_update = true              # 起動時の新バージョン自動チェック
 
 # ==========================================
 # 2. 表示・外観設定 (Appearance)
@@ -57,11 +58,15 @@ gutter_markers = true            # 変更行ガター強調の表示 (true / fal
 wrap = false                     # 画面端での行折り返し表示 (false: 水平スクロール)
 
 [appearance.gui]
+font_family = "PlemolJP Console NF"
 font_size = 15.0                 # GUI フォントサイズ (pt)
-line_height_multiplier = 1.4     # 行間倍率 (1.3〜1.5)
+line_height_multiplier = 1.35    # 行間倍率 (1.3〜1.5)
 show_minimap = true              # ミニマップの表示
+minimap_width = 90.0             # ミニマップ幅 (px)
 enable_gravity_drop = true       # 文字削除時の重力落下演出
-cursor_blink = false             # カーソル点滅の有無
+reactive_idle_sleep = true       # アイドル時 CPU 0% 省電力制御
+cursor_shape = "auto"            # カーソル形状 ("auto", "block", "beam", "underline")
+cursor_corner_radius = 0.0       # カーソル角丸半径 (px: 0.0 で直角)
 
 # ==========================================
 # 3. 不可視文字表示設定 (Invisibles)
@@ -127,6 +132,8 @@ preset = "vi"                    # プリセット体系 ("vi" または "window
 | `:set wrap` / `:set nowrap`           | 画面端折り返し／水平スクロールの切替（`:se wrap?` で状態確認）   |
 | `:set list` / `:set nolist`           | 不可視文字（全角空白□/タブ/改行$）表示切替                       |
 | `:set minimap` / `:set nominimap`     | ミニマップの表示／非表示切替（GUI）                              |
+| `:set cursor_shape=<mode>`            | GUIカーソル形状指定 (`auto`, `block`, `beam`, `underline`)       |
+| `:set cursor_radius=<px>`             | GUIカーソル角丸半径指定（`0.0` で完全直角）                      |
 | `:set particles` / `:set noparticles` | 文字削除落下演出の有効／無効切替（GUI）                          |
 | `:set bg=dark` / `:set bg=light`      | 背景明暗の即時切り替え                                           |
 | `:set tabstop=4` / `:set ts=4`        | タブ幅の指定                                                     |
