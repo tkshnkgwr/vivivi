@@ -125,6 +125,81 @@ impl ViviviGuiApp {
     /// assert_eq!(gui.core.mode(), ViMode::Insert);
     /// ```
     pub fn process_egui_events(&mut self, events: &[Event], current_modifiers: Modifiers) {
+        self.process_egui_events_internal(events, current_modifiers, true);
+    }
+
+    /// ホイールイベントを除外して入力イベントを処理します（描画時に領域判定付きでホイールを処理する場合に使用）。
+    pub(crate) fn process_egui_events_without_wheel(
+        &mut self,
+        events: &[Event],
+        current_modifiers: Modifiers,
+    ) {
+        self.process_egui_events_internal(events, current_modifiers, false);
+    }
+
+    /// 指定ウィンドウに対してマウスホイール垂直スクロールを適用します。
+    pub(crate) fn apply_editor_mouse_wheel(
+        &mut self,
+        delta_y: f32,
+        target_window_idx: usize,
+        view_height: usize,
+    ) {
+        let max_line = self.core.buffer.line_count().saturating_sub(1);
+        let vh = view_height.max(1);
+        let is_active = target_window_idx == self.core.active_window;
+
+        if is_active {
+            if delta_y < -0.1 {
+                let lines = ((-delta_y).ceil() as usize).clamp(1, 5);
+                self.core.scroll.0 = (self.core.scroll.0 + lines).min(max_line);
+                if self.core.cursor.pos.line < self.core.scroll.0 {
+                    self.core.cursor.pos.line = self.core.scroll.0;
+                    self.core.clamp_cursor();
+                }
+            } else if delta_y > 0.1 {
+                let lines = (delta_y.ceil() as usize).clamp(1, 5);
+                self.core.scroll.0 = self.core.scroll.0.saturating_sub(lines);
+                let max_vis_line = self.core.scroll.0 + vh.saturating_sub(1);
+                if self.core.cursor.pos.line > max_vis_line {
+                    self.core.cursor.pos.line = max_vis_line;
+                    self.core.clamp_cursor();
+                }
+            }
+            if let Some(win) = self.core.windows.get_mut(self.core.active_window) {
+                win.cursor = self.core.cursor.clone();
+                win.scroll = self.core.scroll;
+            }
+        } else if let Some(win) = self.core.windows.get_mut(target_window_idx) {
+            if delta_y < -0.1 {
+                let lines = ((-delta_y).ceil() as usize).clamp(1, 5);
+                win.scroll.0 = (win.scroll.0 + lines).min(max_line);
+                if win.cursor.pos.line < win.scroll.0 {
+                    win.cursor.pos.line = win.scroll.0;
+                }
+            } else if delta_y > 0.1 {
+                let lines = (delta_y.ceil() as usize).clamp(1, 5);
+                win.scroll.0 = win.scroll.0.saturating_sub(lines);
+                let max_vis_line = win.scroll.0 + vh.saturating_sub(1);
+                if win.cursor.pos.line > max_vis_line {
+                    win.cursor.pos.line = max_vis_line;
+                }
+            }
+            let line_len = self
+                .core
+                .buffer
+                .get_line(win.cursor.pos.line)
+                .map(|s| s.chars().count())
+                .unwrap_or(0);
+            win.cursor.pos.col = win.cursor.pos.col.min(line_len);
+        }
+    }
+
+    fn process_egui_events_internal(
+        &mut self,
+        events: &[Event],
+        current_modifiers: Modifiers,
+        handle_wheel: bool,
+    ) {
         // 設定ダイアログ表示中は、エディタへのキー入力を完全に遮断（操作不能化＆モーダル保護）
         if self.settings_dialog.is_open {
             for event in events {
@@ -313,7 +388,7 @@ impl ViviviGuiApp {
                 }
 
                 // 5. マウスホイールによるスクロール
-                Event::MouseWheel { delta, .. } => {
+                Event::MouseWheel { delta, .. } if handle_wheel => {
                     // モーダルウィンドウ（ヘルプ・設定・プレビュー・履歴・ファイラー等）表示中、
                     // またはツールウィンドウ表示中はエディタ本文へのホイールスクロール突き抜けを完全に遮断
                     if is_modal_active
@@ -335,23 +410,7 @@ impl ViviviGuiApp {
                         .floor()
                         .max(1.0) as usize;
 
-                    if delta.y < -0.1 {
-                        let lines = ((-delta.y).ceil() as usize).clamp(1, 5);
-                        let max_line = self.core.buffer.line_count().saturating_sub(1);
-                        self.core.scroll.0 = (self.core.scroll.0 + lines).min(max_line);
-                        if self.core.cursor.pos.line < self.core.scroll.0 {
-                            self.core.cursor.pos.line = self.core.scroll.0;
-                            self.core.clamp_cursor();
-                        }
-                    } else if delta.y > 0.1 {
-                        let lines = (delta.y.ceil() as usize).clamp(1, 5);
-                        self.core.scroll.0 = self.core.scroll.0.saturating_sub(lines);
-                        let max_vis_line = self.core.scroll.0 + view_height.saturating_sub(1);
-                        if self.core.cursor.pos.line > max_vis_line {
-                            self.core.cursor.pos.line = max_vis_line;
-                            self.core.clamp_cursor();
-                        }
-                    }
+                    self.apply_editor_mouse_wheel(delta.y, self.core.active_window, view_height);
                 }
 
                 _ => {}

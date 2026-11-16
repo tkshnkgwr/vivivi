@@ -199,3 +199,50 @@ fn test_ex_extended_set_commands() {
     assert!(msg.contains("ic"));
     assert!(msg.contains("sc"));
 }
+
+#[test]
+fn test_ex_version_and_cursor_settings() {
+    let mut app = App::new("hello", None, Default::default(), Default::default());
+
+    // 1. :version / :ver コマンドでバージョン情報を表示
+    app.execute_ex("version");
+    let ver_msg = app.status_message.as_deref().unwrap_or("");
+    assert!(
+        ver_msg.contains(env!("CARGO_PKG_VERSION")),
+        ":version にパッケージバージョンが含まれること: {ver_msg}"
+    );
+    app.execute_ex("ver");
+    assert!(
+        app.status_message
+            .as_deref()
+            .unwrap_or("")
+            .contains(env!("CARGO_PKG_VERSION"))
+    );
+
+    // 2. :set cursor_shape / :set guicursor / :set cursor_radius
+    app.execute_ex("set cursor_shape=beam");
+    assert_eq!(
+        app.config.appearance.gui.cursor_shape,
+        vivivi_app::CursorShape::Beam
+    );
+    app.execute_ex("set guicursor=underline");
+    assert_eq!(
+        app.config.appearance.gui.cursor_shape,
+        vivivi_app::CursorShape::Underline
+    );
+    app.execute_ex("set cursor_shape=block");
+    assert_eq!(
+        app.config.appearance.gui.cursor_shape,
+        vivivi_app::CursorShape::Block
+    );
+    app.execute_ex("set cursor_shape=auto");
+    assert_eq!(
+        app.config.appearance.gui.cursor_shape,
+        vivivi_app::CursorShape::Auto
+    );
+
+    app.execute_ex("set cursor_radius=2.5");
+    assert!((app.config.appearance.gui.cursor_corner_radius - 2.5).abs() < 1e-5);
+    app.execute_ex("set cursor_radius=0");
+    assert_eq!(app.config.appearance.gui.cursor_corner_radius, 0.0);
+}

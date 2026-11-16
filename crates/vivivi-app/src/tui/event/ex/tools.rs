@@ -725,6 +725,17 @@ pub(crate) fn handle_tools_command(app: &mut App, trimmed: &str) -> bool {
             }
         },
 
+        // --- バージョン情報表示 (:version, :ver) ---
+        "version" | "ver" => {
+            let pkg_version = env!("CARGO_PKG_VERSION");
+            let os = std::env::consts::OS;
+            let arch = std::env::consts::ARCH;
+            app.status_message = Some(format!(
+                "vivivi v{pkg_version} ({os}/{arch}) - ViVi & OpenViVi Rust Rebuild"
+            ));
+            true
+        }
+
         _ => false,
     }
 }

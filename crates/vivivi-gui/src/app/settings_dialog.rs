@@ -484,12 +484,56 @@ impl ViviviGuiApp {
         ui.add_space(10.0);
         ui.group(|ui| {
             ui.set_min_width(ui.available_width());
-            ui.label(egui::RichText::new("【GUI・フォント・ミニマップ】").strong());
+            ui.label(egui::RichText::new("【GUI・カーソル・フォント・ミニマップ】").strong());
             ui.spacing_mut().slider_width = 180.0;
             egui::Grid::new("gui_appearance_grid")
                 .num_columns(2)
                 .spacing([24.0, 10.0])
                 .show(ui, |ui| {
+                    Self::nowrap_label(ui, "カーソル形状 (Cursor Shape):");
+                    ui.horizontal_wrapped(|ui| {
+                        for shape in [
+                            vivivi_app::CursorShape::Auto,
+                            vivivi_app::CursorShape::Block,
+                            vivivi_app::CursorShape::Beam,
+                            vivivi_app::CursorShape::Underline,
+                        ] {
+                            ui.selectable_value(
+                                &mut self
+                                    .settings_dialog
+                                    .draft_config
+                                    .appearance
+                                    .gui
+                                    .cursor_shape,
+                                shape,
+                                shape.label(),
+                            );
+                        }
+                    });
+                    ui.end_row();
+
+                    Self::nowrap_label(ui, "カーソル角丸 (Corner Radius):");
+                    ui.horizontal(|ui| {
+                        ui.add(
+                            egui::Slider::new(
+                                &mut self
+                                    .settings_dialog
+                                    .draft_config
+                                    .appearance
+                                    .gui
+                                    .cursor_corner_radius,
+                                0.0..=6.0,
+                            )
+                            .step_by(0.5)
+                            .text("px"),
+                        );
+                        Self::nowrap_label(
+                            ui,
+                            egui::RichText::new("（0.0px = 直角）").color(pal.fg_dimmed),
+                        );
+                    });
+                    ui.end_row();
+
                     Self::nowrap_label(ui, "フォントサイズ (Font Size):");
                     ui.add(
                         egui::Slider::new(

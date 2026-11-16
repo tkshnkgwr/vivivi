@@ -11,7 +11,7 @@ pub mod tui;
 pub mod types;
 
 // 主要な共通型およびイベントディスパッチャをトップレベルに再エクスポート
-pub use config::EditorConfig;
+pub use config::{CursorShape, EditorConfig};
 pub use theme::{Theme, ThemeColor};
 pub use tui::app::App;
 pub use tui::event::{execute_ex_command, handle_key_event, play_macro};

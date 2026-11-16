@@ -1392,3 +1392,223 @@ fn test_gui_sidebar_outline_full_row_hover_and_single_click_jump() {
         "Outline 行の右端余白シングルクリックで対象シンボル行へジャンプするべき"
     );
 }
+
+/// シナリオ 19: サイドバー上でのマウスホイールスクロールがエディタ側と連動しないことの検証
+#[test]
+fn test_gui_sidebar_scroll_does_not_scroll_editor() {
+    let lines = (0..120)
+        .map(|i| format!("line {i}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let core = App::new(&lines, None, CharEncoding::Utf8, NewlineType::Lf);
+    let mut gui = ViviviGuiApp::from_core(core);
+    gui.sidebar_open = true;
+    gui.sidebar_width = 220.0;
+    gui.minimap_open = true;
+
+    let ctx = egui::Context::default();
+    let run_full_frame = |gui: &mut ViviviGuiApp, events: Vec<Event>| {
+        let raw_input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                Pos2::ZERO,
+                egui::vec2(1280.0, 800.0),
+            )),
+            events,
+            ..Default::default()
+        };
+        let _ = ctx.run(raw_input, |ctx| {
+            gui.render_sidebar(ctx);
+            gui.render_central_panel(ctx);
+        });
+    };
+
+    // 初回描画でサイドバーとエディタ矩形を確定
+    run_full_frame(&mut gui, vec![]);
+    assert_eq!(gui.core.scroll.0, 0);
+
+    // 1. ポインタがサイドバー上にある状態でホイールスクロールしても、エディタは動かない
+    let sidebar_pos = egui::pos2(100.0, 300.0);
+    run_full_frame(
+        &mut gui,
+        vec![
+            Event::PointerMoved(sidebar_pos),
+            Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Line,
+                delta: egui::vec2(0.0, -5.0),
+                modifiers: Modifiers::NONE,
+            },
+        ],
+    );
+    assert_eq!(
+        gui.core.scroll.0, 0,
+        "サイドバー上でのホイールスクロールはエディタ側へ連動してはならない"
+    );
+
+    // 2. ポインタがエディタ領域内にある状態でホイールスクロールすると、エディタがスクロールする
+    let editor_rect = gui
+        .last_editor_rect
+        .expect("last_editor_rect が記録されていること");
+    let editor_pos = editor_rect.center();
+    run_full_frame(
+        &mut gui,
+        vec![
+            Event::PointerMoved(editor_pos),
+            Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Line,
+                delta: egui::vec2(0.0, -4.0),
+                modifiers: Modifiers::NONE,
+            },
+        ],
+    );
+    assert!(
+        gui.core.scroll.0 > 0,
+        "エディタ領域上でのホイールスクロールでは正しくスクロールすること"
+    );
+}
+
+/// シナリオ 20: 画面上下分割時のミニマップ操作精度・安定性および短いファイルのキャッシュ整合性検証
+#[test]
+fn test_gui_minimap_vertical_split_stability_and_short_file_cache() {
+    // 1. 短いファイル（10行）ではキャッシュ長が 10 に安定すること
+    let short_core = App::new(
+        "1\n2\n3\n4\n5\n6\n7\n8\n9\n10",
+        None,
+        CharEncoding::Utf8,
+        NewlineType::Lf,
+    );
+    let mut short_gui = ViviviGuiApp::from_core(short_core);
+    short_gui.sidebar_open = false;
+    short_gui.minimap_open = true;
+    let ctx_short = egui::Context::default();
+    let _ = ctx_short.run(
+        egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                Pos2::ZERO,
+                egui::vec2(800.0, 600.0),
+            )),
+            ..Default::default()
+        },
+        |ctx| short_gui.render_central_panel(ctx),
+    );
+    assert_eq!(short_gui.minimap_cache.len(), 10);
+
+    // 2. 200行ファイルで :split（上下分割）した状態でのミニマップクリックとフレーム間安定性
+    let long_text = (0..200)
+        .map(|i| format!("fn item_{i}() {{}}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let core = App::new(&long_text, None, CharEncoding::Utf8, NewlineType::Lf);
+    let mut gui = ViviviGuiApp::from_core(core);
+    gui.sidebar_open = false;
+    gui.minimap_open = true;
+    gui.core.execute_ex("split");
+    assert_eq!(gui.core.windows.len(), 2);
+
+    let ctx = egui::Context::default();
+    let run_frame = |gui: &mut ViviviGuiApp, events: Vec<Event>| {
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    egui::vec2(800.0, 600.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ctx| gui.render_central_panel(ctx),
+        );
+    };
+
+    run_frame(&mut gui, vec![]);
+    let mm_rect = gui
+        .last_minimap_rect
+        .expect("minimap_rect が記録されていること");
+    let click_pos = egui::pos2(mm_rect.center().x, mm_rect.bottom() - 20.0);
+
+    // ミニマップ下部をクリック（ドラッグ開始〜離す）
+    run_frame(
+        &mut gui,
+        vec![
+            Event::PointerMoved(click_pos),
+            Event::PointerButton {
+                pos: click_pos,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Modifiers::NONE,
+            },
+        ],
+    );
+    run_frame(
+        &mut gui,
+        vec![Event::PointerButton {
+            pos: click_pos,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        }],
+    );
+
+    let scrolled_after_click = gui.core.scroll.0;
+    assert!(
+        scrolled_after_click > 100,
+        "上下分割時にミニマップ下部クリックで終端付近へ移動できるべき: scroll={scrolled_after_click}"
+    );
+
+    // 次フレームを無操作で描画しても、adjust_scroll によりスクロール位置が暴走・引き戻されないこと
+    run_frame(&mut gui, vec![]);
+    assert_eq!(
+        gui.core.scroll.0, scrolled_after_click,
+        "上下分割時のミニマップ操作後、次フレームでスクロール位置がずれないこと"
+    );
+}
+
+/// シナリオ 21: カーソル形状（Auto/Block/Beam/Underline）と角丸設定の描画反映検証
+#[test]
+fn test_gui_cursor_shape_and_corner_radius_customization() {
+    let core = App::new("abcdef", None, CharEncoding::Utf8, NewlineType::Lf);
+    let mut gui = ViviviGuiApp::from_core(core);
+    gui.sidebar_open = false;
+    gui.minimap_open = false;
+
+    assert_eq!(
+        gui.core.config.appearance.gui.cursor_shape,
+        vivivi_app::CursorShape::Auto
+    );
+    assert_eq!(gui.core.config.appearance.gui.cursor_corner_radius, 0.0);
+
+    let ctx = egui::Context::default();
+    let render_once = |gui: &mut ViviviGuiApp| {
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    egui::vec2(640.0, 480.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| gui.render_central_panel(ctx),
+        );
+    };
+
+    // Normal モードでも Beam を選択すれば縦線幅 (2.0px) になる
+    gui.core.execute_ex("set cursor_shape=beam");
+    render_once(&mut gui);
+    let beam_rect = gui
+        .last_cursor_rect
+        .expect("Beam カーソル矩形が描画されること");
+    assert!((beam_rect.width() - 2.0).abs() < 0.1);
+
+    // Block を選択すれば文字幅以上のブロック矩形になる
+    gui.core.execute_ex("set cursor_shape=block");
+    gui.core.execute_ex("set cursor_radius=2.0");
+    render_once(&mut gui);
+    let block_rect = gui
+        .last_cursor_rect
+        .expect("Block カーソル矩形が描画されること");
+    assert!(block_rect.width() >= gui.last_char_width - 0.5);
+
+    // Underline も正常に描画される
+    gui.core.execute_ex("set cursor_shape=underline");
+    render_once(&mut gui);
+    assert!(gui.last_cursor_rect.is_some());
+}

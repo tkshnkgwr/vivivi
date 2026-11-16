@@ -3,7 +3,7 @@
 use eframe::egui;
 use egui::{Align2, Color32, CornerRadius, FontId, Frame, Pos2, Rect, Stroke, Vec2};
 use unicode_width::UnicodeWidthChar;
-use vivivi_app::LogicalRect;
+use vivivi_app::{CursorShape, LogicalRect};
 use vivivi_modes::{LineChangeState, TokenType};
 use vivivi_vi::ViMode;
 
@@ -206,7 +206,7 @@ impl ViviviGuiApp {
                 i.raw.hovered_files.clone(),
             )
         });
-        self.process_egui_events(&events, current_modifiers);
+        self.process_egui_events_without_wheel(&events, current_modifiers);
         self.handle_drag_and_drop_files(&dropped_files);
         self.core.sync_treesitter_if_dirty();
 
@@ -251,6 +251,16 @@ impl ViviviGuiApp {
                     available_rect.min,
                     Vec2::new(editor_width, available_rect.height()),
                 );
+                let minimap_rect_opt = if self.minimap_open {
+                    Some(Rect::from_min_size(
+                        Pos2::new(editor_rect.max.x, available_rect.min.y),
+                        Vec2::new(minimap_width, available_rect.height()),
+                    ))
+                } else {
+                    None
+                };
+                self.last_editor_rect = Some(editor_rect);
+                self.last_minimap_rect = minimap_rect_opt;
 
                 // 等幅フォントメトリクスの算出
                 let font_id = FontId::monospace(self.font_size);
@@ -292,6 +302,59 @@ impl ViviviGuiApp {
                         .floor()
                         .max(1.0) as usize;
                     self.core.adjust_scroll(view_height, view_width);
+                }
+
+                // マウスホイール処理（ポインタがエディタ領域またはミニマップ領域上にある場合のみ有効化）
+                // サイドバー、トップバー、ステータスバー、メニュー、モーダル上でのスクロール連動を完全に防止する
+                if !self.is_any_modal_open()
+                    && self.core.lsp_hover_text.is_none()
+                    && !self.core.lsp_show_diagnostics_panel
+                    && (ui.rect_contains_pointer(editor_rect)
+                        || minimap_rect_opt.is_some_and(|mr| ui.rect_contains_pointer(mr)))
+                {
+                    let pointer_pos =
+                        ui.input(|i| i.pointer.hover_pos().or(i.pointer.latest_pos()));
+                    let (target_win_idx, target_view_height) = pointer_pos
+                        .and_then(|pos| {
+                            window_rects.iter().find_map(|(idx, lrect)| {
+                                let wrect = Rect::from_min_size(
+                                    Pos2::new(
+                                        editor_rect.min.x + lrect.x as f32,
+                                        editor_rect.min.y + lrect.y as f32,
+                                    ),
+                                    Vec2::new(lrect.width as f32, lrect.height as f32),
+                                );
+                                if wrect.contains(pos) {
+                                    let vh = ((lrect.height as f32 - padding * 2.0) / line_height)
+                                        .floor()
+                                        .max(1.0)
+                                        as usize;
+                                    Some((*idx, vh))
+                                } else {
+                                    None
+                                }
+                            })
+                        })
+                        .unwrap_or_else(|| {
+                            let active_h = window_rects
+                                .iter()
+                                .find(|(idx, _)| *idx == self.core.active_window)
+                                .map(|(_, r)| r.height as f32)
+                                .unwrap_or(editor_rect.height());
+                            let vh = ((active_h - padding * 2.0) / line_height).floor().max(1.0)
+                                as usize;
+                            (self.core.active_window, vh)
+                        });
+
+                    for event in &events {
+                        if let egui::Event::MouseWheel { delta, .. } = event {
+                            self.apply_editor_mouse_wheel(
+                                delta.y,
+                                target_win_idx,
+                                target_view_height,
+                            );
+                        }
+                    }
                 }
 
                 // エディタ中央ペイン領域のマウスホバー連動「Iビーム（テキスト入力）」カーソル変更
@@ -968,40 +1031,72 @@ impl ViviviGuiApp {
                                 let block_w = (cursor_cell_cols as f32) * char_width;
 
                                 let mode = self.core.mode();
-                                match mode {
-                                    ViMode::Insert => {
-                                        // Iビーム（縦バー）カーソル
+                                let cursor_color = match mode {
+                                    ViMode::Insert => pal.accent_green,
+                                    ViMode::Replace => pal.accent_red,
+                                    _ if mode.is_visual() => pal.accent_purple,
+                                    _ => pal.accent_blue,
+                                };
+                                let effective_shape =
+                                    match self.core.config.appearance.gui.cursor_shape {
+                                        CursorShape::Auto => match mode {
+                                            ViMode::Insert => CursorShape::Beam,
+                                            ViMode::Replace => CursorShape::Underline,
+                                            _ => CursorShape::Block,
+                                        },
+                                        custom => custom,
+                                    };
+                                let corner_radius = CornerRadius::same(
+                                    self.core
+                                        .config
+                                        .appearance
+                                        .gui
+                                        .cursor_corner_radius
+                                        .clamp(0.0, 8.0)
+                                        .round() as u8,
+                                );
+
+                                match effective_shape {
+                                    CursorShape::Beam => {
+                                        // 縦線（Iビーム）カーソル
                                         let ibeam_rect = Rect::from_min_size(
                                             Pos2::new(cursor_x, cursor_row_y),
                                             Vec2::new(2.0, line_height),
                                         );
-                                        painter.rect_filled(ibeam_rect, 1.0, pal.accent_green);
+                                        painter.rect_filled(
+                                            ibeam_rect,
+                                            corner_radius,
+                                            cursor_color,
+                                        );
                                         active_cursor_screen_rect = Some(ibeam_rect);
                                     }
-                                    ViMode::Replace => {
-                                        // アンダースコア（下線）カーソル
+                                    CursorShape::Underline => {
+                                        // 下線（アンダースコア）カーソル
                                         let under_rect = Rect::from_min_size(
                                             Pos2::new(cursor_x, cursor_row_y + line_height - 3.0),
                                             Vec2::new(block_w, 3.0),
                                         );
-                                        painter.rect_filled(under_rect, 1.0, pal.accent_red);
+                                        painter.rect_filled(
+                                            under_rect,
+                                            corner_radius,
+                                            cursor_color,
+                                        );
                                         active_cursor_screen_rect = Some(Rect::from_min_size(
                                             Pos2::new(cursor_x, cursor_row_y),
                                             Vec2::new(block_w, line_height),
                                         ));
                                     }
-                                    _ => {
-                                        // ブロックカーソル（Normal / Visual / CommandLine）
-                                        let block_color = if mode.is_visual() {
-                                            pal.accent_purple
-                                        } else {
-                                            pal.accent_blue
-                                        };
+                                    CursorShape::Block | CursorShape::Auto => {
+                                        // ブロック（矩形）カーソル
                                         let block_rect = Rect::from_min_size(
                                             Pos2::new(cursor_x, cursor_row_y),
                                             Vec2::new(block_w, line_height),
                                         );
-                                        painter.rect_filled(block_rect, 2.0, block_color);
+                                        painter.rect_filled(
+                                            block_rect,
+                                            corner_radius,
+                                            cursor_color,
+                                        );
 
                                         // ブロックカーソル上の文字を反転色（背景色）でくっきり再描画
                                         if let Some(ch) = char_under_cursor
@@ -1081,49 +1176,67 @@ impl ViviviGuiApp {
                     });
                 }
 
-                // --- 右端ミニマップ領域（完全幾何学的線形対応 ＆ ドラッグ追従） ---
-                if self.minimap_open {
-                    let minimap_rect = Rect::from_min_size(
-                        Pos2::new(editor_rect.max.x, available_rect.min.y),
-                        Vec2::new(minimap_width, available_rect.height()),
-                    );
+                // --- 右端ミニマップ領域（分割ウィンドウ実高さ対応・線形スケーリング・確実なドラッグ追従） ---
+                if let Some(minimap_rect) = minimap_rect_opt {
+                    let active_win_h = window_rects
+                        .iter()
+                        .find(|(idx, _)| *idx == self.core.active_window)
+                        .map(|(_, r)| r.height as f32)
+                        .unwrap_or(editor_rect.height());
+                    let active_visible_rows = ((active_win_h - padding * 2.0) / line_height)
+                        .floor()
+                        .max(1.0) as usize;
 
                     let total_lines_mm = self.core.buffer.line_count().max(1);
-                    let visible_rows = (editor_rect.height() / line_height).max(1.0) as usize;
-                    let max_scroll = total_lines_mm.saturating_sub(visible_rows);
+                    let max_scroll = total_lines_mm.saturating_sub(active_visible_rows);
                     let mm_h = minimap_rect.height();
+                    let content_top = minimap_rect.top() + 2.0;
+                    let usable_mm_h = (mm_h - 4.0).max(3.0);
+                    let max_mm_rows = (usable_mm_h / 3.0).floor().max(1.0) as usize;
 
-                    // ビューポートハイライト矩形の高さ（画面表示行数と総行数の比率、最小24px）
-                    let vp_height = if total_lines_mm <= visible_rows {
-                        mm_h
+                    // 短いファイルでは実描画高さ (行数×3px)、長いファイルではミニマップ全高を基準にする
+                    let content_h = if total_lines_mm <= max_mm_rows {
+                        (total_lines_mm as f32 * 3.0).min(usable_mm_h)
                     } else {
-                        ((visible_rows as f32 / total_lines_mm as f32) * mm_h).clamp(24.0, mm_h)
+                        usable_mm_h
                     };
-                    let scrollable_h = (mm_h - vp_height).max(0.0);
 
-                    // ミニマップのマウスクリックおよびドラッグ追従処理
-                    let is_pointer_down = ui.input(|i| i.pointer.primary_down());
-                    let pointer_pos =
-                        ui.input(|i| i.pointer.interact_pos().or(i.pointer.latest_pos()));
+                    // ビューポートハイライト矩形の高さ（アクティブウィンドウの可視行数と総行数の比率）
+                    let vp_height = if total_lines_mm <= active_visible_rows {
+                        content_h
+                    } else {
+                        ((active_visible_rows as f32 / total_lines_mm as f32) * content_h)
+                            .clamp(16.0_f32.min(content_h), content_h)
+                    };
+                    let scrollable_h = (content_h - vp_height).max(0.0);
 
-                    if is_pointer_down
-                        && let Some(pos) = pointer_pos
-                        && minimap_rect.contains(pos)
+                    // egui の allocate_rect でクリック＆ドラッグを捕捉（ポインタが左右にはみ出しても追従継続）
+                    let mm_response = ui
+                        .allocate_rect(minimap_rect, egui::Sense::click_and_drag())
+                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+
+                    if !self.is_any_modal_open()
+                        && (mm_response.clicked() || mm_response.dragged())
                         && max_scroll > 0
                         && scrollable_h > 0.0
+                        && let Some(pos) = mm_response.interact_pointer_pos()
                     {
                         // クリック・ドラッグ位置がビューポート矩形の中心になるよう吸着
                         let target_vp_top = (pos.y - vp_height / 2.0)
-                            .clamp(minimap_rect.top(), minimap_rect.top() + scrollable_h);
-                        let ratio = (target_vp_top - minimap_rect.top()) / scrollable_h;
+                            .clamp(content_top, content_top + scrollable_h);
+                        let ratio = (target_vp_top - content_top) / scrollable_h;
                         let new_scroll = (ratio * max_scroll as f32).round() as usize;
                         self.core.scroll.0 = new_scroll.min(max_scroll);
 
-                        // カーソル位置も可視画面中央へ同期
-                        let center_line =
-                            (new_scroll + visible_rows / 2).min(total_lines_mm.saturating_sub(1));
+                        // カーソル位置もアクティブウィンドウ可視範囲の中央へ同期（次フレームの adjust_scroll と整合）
+                        let center_line = (self.core.scroll.0 + active_visible_rows / 2)
+                            .min(total_lines_mm.saturating_sub(1));
                         self.core.cursor.pos.line = center_line;
                         self.core.clamp_cursor();
+                        if let Some(win) = self.core.windows.get_mut(self.core.active_window) {
+                            win.cursor = self.core.cursor.clone();
+                            win.scroll = self.core.scroll;
+                        }
                     }
 
                     let mm_painter = ui.painter().with_clip_rect(minimap_rect);
@@ -1133,33 +1246,44 @@ impl ViviviGuiApp {
                         Stroke::new(1.0_f32, pal.bg_statusline),
                     );
 
-                    // ミニライン構造描画（0行目から最終行まで均等にサンプリングして端数の切り捨てを防止）
-                    let max_mm_rows = (mm_h / 3.0).max(1.0) as usize;
+                    // ミニライン構造描画（0行目から最終行まで均等サンプリング・タブおよび全角文字幅対応）
+                    let expected_samples = total_lines_mm.min(max_mm_rows);
+                    let buffer_rev = self.core.buffer.revision();
                     let current_key = (self.core.buffer.len(), total_lines_mm);
-                    if self.minimap_cache_key != current_key
-                        || self.minimap_cache.len() != max_mm_rows
+                    let tab_w = self.core.tab_width.max(1);
+                    if self.minimap_cache_revision != buffer_rev
+                        || self.minimap_cache_key != current_key
+                        || self.minimap_cache.len() != expected_samples
                     {
                         self.minimap_cache.clear();
-                        let num_samples = if total_lines_mm <= max_mm_rows {
-                            total_lines_mm
-                        } else {
-                            max_mm_rows
-                        };
-
-                        for i in 0..num_samples {
+                        for i in 0..expected_samples {
                             let l_idx = if total_lines_mm <= max_mm_rows {
                                 i
+                            } else if expected_samples <= 1 {
+                                0
                             } else {
                                 (i as f32 * (total_lines_mm - 1) as f32
-                                    / (max_mm_rows - 1).max(1) as f32)
+                                    / (expected_samples - 1) as f32)
                                     .round() as usize
                             };
 
                             if let Some(line_str) = self.core.buffer.get_line(l_idx) {
-                                let trimmed = line_str.trim_start();
-                                if !trimmed.is_empty() {
-                                    let indent = (line_str.len() - trimmed.len()).min(20) as f32;
-                                    let len = (trimmed.len().min(40) as f32) * 0.9;
+                                let mut indent_cols = 0usize;
+                                let mut total_cols = 0usize;
+                                let mut seen_non_ws = false;
+                                for ch in line_str.chars() {
+                                    let w = char_display_width(ch, total_cols, tab_w);
+                                    if !seen_non_ws && (ch == ' ' || ch == '\t' || ch == '　') {
+                                        indent_cols += w;
+                                    } else {
+                                        seen_non_ws = true;
+                                    }
+                                    total_cols += w;
+                                }
+                                let content_cols = total_cols.saturating_sub(indent_cols);
+                                if content_cols > 0 {
+                                    let indent = (indent_cols.min(24) as f32) * 1.1;
+                                    let len = (content_cols.min(48) as f32) * 1.05;
                                     self.minimap_cache.push((indent, len));
                                 } else {
                                     self.minimap_cache.push((0.0, 0.0));
@@ -1168,6 +1292,7 @@ impl ViviviGuiApp {
                                 self.minimap_cache.push((0.0, 0.0));
                             }
                         }
+                        self.minimap_cache_revision = buffer_rev;
                         self.minimap_cache_key = current_key;
                     }
 
@@ -1175,13 +1300,15 @@ impl ViviviGuiApp {
                     for (i, &(indent, len)) in self.minimap_cache.iter().enumerate() {
                         if len > 0.0 {
                             let y = if total_lines_mm <= max_mm_rows {
-                                minimap_rect.top() + (i as f32) * 3.0 + 2.0
+                                content_top + (i as f32) * 3.0 + 1.0
+                            } else if cache_len <= 1 {
+                                content_top + 1.0
                             } else {
-                                minimap_rect.top()
-                                    + (i as f32 / (cache_len - 1).max(1) as f32) * (mm_h - 4.0)
-                                    + 2.0
+                                content_top
+                                    + (i as f32 / (cache_len - 1) as f32) * (content_h - 2.0)
+                                    + 1.0
                             };
-                            let x1 = minimap_rect.left() + 6.0 + indent * 1.2;
+                            let x1 = minimap_rect.left() + 6.0 + indent;
                             let x2 = (x1 + len).min(minimap_rect.right() - 4.0);
                             if x2 > x1 {
                                 mm_painter.line_segment(
@@ -1192,13 +1319,58 @@ impl ViviviGuiApp {
                         }
                     }
 
-                    // ビューポートハイライト矩形（現在スクロール位置と100%線形同期）
+                    // 複数分割時は非アクティブウィンドウのビューポート位置も控えめに補助表示
+                    if window_rects.len() > 1 {
+                        let inactive_c = pal.fg_dimmed;
+                        for (win_idx, lrect) in &window_rects {
+                            if *win_idx == self.core.active_window {
+                                continue;
+                            }
+                            if let Some(win) = self.core.windows.get(*win_idx) {
+                                let win_vis_rows =
+                                    ((lrect.height as f32 - padding * 2.0) / line_height)
+                                        .floor()
+                                        .max(1.0) as usize;
+                                let win_max_scroll = total_lines_mm.saturating_sub(win_vis_rows);
+                                let win_vp_h = if total_lines_mm <= win_vis_rows {
+                                    content_h
+                                } else {
+                                    ((win_vis_rows as f32 / total_lines_mm as f32) * content_h)
+                                        .clamp(16.0_f32.min(content_h), content_h)
+                                };
+                                let win_scrollable_h = (content_h - win_vp_h).max(0.0);
+                                let win_scroll = win.scroll.0.min(win_max_scroll);
+                                let win_vp_top = if win_max_scroll == 0 || win_scrollable_h <= 0.0 {
+                                    content_top
+                                } else {
+                                    content_top
+                                        + (win_scroll as f32 / win_max_scroll as f32)
+                                            * win_scrollable_h
+                                };
+                                let inactive_rect = Rect::from_min_size(
+                                    Pos2::new(minimap_rect.left() + 2.0, win_vp_top),
+                                    Vec2::new(minimap_width - 4.0, win_vp_h),
+                                );
+                                mm_painter.rect_filled(
+                                    inactive_rect,
+                                    CornerRadius::same(2),
+                                    Color32::from_rgba_unmultiplied(
+                                        inactive_c.r(),
+                                        inactive_c.g(),
+                                        inactive_c.b(),
+                                        18,
+                                    ),
+                                );
+                            }
+                        }
+                    }
+
+                    // アクティブウィンドウのビューポートハイライト矩形（現在スクロール位置と100%線形同期）
                     let current_scroll = self.core.scroll.0.min(max_scroll);
                     let vp_top = if max_scroll == 0 || scrollable_h <= 0.0 {
-                        minimap_rect.top()
+                        content_top
                     } else {
-                        minimap_rect.top()
-                            + (current_scroll as f32 / max_scroll as f32) * scrollable_h
+                        content_top + (current_scroll as f32 / max_scroll as f32) * scrollable_h
                     };
 
                     let vp_rect = Rect::from_min_size(

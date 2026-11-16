@@ -98,6 +98,12 @@ pub struct ViviviGuiApp {
     pub minimap_cache: Vec<(f32, f32)>,
     /// ミニマップキャッシュ作成時のバッファ状態キー (文字数, 行数)
     pub minimap_cache_key: (usize, usize),
+    /// ミニマップキャッシュ作成時のバッファリビジョン
+    pub(crate) minimap_cache_revision: u64,
+    /// 直近フレームのエディタ本文描画領域（ホイールスクロール境界判定用）
+    pub last_editor_rect: Option<Rect>,
+    /// 直近フレームのミニマップ描画領域（ホイールスクロール境界判定用）
+    pub last_minimap_rect: Option<Rect>,
     /// 構文ハイライト用行トークンキャッシュ（行テキストハッシュ + 言語 -> トークン列）
     pub syntax_cache: HashMap<u64, Vec<vivivi_modes::SyntaxToken>>,
     /// ウィンドウ表示状態（座標、サイズ、最大化フラグ）
@@ -153,26 +159,34 @@ impl ViviviGuiApp {
         let active_theme = vivivi_app::theme::Theme::load_by_name(&core.config.appearance.theme);
         let initial_config = core.config.clone();
         let async_tree = AsyncFileTree::new(current_dir.clone());
+        let initial_font_size = initial_config.appearance.gui.font_size.clamp(8.0, 48.0);
+        let initial_line_height = (initial_font_size
+            * initial_config.appearance.gui.line_height_multiplier)
+            .round()
+            .max(12.0);
 
         Self {
             core,
             sidebar_open: true,
             sidebar_tab: SidebarTab::Files,
             sidebar_width: 220.0,
-            minimap_open: true,
-            minimap_width: 64.0,
+            minimap_open: initial_config.appearance.gui.show_minimap,
+            minimap_width: initial_config.appearance.gui.minimap_width,
             current_dir,
             cached_files,
             ime_enabled: false,
             ime_preedit: String::new(),
             last_cursor_rect: None,
-            font_size: 15.0,
-            line_height: 21.0,
+            font_size: initial_font_size,
+            line_height: initial_line_height,
             particles: ParticleManager::new(),
             last_active_text_origin: Pos2::new(56.0, 56.0),
             last_char_width: 9.0,
             minimap_cache: Vec::new(),
             minimap_cache_key: (usize::MAX, usize::MAX),
+            minimap_cache_revision: u64::MAX,
+            last_editor_rect: None,
+            last_minimap_rect: None,
             syntax_cache: HashMap::new(),
             window_state: crate::window_state::WindowState::default(),
             active_theme,
@@ -286,6 +300,14 @@ impl eframe::App for ViviviGuiApp {
         if self.minimap_open != self.core.config.appearance.gui.show_minimap {
             self.minimap_open = self.core.config.appearance.gui.show_minimap;
         }
+        self.minimap_width = self.core.config.appearance.gui.minimap_width;
+        let target_font_size = self.core.config.appearance.gui.font_size.clamp(8.0, 48.0);
+        let target_line_height = (target_font_size
+            * self.core.config.appearance.gui.line_height_multiplier)
+            .round()
+            .max(12.0);
+        self.font_size = target_font_size;
+        self.line_height = target_line_height;
         if self.particles.enabled != self.core.config.appearance.gui.enable_gravity_drop {
             self.particles.enabled = self.core.config.appearance.gui.enable_gravity_drop;
         }

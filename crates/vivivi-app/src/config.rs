@@ -40,6 +40,57 @@ fn default_line_height_multiplier() -> f32 {
 fn default_minimap_width() -> f32 {
     90.0
 }
+fn default_cursor_corner_radius() -> f32 {
+    0.0
+}
+
+/// GUI エディタのカーソル表示形状設定
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum CursorShape {
+    /// モード連動（Normal=ブロック, Insert=縦線, Replace=下線）
+    #[default]
+    Auto,
+    /// 常にブロック（矩形）
+    Block,
+    /// 常に縦線（Iビーム）
+    Beam,
+    /// 常に下線（アンダースコア）
+    Underline,
+}
+
+impl CursorShape {
+    /// 文字列からカーソル形状をパースします（大文字小文字無視・エイリアス対応）。
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "auto" | "mode" => Some(Self::Auto),
+            "block" | "box" => Some(Self::Block),
+            "beam" | "bar" | "line" | "ibeam" | "vertical" => Some(Self::Beam),
+            "underline" | "under" | "underscore" => Some(Self::Underline),
+            _ => None,
+        }
+    }
+
+    /// 設定・表示用の識別子文字列を返します。
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Block => "block",
+            Self::Beam => "beam",
+            Self::Underline => "underline",
+        }
+    }
+
+    /// 日本語UI表示用のラベルを返します。
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Auto => "自動 (モード連動)",
+            Self::Block => "ブロック (Block)",
+            Self::Beam => "縦線 (Beam)",
+            Self::Underline => "下線 (Underline)",
+        }
+    }
+}
 fn default_zenkaku() -> String {
     "　".to_string()
 }
@@ -121,6 +172,12 @@ pub struct AppearanceGuiConfig {
     /// アイドル時CPU 0%省電力制御
     #[serde(default = "default_true")]
     pub reactive_idle_sleep: bool,
+    /// カーソル表示形状 ("auto", "block", "beam", "underline")
+    #[serde(default)]
+    pub cursor_shape: CursorShape,
+    /// カーソルの角丸半径 (px: 0.0 で直角)
+    #[serde(default = "default_cursor_corner_radius")]
+    pub cursor_corner_radius: f32,
 }
 
 impl Default for AppearanceGuiConfig {
@@ -133,6 +190,8 @@ impl Default for AppearanceGuiConfig {
             minimap_width: default_minimap_width(),
             enable_gravity_drop: true,
             reactive_idle_sleep: true,
+            cursor_shape: CursorShape::Auto,
+            cursor_corner_radius: default_cursor_corner_radius(),
         }
     }
 }
@@ -602,6 +661,8 @@ show_minimap = true
 minimap_width = 90.0
 enable_gravity_drop = true     # 文字削除時の物理重力落下演出 (OpenViVi)
 reactive_idle_sleep = true     # アイドル時CPU 0%省電力制御
+cursor_shape = "auto"          # "auto" (モード連動), "block", "beam", "underline"
+cursor_corner_radius = 0.0     # カーソル角丸 (px: 0.0 で直角)
 
 # ==========================================
 # 3. 不可視文字・空白 (Invisibles)
@@ -665,6 +726,8 @@ mod tests {
         assert!(config.editing.ignorecase);
         assert!(config.tools.difflog_enabled);
         assert_eq!(config.keymap.preset, "vi");
+        assert_eq!(config.appearance.gui.cursor_shape, CursorShape::Auto);
+        assert_eq!(config.appearance.gui.cursor_corner_radius, 0.0);
     }
 
     #[test]

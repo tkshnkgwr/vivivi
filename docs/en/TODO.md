@@ -472,3 +472,26 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 - [ ] **[ViVi 4] One-Point Tips & Help Dialog (`onePointTipsDlg`)**
   - Startup or menu-triggered operational tips dialog introducing useful editor shortcuts and workflow tricks.
 
+---
+
+## 7. Bug Fixes, UI/UX Enhancements & Refactoring (From 2026-11-13 Notes)
+
+### 🐛 Bug Fixes
+- [x] **MiniMap Behavior & Rendering Issues**
+  - Overall behavior and rendering are broken
+  - Behavior is broken when splitting the screen vertically (top/bottom)
+- [x] **Scroll Synchronization Bug**
+  - Scrolling in the sidebar causes the editor's scroll position to move in sync
+
+### ✨ Features & Enhancements
+- [x] **Implement Version Display Command**
+  - Allow displaying current version information via the `:version` command
+- [x] **Consider Cursor Shape & Corner Radius Customization**
+  - Allow changing cursor shape (block, vertical bar, underline, etc.)
+  - Adjust `egui` `CornerRadius` (`Rounding`) or rendering settings so corners can be rendered sharp (right-angled) instead of rounded
+
+### 🧹 Refactoring & Maintenance
+- [ ] **Split Bloated Source Files**
+  - Since the scope of changes has grown large, check if any source files exceed 1,000 lines and refactor/split them if found
+
+

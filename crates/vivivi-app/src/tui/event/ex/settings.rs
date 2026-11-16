@@ -742,6 +742,65 @@ pub(crate) fn handle_settings_command(app: &mut App, trimmed: &str) -> bool {
             true
         }
 
+        // --- カーソル形状・角丸設定 (:set cursor_shape=<auto|block|beam|underline> / :set guicursor=... / :set cursor_radius=<px>) ---
+        "cursor_shape?" | "set cursor_shape?" | "se cursor_shape?" | "guicursor?"
+        | "set guicursor?" | "se guicursor?" => {
+            app.status_message = Some(format!(
+                "cursor_shape={} ({}) / cursor_radius={:.1}px",
+                app.config.appearance.gui.cursor_shape.as_str(),
+                app.config.appearance.gui.cursor_shape.label(),
+                app.config.appearance.gui.cursor_corner_radius,
+            ));
+            true
+        }
+        _ if trimmed.starts_with("set cursor_shape=")
+            || trimmed.starts_with("se cursor_shape=")
+            || trimmed.starts_with("set guicursor=")
+            || trimmed.starts_with("se guicursor=")
+            || trimmed.starts_with("set cs=")
+            || trimmed.starts_with("se cs=") =>
+        {
+            let val = trimmed.split_once('=').map(|(_, v)| v.trim()).unwrap_or("");
+            if let Some(shape) = crate::config::CursorShape::parse(val) {
+                app.config.appearance.gui.cursor_shape = shape;
+                app.status_message = Some(format!(
+                    "カーソル形状を設定しました: {} ({})",
+                    shape.as_str(),
+                    shape.label()
+                ));
+            } else {
+                app.status_message = Some(format!(
+                    "未対応のカーソル形状です: {val} (指定可能: auto, block, beam, underline)"
+                ));
+            }
+            true
+        }
+        "cursor_radius?" | "set cursor_radius?" | "se cursor_radius?" => {
+            app.status_message = Some(format!(
+                "cursor_radius={:.1}px (0.0 で直角)",
+                app.config.appearance.gui.cursor_corner_radius
+            ));
+            true
+        }
+        _ if trimmed.starts_with("set cursor_radius=")
+            || trimmed.starts_with("se cursor_radius=") =>
+        {
+            let val = trimmed.split_once('=').map(|(_, v)| v.trim()).unwrap_or("");
+            if let Ok(radius) = val.parse::<f32>() {
+                let clamped = radius.clamp(0.0, 8.0);
+                app.config.appearance.gui.cursor_corner_radius = clamped;
+                app.status_message = Some(format!(
+                    "カーソル角丸を設定しました: {clamped:.1}px{}",
+                    if clamped == 0.0 { " (直角)" } else { "" }
+                ));
+            } else {
+                app.status_message = Some(format!(
+                    "無効なカーソル角丸値です: {val} (0.0〜8.0 の数値を指定)"
+                ));
+            }
+            true
+        }
+
         // --- 全設定一覧確認 (:set all / :se all) ---
         "set all" | "se all" => {
             let nu = if app.show_line_numbers {
