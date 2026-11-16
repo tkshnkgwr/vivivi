@@ -491,7 +491,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - Adjust `egui` `CornerRadius` (`Rounding`) or rendering settings so corners can be rendered sharp (right-angled) instead of rounded
 
 ### 🧹 Refactoring & Maintenance
-- [ ] **Split Bloated Source Files**
+- [x] **Split Bloated Source Files**
   - Since the scope of changes has grown large, check if any source files exceed 1,000 lines and refactor/split them if found
 
 
