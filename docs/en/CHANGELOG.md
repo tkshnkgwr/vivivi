@@ -4,9 +4,13 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
-## [Unreleased]
+## [0.9.22-beta] - 2026-11-20
 
-### Added / Changed / Fixed (2026-11-16)
+### Added / Changed / Fixed
+- **Full Project Inspection, Hardening, Settings Parity & Documentation Sync (`vivivi-vi`, `vivivi-modes`, `moult-update`, `vivivi-app`, `vivivi-gui`, `docs/`, `doc/help/`)**:
+  - **Panic & Overflow Elimination**: Applied saturating arithmetic (`saturating_mul` / `saturating_add`) to `CommandParser` numeric count buffering and `renumber_lines` step accumulation; replaced `LspClient::spawn` stdio `.expect()` with `io::Result` propagation, refactored `FilerPane::refresh` parent lookup to `if let Some(parent)`, and hardened `Mutex::lock()` calls against thread poisoning via `unwrap_or_else(|e| e.into_inner())`.
+  - **CLI Flag Support & GUI/TUI Settings Parity**: Added `--version` (`-V`, `-v`) and `--help` (`-h`) CLI flag handling to `vivivi` and `vivivi-gui`; synchronized `active_theme` inside `App::apply_config`, synced `ignorecase` / `smartcase` runtime flags in TUI settings modal, added `trim_on_save` checkbox to GUI & TUI settings dialogs, and corrected the Zen-Coding shortcut label.
+  - **Bilingual Documentation & Offline Help Sync**: Synchronized `SPECIFICATION.md`, `USER_GUIDE.md`, `TODO.md`, `TEST_REPORT.md`, and `doc/help/{clipboard,vivi_cmd}.md` with the 6-category config schema, `920x640` dialog dimensions, section numbering, and vertical table alignment.
 - **GUI Minimap, Split Scroll & Sidebar Scroll Isolation (`vivivi-gui`)**:
   - Fixed Minimap last-line rendering, height-proportional viewport sync, and click/drag scroll accuracy.
   - Improved split window rendering and per-pane independent mouse wheel scrolling (`last_editor_rect` / hover routing).

@@ -132,6 +132,7 @@ impl App {
         self.vi.set_clipboard_option(cb_opt);
         self.vi.ignorecase = cfg.editing.ignorecase;
         self.vi.smartcase = cfg.editing.smartcase;
+        self.active_theme = crate::theme::Theme::load_by_name(&cfg.appearance.theme);
         self.config = cfg.clone();
     }
 

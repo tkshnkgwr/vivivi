@@ -136,10 +136,10 @@ impl FilerPane {
         self.entries.clear();
 
         // 親ディレクトリ ".." を先頭に追加（ルートでなければ）
-        if self.current_dir.parent().is_some() {
+        if let Some(parent) = self.current_dir.parent() {
             self.entries.push(FileEntry {
                 name: "..".to_string(),
-                path: self.current_dir.parent().unwrap().to_path_buf(),
+                path: parent.to_path_buf(),
                 is_dir: true,
                 size: 0,
                 modified: None,

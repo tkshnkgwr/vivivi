@@ -375,6 +375,11 @@ pub fn get_category_items(app: &App, category_idx: usize) -> Vec<(String, String
                 format!("[{}]", if cfg.editing.smartcase { "x" } else { " " }),
                 ":set smartcase".to_string(),
             ),
+            (
+                "保存時末尾空白削除 (trim)".to_string(),
+                format!("[{}]", if cfg.editing.trim_on_save { "x" } else { " " }),
+                ":set trim / :set notrim".to_string(),
+            ),
         ],
         4 => vec![
             (

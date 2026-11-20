@@ -67,6 +67,7 @@
 | `rust-verification` | Rust コード変更時の事前検証 (`cargo check`/`test`/`clippy`/`fmt`) | [.agents/skills/rust-verification/SKILL.md](file:///.agents/skills/rust-verification/SKILL.md) |
 | `git-commit`        | ボスから明示的なコミット・Push指示があった際の安全実行手順・規約 | [.agents/skills/git-commit/SKILL.md](file:///.agents/skills/git-commit/SKILL.md)               |
 | `markdown-table`    | Markdown テーブル作成・編集時の垂直整列ガイド（gVim視認性）      | [.agents/skills/markdown-table/SKILL.md](file:///.agents/skills/markdown-table/SKILL.md)       |
+| `docs-sync`         | リファクタリング・機能追加後の日英ドキュメント整備・同期手順     | [.agents/skills/docs-sync/SKILL.md](file:///.agents/skills/docs-sync/SKILL.md)                 |
 | `vault-memo`        | 検討ログや設計知見を Obsidian Vault（`01.FleetingNote`）へ保存   | [.agents/skills/vault-memo/SKILL.md](file:///.agents/skills/vault-memo/SKILL.md)               |
 
 ---

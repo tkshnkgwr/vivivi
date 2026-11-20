@@ -52,8 +52,14 @@ impl LspClient {
             .stderr(Stdio::null())
             .spawn()?;
 
-        let mut stdin = child.stdin.take().expect("Failed to open child stdin");
-        let mut stdout = child.stdout.take().expect("Failed to open child stdout");
+        let mut stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| std::io::Error::other("Failed to open child stdin"))?;
+        let mut stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| std::io::Error::other("Failed to open child stdout"))?;
 
         let (stdin_tx, stdin_rx): (Sender<String>, Receiver<String>) = channel();
         let (out_tx, out_rx): (Sender<JsonRpcMessage>, Receiver<JsonRpcMessage>) = channel();

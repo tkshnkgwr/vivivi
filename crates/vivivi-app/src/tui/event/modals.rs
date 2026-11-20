@@ -572,10 +572,16 @@ fn toggle_tui_settings_item(app: &mut App) {
             // ignorecase
             5 => {
                 app.config.editing.ignorecase = !app.config.editing.ignorecase;
+                app.vi.ignorecase = app.config.editing.ignorecase;
             }
             // smartcase
             6 => {
                 app.config.editing.smartcase = !app.config.editing.smartcase;
+                app.vi.smartcase = app.config.editing.smartcase;
+            }
+            // trim_on_save
+            7 => {
+                app.config.editing.trim_on_save = !app.config.editing.trim_on_save;
             }
             _ => {}
         },

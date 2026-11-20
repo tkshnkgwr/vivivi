@@ -86,7 +86,10 @@ impl UpdateManager {
 
     /// 現在のステータスを取得
     pub fn status(&self) -> UpdateStatus {
-        self.status.lock().unwrap().clone()
+        self.status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// ステータス共有ハンドルを取得（UIスレッド等からの監視用）
@@ -96,7 +99,7 @@ impl UpdateManager {
 
     /// 更新があるか確認
     pub fn check(&self, force: bool) -> Result<UpdateCheckResult> {
-        *self.status.lock().unwrap() = UpdateStatus::Checking;
+        *self.status.lock().unwrap_or_else(|e| e.into_inner()) = UpdateStatus::Checking;
         match check_for_update(&self.config, force) {
             Ok(UpdateCheckResult::UpdateAvailable {
                 latest_release,
@@ -110,15 +113,17 @@ impl UpdateManager {
                     target_asset,
                     sha256_asset,
                 };
-                *self.status.lock().unwrap() = UpdateStatus::UpdateAvailable(*latest_release);
+                *self.status.lock().unwrap_or_else(|e| e.into_inner()) =
+                    UpdateStatus::UpdateAvailable(*latest_release);
                 Ok(res)
             }
             Ok(UpdateCheckResult::UpToDate { current_version }) => {
-                *self.status.lock().unwrap() = UpdateStatus::UpToDate;
+                *self.status.lock().unwrap_or_else(|e| e.into_inner()) = UpdateStatus::UpToDate;
                 Ok(UpdateCheckResult::UpToDate { current_version })
             }
             Err(e) => {
-                *self.status.lock().unwrap() = UpdateStatus::Failed(e.to_string());
+                *self.status.lock().unwrap_or_else(|e| e.into_inner()) =
+                    UpdateStatus::Failed(e.to_string());
                 Err(e)
             }
         }
@@ -149,7 +154,8 @@ impl UpdateManager {
 
         let status_arc = Arc::clone(&self.status);
         let progress_cb = move |downloaded: u64, total: Option<u64>| {
-            *status_arc.lock().unwrap() = UpdateStatus::Downloading { downloaded, total };
+            *status_arc.lock().unwrap_or_else(|e| e.into_inner()) =
+                UpdateStatus::Downloading { downloaded, total };
         };
 
         let extract_path = download_and_extract(
@@ -159,7 +165,7 @@ impl UpdateManager {
             Some(&progress_cb),
         )?;
 
-        *self.status.lock().unwrap() = UpdateStatus::ReadyToApply {
+        *self.status.lock().unwrap_or_else(|e| e.into_inner()) = UpdateStatus::ReadyToApply {
             release: release.clone(),
             staging_dir: extract_path.clone(),
         };
@@ -170,7 +176,7 @@ impl UpdateManager {
     /// スワップを適用（新バイナリへ置換）
     pub fn apply(&self, staging_dir: &Path) -> Result<()> {
         swap_in_place(staging_dir, &self.config)?;
-        *self.status.lock().unwrap() = UpdateStatus::Applied;
+        *self.status.lock().unwrap_or_else(|e| e.into_inner()) = UpdateStatus::Applied;
         Ok(())
     }
 

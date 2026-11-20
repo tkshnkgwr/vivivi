@@ -4,9 +4,13 @@
 
 ---
 
-## [Unreleased]
+## [0.9.22-beta] - 2026-11-20
 
-### Added / Changed / Fixed (2026-11-16)
+### Added / Changed / Fixed
+- **プロジェクト全体検査・堅牢化・設定同期・ドキュメント完全同期 (`vivivi-vi`, `vivivi-modes`, `moult-update`, `vivivi-app`, `vivivi-gui`, `docs/`, `doc/help/`)**:
+  - **パニック・オーバーフロー排除**: `CommandParser` のカウント入力蓄積に飽和演算（`saturating_mul` / `saturating_add`）を導入し巨大数値入力時のオーバーフローを防止。`renumber_lines` のステップ加算飽和化、`LspClient::spawn` の子プロセス stdio 取得の `io::Result` 伝播化、`FilerPane::refresh` の `if let Some(parent)` 安全化、`moult-update` 等の `Mutex::lock()` ポイズニング回復（`unwrap_or_else(|e| e.into_inner())`）を実施。
+  - **CLIフラグ対応 & GUI/TUI設定パリティ強化**: `vivivi` / `vivivi-gui` に `--version` (`-V`, `-v`) および `--help` (`-h`) フラグを追加。`App::apply_config` での `active_theme` 同期、TUI 設定モーダルでの `ignorecase` / `smartcase` エンジン即時同期、および GUI/TUI 設定画面への `trim_on_save`（保存時末尾空白削除）トグル追加と Zen-Coding ショートカット表記補正を実施。
+  - **日英ドキュメント・内蔵ヘルプ同期**: `SPECIFICATION.md`、`USER_GUIDE.md`、`TODO.md`、`TEST_REPORT.md`、`doc/help/{clipboard,vivi_cmd}.md` のスキーマ表記・ダイアログ寸法・章番号・テーブル整列を最新実装へ完全同期。
 - **GUI ミニマップ・画面分割スクロール・サイドバースクロール改善 (`vivivi-gui`)**:
   - ミニマップの最終行・高さ比例計算およびドラッグ/クリック遷移の同期ズレを修正。
   - 画面分割（`:split` / `:vsplit`）時の複数ペイン描画・マウスホイール独立スクロール（ホバー/アクティブペイン判定）を改善。

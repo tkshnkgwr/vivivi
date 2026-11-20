@@ -78,7 +78,7 @@ pub fn renumber_lines(lines: &[&str], start: usize, step: usize) -> Vec<String> 
 
         let num = counters.entry((indent_len, pat_type)).or_insert(start);
         let cur_val = *num;
-        *num += step;
+        *num = num.saturating_add(step);
 
         match pat_type {
             0 => result.push(format!("{indent}{cur_val}{delim_info}{rest}")),

@@ -23,7 +23,30 @@ fn main() -> eframe::Result {
 
     // コマンドライン引数から開くファイルパスを取得
     let args: Vec<String> = std::env::args().collect();
-    let file_path = args.get(1).map(PathBuf::from);
+    if args
+        .iter()
+        .skip(1)
+        .any(|a| a == "--version" || a == "-V" || a == "-v")
+    {
+        println!("vivivi-gui {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+    if args.iter().skip(1).any(|a| a == "--help" || a == "-h") {
+        println!(
+            "vivivi-gui {} - OpenViVi reconstructed in Rust (Desktop GUI Edition)\n\n\
+            Usage: vivivi-gui [OPTIONS] [FILE]\n\n\
+            Options:\n  \
+              -h, --help       このヘルプメッセージを表示\n  \
+              -V, --version    バージョン情報を表示",
+            env!("CARGO_PKG_VERSION")
+        );
+        return Ok(());
+    }
+    let file_path = args
+        .iter()
+        .skip(1)
+        .find(|a| !a.starts_with('-'))
+        .map(PathBuf::from);
 
     let (initial_text, file_path_opt, encoding, newline) = if let Some(ref path) = file_path {
         if path.is_file() {

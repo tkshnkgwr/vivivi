@@ -29,14 +29,38 @@ fn main() -> anyhow::Result<()> {
 
     let args: Vec<String> = env::args().collect();
 
+    // --version / -V / -v フラグが渡された場合はバージョンを表示して終了
+    if args
+        .iter()
+        .skip(1)
+        .any(|a| a == "--version" || a == "-V" || a == "-v")
+    {
+        println!("vivivi {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
+    // --help / -h フラグが渡された場合はヘルプを表示して終了
+    if args.iter().skip(1).any(|a| a == "--help" || a == "-h") {
+        println!(
+            "vivivi {} - OpenViVi reconstructed in Rust (TUI Edition)\n\n\
+            Usage: vivivi [OPTIONS] [FILE]\n\n\
+            Options:\n  \
+              -d, --demo       非対話コンソールデモを実行\n  \
+              -h, --help       このヘルプメッセージを表示\n  \
+              -V, --version    バージョン情報を表示",
+            env!("CARGO_PKG_VERSION")
+        );
+        return Ok(());
+    }
+
     // --demo フラグが渡された場合はコンソールデモを実行
-    if args.iter().any(|a| a == "--demo" || a == "-d") {
+    if args.iter().skip(1).any(|a| a == "--demo" || a == "-d") {
         run_console_demo();
         return Ok(());
     }
 
     // 引数から開くファイルパスを取得
-    let file_arg = args.get(1).filter(|a| !a.starts_with('-'));
+    let file_arg = args.iter().skip(1).find(|a| !a.starts_with('-'));
     let (initial_text, file_path, encoding, newline) = if let Some(path_str) = file_arg {
         let path = PathBuf::from(path_str);
         if path.exists() {

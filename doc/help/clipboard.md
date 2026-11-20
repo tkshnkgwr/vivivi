@@ -29,6 +29,6 @@ Vim 同様、無名レジスタ（通常の一文字削除 `x` やヤンク `y`�
 `%USERPROFILE%\.vivivi\config.toml` に以下を記述することで、エディタ起動時から常にクリップボード共有を有効化できます。
 
 ```toml
-[editor]
-clipboard = "unnamed"
+[general]
+clipboard = "unnamedplus"
 ```

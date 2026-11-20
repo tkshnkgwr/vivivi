@@ -48,6 +48,10 @@ impl ViviviGuiApp {
             &mut self.settings_dialog.draft_config.editing.dabbrev_ignorecase,
             "動的補完 (dabbrev / Ctrl-L, Ctrl-M) で大文字小文字を同一視する",
         );
+        ui.checkbox(
+            &mut self.settings_dialog.draft_config.editing.trim_on_save,
+            "ファイル保存時に行末の空白を自動削除する (trim_on_save / :set trim)",
+        );
 
         ui.add_space(5.0);
         ui.separator();
@@ -110,7 +114,7 @@ impl ViviviGuiApp {
         ui.label("• ダイナミックマクロ (Dynamic Macro): 'Alt-M' で直前の繰り返し操作を自動再現");
         ui.label("• 字句編集予測 (LexEdit): 'Ctrl-J' でバッファ内の文脈から次の入力を自動予測");
         ui.label("• 静的略語展開 (Abbreviation): 'Ctrl-;' で登録略語を展開");
-        ui.label("• Zen-Coding (Emmet): HTML/XMLタグを 'Ctrl-E' で即時展開");
+        ui.label("• Zen-Coding (Emmet): HTML/XMLタグを 'Ctrl-,' (Alt-, / :zen) で即時展開");
     }
 
     /// 6. キーマップ (Keymap)

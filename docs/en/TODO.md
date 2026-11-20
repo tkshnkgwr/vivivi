@@ -277,7 +277,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 ---
 
 ## 3. Currently in Progress: Beta Testing & Practical Verification (v0.9.9-beta)
-- [ ] **[Verification & Dogfooding] Boss's Hands-on Manual Testing (`MANUAL_TEST_GUIDE.md`)**
+- [x] **[Verification & Dogfooding] Boss's Hands-on Manual Testing (`MANUAL_TEST_GUIDE.md`)**
   - Daily coding and production usage, discovering friction points, edge-cases, and bugs.
   - [x] **Dynamic Option Control**: Implemented `:se nu` / `:se nonu` / `:se wrap` / `:se nowrap` and status query commands (`:se nu?`, `:se wrap?`).
   - [x] **Full-Width Space Display**: Eliminated glyph shrinking caused by ambiguous-width marks; preserved 2-cell width with wine-red background highlight.
@@ -308,7 +308,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
     - [x] **Eliminate `Box::leak` Memory Leak**: Replace `zenkaku_space: Box::leak(...)` in `App::new` with `Cow<'static, str>` or `Arc<str>` to prevent heap leakage during long sessions or bulk instantiation.
     - [x] **Isolate Real User Directory I/O in Tests**: Refactor `App::new` to avoid writing to `%USERPROFILE%\.vivivi\recent_files.json` and reading real `config.toml` during automated tests by introducing a sandbox/mock builder.
     - [x] **Ensure TUI Settings Modal Rollback on Cancel**: Unify behavior so dismissing the TUI settings modal with `Esc` or `q` completely restores pre-modal backup settings, matching the GUI dialog.
-- [ ] **[Hands-on Feedback Bugs & Feature Requests] (2026-11-13)**:
+- [x] **[Hands-on Feedback Bugs & Feature Requests] (2026-11-13)**:
   - [x] **Window & UI Colors Not Updating on Theme Change**: Fix issue where changing the theme only updates text foreground colors while leaving window background and overall UI colors unchanged.
   - [x] **Settings Screen Display Failure (Dimmed Overlay Only)**: Fix issue where opening the settings dialog only darkens the entire screen and blocks interaction (overlay display / z-order issue hiding the underlying settings dialog).
   - [x] **Keisen Mode Drawing Failure**: Fix issue where drawing box lines in Keisen (box-drawing) mode fails to input or render lines properly.

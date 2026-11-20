@@ -528,11 +528,14 @@ stateDiagram-v2
 
 ### 14.3 設定ファイル永続化仕様 (`config.toml`)
 - **格納パス**: `%USERPROFILE%\.vivivi\config.toml`（または `~/.vivivi/config.toml`）。
-- **構成スキーマ**:
-  - `[editor]`: `tab_stop`, `number`, `relative_number`, `wrap`, `gutter`, `hlsearch`, `clipboard`, `theme`
-  - `[invisible]`: `enabled`, `space`, `tab`, `eol`
-  - `[keymap.normal]`, `[keymap.insert]`: ユーザーキーリマップ辞書
-- **動的再読込・設定**: `:config` コマンドによるディスクからのオンザフライ再読込と即時適用。また `:set` / `:se` コマンドによる行番号（`:se nu` / `:se nonu`）、行折り返し（`:se wrap` / `:se nowrap`）、タブ幅、クリップボード等の動的切り替えおよび `?` による状態確認をサポート。
+- **構成スキーマ (6大カテゴリ)**:
+  - `[general]`: `default_encoding`, `default_fileformat`, `clipboard`, `crash_recovery`, `check_update`
+  - `[appearance]`: `theme`, `line_number`, `relative_number`, `wrap`, `gutter_markers`, `[appearance.gui]` (`show_minimap`, `enable_gravity_drop`, `reactive_idle_sleep`, `cursor_shape`, `cursor_corner_radius` 等)
+  - `[invisibles]`: `enabled`, `zenkaku_space`, `space`, `tab`, `eol`
+  - `[editing]`: `tab_width`, `expand_tab`, `keisen_protect`, `match_paren`, `dabbrev_ignorecase`, `ignorecase`, `smartcase`, `trim_on_save`
+  - `[tools]`: `grep_ignore_dirs`, `difflog_enabled`, `persistent_undo`, `template_dir`
+  - `[keymap.normal]`, `[keymap.insert]`, `[keymap.visual]`: ユーザーキーリマップ辞書
+- **動的再読込・設定**: `:source`（または `:so`, `:config`）コマンドによるディスクからのオンザフライ再読込と即時適用、および `:mkvivivirc`（`:wconfig`）による明示的永続化。また `:set` / `:se` コマンドによる行番号（`:se nu` / `:se nonu`）、行折り返し（`:se wrap` / `:se nowrap`）、タブ幅、クリップボード等の動的切り替えおよび `?` による状態確認をサポート。
 
 ### 14.4 文字コード自動判別・指定および改行変換仕様
 - **特有文字・決定打による超高速早期自動判別 (`detect_encoding`)**:
@@ -663,12 +666,12 @@ stateDiagram-v2
   - フローティングモーダルからコマンドを入力し、「実行のみ（結果プレビュー）」、「バッファへの挿入 (`:r !`)」、「選択テキスト置換 (`:[range]!`)」を対話的に選択・実行可能。
 
 ### 16.5 GUI/TUI設定ダイアログ仕様 (`settings_dialog/`, `settings.rs`)
-- **GUI設定ダイアログ (`580x620`, 最大 `660px`)**:
+- **GUI設定ダイアログ (`920x640` 固定、左カテゴリペイン `236px`)**:
   - モーダル暗転（Dim）オーバーレイとエディタキー入力完全遮断（Input Block）。
-  - 左ペイン（6大カテゴリツリー）と右ペイン（各設定ウィジェット）の2ペイン構成。
+  - 左ペイン（6大カテゴリツリー、`236px` 固定幅）と右ペイン（各設定ウィジェット）の2ペイン構成。
   - 「適用（ライブプレビュー）」、「デフォルトに戻す」、「キャンセル（バックアップ復元）」、「保存して閉じる」ボタンを配備。
   - メニューバー（「Edit」→「Preferences」）、ショートカット `Ctrl+,`、Ex コマンド `:preferences` で起動。
-- **TUI設定フローティングモーダル (Ratatui 中央 `76% x 76%`)**:
+- **TUI設定フローティングモーダル (Ratatui 中央 `86% x 82%`, 最大 `112x28`)**:
   - 枠線付きフローティングウィンドウ、全角文字境界の安全クリア（`clear_modal_area`）。
   - 左カラム（カテゴリ 1〜6）と右カラム（項目一覧・現在値）を `h` / `l` / `Tab` でフォーカス切り替え。
   - `j` / `k` で項目移動、`Space` / `Enter` でトグル・値変更（即時エディタ反映）。
@@ -706,7 +709,7 @@ stateDiagram-v2
   - 空白未検出時: `Trim: 末尾空白はありませんでした`
 
 ### 17.3 保存時自動トリム機能 (`trim_on_save`)
-- **設定キー**: `AppConfig.editor.trim_on_save` (真偽値, デフォルト: `false`)
+- **設定キー**: `AppConfig.editing.trim_on_save` (`[editing]` セクションの真偽値, デフォルト: `false`)
 - **動的切り替えコマンド**:
   - `:set trim` または `:set trim_on_save`: 保存時自動トリムを有効化。
   - `:set notrim` または `:set notrim_on_save`: 保存時自動トリムを無効化。

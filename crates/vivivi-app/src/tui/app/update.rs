@@ -17,7 +17,7 @@ impl App {
                     ..
                 }) = mgr.check(force)
                 {
-                    *target_lock.lock().unwrap() =
+                    *target_lock.lock().unwrap_or_else(|e| e.into_inner()) =
                         Some((*latest_release, target_asset, sha256_asset));
                 }
             });
@@ -25,7 +25,11 @@ impl App {
 
     /// 新バージョンのダウンロード＆展開をバックグラウンドで開始
     pub fn download_update(&self) -> bool {
-        let target = self.update_target.lock().unwrap().clone();
+        let target = self
+            .update_target
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         if let Some((release, target_asset, sha256_asset)) = target {
             let mgr = std::sync::Arc::clone(&self.update_manager);
             let staging_lock = std::sync::Arc::clone(&self.update_staging_dir);
@@ -35,7 +39,7 @@ impl App {
                     if let Ok(extracted) =
                         mgr.download(&release, &target_asset, sha256_asset.as_ref(), None)
                     {
-                        *staging_lock.lock().unwrap() = Some(extracted);
+                        *staging_lock.lock().unwrap_or_else(|e| e.into_inner()) = Some(extracted);
                     }
                 });
             true
@@ -46,7 +50,11 @@ impl App {
 
     /// ダウンロード完了した新バイナリをスワップ適用して即時再起動
     pub fn apply_update_and_restart(&self) -> Result<(), String> {
-        let staging = self.update_staging_dir.lock().unwrap().clone();
+        let staging = self
+            .update_staging_dir
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         if let Some(staging_dir) = staging {
             self.update_manager
                 .apply_and_restart(&staging_dir)

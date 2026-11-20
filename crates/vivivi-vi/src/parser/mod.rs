@@ -689,7 +689,7 @@ impl CommandParser {
                     'M' => Some(ViCommand::Fold(crate::command::FoldAction::CloseAll)),
                     'R' => Some(ViCommand::Fold(crate::command::FoldAction::OpenAll)),
                     d if d.is_ascii_digit() => {
-                        let lvl = d.to_digit(10).unwrap() as usize;
+                        let lvl = d.to_digit(10).unwrap_or(0) as usize;
                         Some(ViCommand::Fold(crate::command::FoldAction::CloseLevel(lvl)))
                     }
                     _ => None,
@@ -862,5 +862,16 @@ mod tests {
         parser.feed_char('a', ViMode::Normal);
         assert_eq!(parser.selected_register, Some('a'));
         assert_eq!(parser.state, ParserState::Idle);
+    }
+
+    #[test]
+    fn test_count_buffer_saturation_prevents_overflow() {
+        let mut parser = CommandParser::new();
+        for _ in 0..40 {
+            assert!(parser.feed_char('9', ViMode::Normal).is_none());
+        }
+        assert_eq!(parser.count_buffer, Some(usize::MAX));
+        let cmd = parser.feed_char('j', ViMode::Normal);
+        assert_eq!(cmd, Some(ViCommand::Move(Motion::Down(usize::MAX))));
     }
 }

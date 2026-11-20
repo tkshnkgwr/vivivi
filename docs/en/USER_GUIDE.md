@@ -278,11 +278,10 @@ Folds code blocks based on indentation hierarchy.
 ### (9) Print Preview & Standalone PDF Export (`:preview`, `:pdf`)
 - **Print Preview**: Run `:preview` or `:print` for a full-screen paginated A4 preview modal with line numbers, headers, and footers. Scroll with `j`/`k` or `d`/`u`, and exit with `Esc` or `q`.
 - **Direct PDF Export**: Run `:pdf [path]` to export standard PDF 1.4 documents directly to disk without any external tools or libraries.
-- *(Note: Desktop GUI (egui) and GUI-dependent features were migrated to Phase 5 per user instruction, focusing current capabilities on TUI and core tooling)*.
 
 ---
 
-## 6. Advanced Power Tools & Hardening (Phase 4.8)
+## 7. Advanced Power Tools & Hardening (Phase 4.8)
 
 ### (1) Multi-Tab Buffer Management (Tab Bar UI)
 Work with multiple files and buffers across dedicated tab pages. When two or more tabs are open, an interactive tab bar is automatically rendered along the top edge of the terminal.
@@ -345,7 +344,7 @@ Persist user preferences and key mappings in `%USERPROFILE%\.vivivi\config.toml`
 
 ---
 
-## 7. Native Desktop GUI (`vivivi-gui`) Operational Guide
+## 8. Native Desktop GUI (`vivivi-gui`) Operational Guide
 
 `vivivi-gui` is the native desktop GUI frontend powered by `egui` / `eframe`. It shares 100% of the headless editor core, configuration (`config.toml`), and Vi keybindings with the terminal TUI edition.
 
@@ -387,7 +386,7 @@ cargo run -p vivivi-gui -- path/to/file.rs
 
 ---
 
-## 8. Binary Mode, LSP, Tree-sitter & Self-Update (Phase 5 / 6)
+## 9. Binary Mode, LSP, Tree-sitter & Self-Update (Phase 5 / 6)
 
 ### (1) Binary Mode (Hex Editor / `:hex`, `:binary`, `:text`)
 - Run `:hex` or `:binary` to switch into a synchronized 3-column grid displaying address offsets, 16-byte hex dumps, and printable ASCII characters (`:text` returns to normal text editing).

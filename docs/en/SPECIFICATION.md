@@ -480,11 +480,14 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
 
 ### 14.3 Configuration File & Customization (`config.toml`)
 - **Location**: `%USERPROFILE%\.vivivi\config.toml` (or `~/.vivivi/config.toml`).
-- **Configuration Schema**:
-  - `[editor]`: `tab_stop`, `number`, `relative_number`, `wrap`, `gutter`, `hlsearch`, `clipboard`, `theme`
-  - `[invisible]`: `enabled`, `space`, `tab`, `eol`
-  - `[keymap.normal]`, `[keymap.insert]`: Custom key remapping tables
-- **Dynamic Reload & Set**: `:config` ex command reloads settings from disk on the fly. Runtime toggling via `:set` / `:se` for line numbers (`:se nu` / `:se nonu`), line wrapping (`:se wrap` / `:se nowrap`), tabstop, clipboard, etc., with `?` status queries.
+- **Configuration Schema (6 Core Categories)**:
+  - `[general]`: `default_encoding`, `default_fileformat`, `clipboard`, `crash_recovery`, `check_update`
+  - `[appearance]`: `theme`, `line_number`, `relative_number`, `wrap`, `gutter_markers`, `[appearance.gui]` (`show_minimap`, `enable_gravity_drop`, `reactive_idle_sleep`, `cursor_shape`, `cursor_corner_radius`, etc.)
+  - `[invisibles]`: `enabled`, `zenkaku_space`, `space`, `tab`, `eol`
+  - `[editing]`: `tab_width`, `expand_tab`, `keisen_protect`, `match_paren`, `dabbrev_ignorecase`, `ignorecase`, `smartcase`, `trim_on_save`
+  - `[tools]`: `grep_ignore_dirs`, `difflog_enabled`, `persistent_undo`, `template_dir`
+  - `[keymap.normal]`, `[keymap.insert]`, `[keymap.visual]`: Custom key remapping tables
+- **Dynamic Reload & Set**: `:source` (or `:so`, `:config`) reloads settings from disk on the fly, and `:mkvivivirc` (`:wconfig`) explicitly persists in-memory changes. Runtime toggling via `:set` / `:se` for line numbers (`:se nu` / `:se nonu`), line wrapping (`:se wrap` / `:se nowrap`), tabstop, clipboard, etc., with `?` status queries.
 
 ### 14.4 Encoding Auto-Detection, Reload & Line Ending Format Specifications
 - **Ultra-Fast Early Encoding Detection (`detect_encoding`)**:
@@ -613,12 +616,12 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
   - Floating dialog allowing users to enter shell commands interactively, choosing execution mode ("Run only", "Read into buffer `:r !`", or "Filter range `:[range]!`").
 
 ### 16.5 GUI / TUI Preferences Dialog Specifications (`settings_dialog/`, `settings.rs`)
-- **GUI Preferences Dialog (`580x620`, max `660px`)**:
+- **GUI Preferences Dialog (`920x640` fixed, left category pane `236px`)**:
   - Dimmed modal backdrop and 100% editor input blocking.
-  - 2-pane layout separating 6-category sidebar from interactive controls.
+  - 2-pane layout separating the `236px` fixed 6-category sidebar from interactive controls.
   - "Apply" (live preview), "Reset to Defaults", "Cancel" (restore backup), and "Save & Close" buttons.
   - Triggered via menu bar (Edit → Preferences), `Ctrl+,`, or `:preferences`.
-- **TUI Preferences Modal (Ratatui Centered `76% x 76%`)**:
+- **TUI Preferences Modal (Ratatui Centered `86% x 82%`, max `112x28`)**:
   - Bordered floating modal with wide-character boundary clearing (`clear_modal_area`).
   - 2-column layout; focus switched via `h` / `l` / `Tab`.
   - Navigate with `j` / `k`, toggle options or cycle values with `Space` / `Enter` (live editor reflection).
@@ -656,7 +659,7 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
   - When clean: `Trim: No trailing whitespace detected`
 
 ### 17.3 Trim On Save (`trim_on_save`)
-- **Configuration Key**: `AppConfig.editor.trim_on_save` (boolean, default: `false`)
+- **Configuration Key**: `AppConfig.editing.trim_on_save` (`[editing]` boolean, default: `false`)
 - **Interactive Commands**:
   - `:set trim` or `:set trim_on_save`: Enables automated trimming on buffer write.
   - `:set notrim` or `:set notrim_on_save`: Disables automated trimming on buffer write.
