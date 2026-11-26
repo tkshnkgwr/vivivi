@@ -68,7 +68,7 @@
 | エンコード   | 指定エンコード再読込・改行変換 (:e ++enc)  | 共通 (ViVi / OpenViVi) | Shift_JIS/EUC-JP/UTF-8の明示指定オープン、CRLF/LF変換保存          | 実装済み (Phase 4.8)    |
 | 堅牢性       | 自動保存・クラッシュリカバリ (.swp)        | 共通 (ViVi / OpenViVi) | 定期スワップ保存と異常終了時の未保存データ自動復元プロンプト       | 実装済み (Phase 4.8)    |
 | OS連携       | システム共有クリップボード ("+y, "*p)      | 共通 (ViVi / OpenViVi) | OSクリップボードとViレジスタの双方向透過同期                       | 実装済み (Phase 4.8)    |
-| 言語・構文   | 構文強調拡充 (Go, Ruby, TOML, PS, YAML 等) | 共通 (ViVi / OpenViVi) | Go, Ruby, TOML, PowerShell, YAML, XML, bat/cmd の構文色分け        | 実装済み (Phase 4.8)    |
+| 言語・構文   | 構文強調拡充 (全20言語: Hosts / Cron 等)   | 共通 (ViVi / OpenViVi) | Go, Ruby, TOML, PS, YAML, XML, Batch, Hosts, Cron 等の色分け      | 実装済み (Phase 4.8+)   |
 | UI/UX表示    | ミニマップ (Minimap)                       | OpenViVi               | ファイル全体の縮小俯瞰プレビューと検索ヒット位置の可視化           | 実装済み (vivivi-gui)   |
 | UI/UX表示    | サイドバー ファイルツリー (Explorer)       | 共通 (ViVi / モダン)   | 階層フォルダ展開、非同期遅延読込、クラウド/NAS安全設計             | 実装済み (vivivi-gui)   |
 | UI/UX表示    | 削除文字落下アニメーション                 | OpenViVi               | 文字削除時に文字が物理重力で落下するOpenViVi特有の演出             | 実装済み (vivivi-gui)   |
@@ -377,8 +377,7 @@
 - [x] **【OpenViVi】 削除文字落下アニメーション (Gravity Drop Animation / egui連携)**
   - 文字削除時に文字が重力でポロポロ落下するOpenViVi特有のビジュアルギミック（`vivivi-gui::particles` に実装完了）
 - [x] **【ViVi 4 / モダン拡張】 サイドバー・ファイルエクスプローラーの非同期クラウド耐障害強化**
-  - エディタ左ペインへのファイル/ディレクトリ階層表示・親子移動・クリックオープンは `vivivi-gui` に基本実装済み
-  - 今後の拡張：キーボード駆動ナビゲーション（`:tree` / `:Explore` / `Ctrl-e` トグル）、および **ネットワークドライブ・クラウド同期（Box/OneDrive等）向け非同期遅延読み込み（Lazy Loading）・I/Oタイムアウト** の本格導入
+  - エディタ左ペインへのファイル/ディレクトリ階層表示・親子移動・クリックオープン、キーボード駆動ナビゲーション（`:tree` / `:explore` / `Ctrl-e` トグル）、および **ネットワークドライブ・クラウド同期（Box/OneDrive等）向け非同期遅延読み込み（Lazy Loading）・I/Oタイムアウト** を `vivivi-gui`（`async_tree.rs`）に実装完了
 - [x] **【ViVi 3 / ViVi 4】 バイナリモード (Hex Editor)**
   - 16進ダンプ＋ASCII並行表示、バイト単位の直感編集（`vivivi-modes::hex`）
   - アドレスオフセット列（8桁HEX）、16進ダンプ列（16バイト折返し/中央空白区切り）、印字可能ASCII列の3列同期グリッド
@@ -391,26 +390,23 @@
   - デスクトップ GUI (`egui::ViewportBuilder::with_icon`) および Windows `.exe` (`winres`) へのネイティブ組み込み
 - [ ] **【独自】** 巨大ファイル（1GB超）の高速表示・編集（Piece Tree / Memory-Mapped File `memmap2`）
 - [x] **【モダン拡張】 構文木ハイライト (Tree-sitter 統合)**
-  - 多言語のAST（抽象構文木）解析エンジン `tree-sitter` クレートの統合（`vivivi-modes::treesitter::TreeSitterEngine`）
+  - 多言語のAST（抽象構文木）解析エンジン `tree-sitter` クレートの統合（`vivivi-modes::treesitter::TreeSitterEngine`、対応 18 言語: Rust / C・C++ / Python / JS・TS / JSON / Markdown / SQL / PL・SQL / Java / HTML / Bash / Go / Ruby / TOML / PowerShell / YAML / XML / Batch）
   - ネストされたスコープ・括弧・識別子の正確なハイライト（現状の内蔵トークナイザーの上位互換・多層レイヤリング描画連携）
   - 構文木ノードに基づくスマート選択（関数・ブロック単位の選択拡大 `expand` / 縮小 `shrink`、キーバインド `Alt+Up` / `Alt+Down` / `Alt++` / `Alt+-`）
   - `:smartselect [expand|shrink]` および `:ast`（構文木S式プレビュー表示）Exコマンド対応
-  - インクリメンタルパースによるタイピング遅延ゼロの構文解析更新（`edit` API完備）
+  - インクリメンタルパースによるタイピング遅延ゼロの構文解析更新（`edit` / `parse_incremental` 差分解析連携）
 - [x] **【独自】 LSP (Language Server Protocol) クライアント統合**
   - LSP v3.17 準拠の非同期クライアントエンジン（`vivivi-modes::lsp`）
-  - JSON-RPC 2.0 / Content-Length 通信ストリーム、バックグラウンド子プロセス（`rust-analyzer`, `clangd` 等）連携
-  - リアルタイム診断情報収集（`textDocument/publishDiagnostics`）、ホバー（`textDocument/hover`）、定義ジャンプ（`textDocument/definition`）、コード補完（`textDocument/completion`）
-  - TUIにおける `:lsp start [cmd]`, `:lsp stop`, `:lsp hover` (キー: `K`), `:lsp def` (キー: `gd`), `:lsp diag` コマンド統合
+  - JSON-RPC 2.0 / Content-Length 通信ストリーム、バックグラウンド子プロセス（`rust-analyzer`, `clangd`, `pyright-langserver`, `gopls`, `typescript-language-server`, `jdtls`, `solargraph`, `bash-language-server`, `taplo` 等）連携
+  - `textDocument/didChange` 自動同期、リアルタイム診断情報収集（`textDocument/publishDiagnostics`）、ホバー（`textDocument/hover`）、別ファイル対応定義ジャンプ（`textDocument/definition`）、コード補完（`textDocument/completion`）
+  - TUI/GUIにおける `:lsp start [cmd]`, `:lsp stop`, `:lsp hover` (キー: `K`), `:lsp def` (キー: `gd`), `:lsp comp`, `:lsp diag` コマンド統合
 - [ ] **【独自】** マルチカーソル編集
-- [x] **【更新管理・運用】 アプリの更新チェック機能・通知機能・自動更新の環境整備とプログラム連携（優先度：中）**
-  - **1. GitHub Actions CI/CD リリース自動化パイプラインの構築 (`.github/workflows/release.yml`)**:
-    - `git push origin v*`（バージョンタグ）をトリガーとした自動クロスビルド＆リリースワークフローの策定。
-    - Windows x86_64 (`x86_64-pc-windows-msvc`) を最優先とし、将来の macOS / Linux 向けマトリクスビルドを整備。
-    - リリースアセットの標準命名規則: `vivivi-v<X.Y.Z>-<target-triple>.zip`（例: `vivivi-v0.1.0-x86_64-pc-windows-msvc.zip`）。
-  - **2. リリース規約・バージョニング標準の策定**:
+- [x] **【更新管理・運用】 アプリの更新チェック機能・通知機能・自動更新クライアント基盤 (`moult-update`)（優先度：中）**
+  - *(※GitHub Actions 自動リリースパイプライン `.github/workflows/release.yml` の実ファイル配置は Phase 6 で未完了のまま管理)*
+  - **1. リリース規約・バージョニング標準の策定**:
     - セマンティックバージョニング完全準拠（`v<Major>.<Minor>.<Patch>`）。アルファ/ベータ版は `v0.1.0-alpha.1` 形式で pre-release フラグを自動設定。
-    - 配布 zip 内の構成仕様: `vivivi.exe`、`README.md`、`LICENSE`、`doc/help/`（オフライン完結ヘルプ一式）。
-  - **3. プログラム側連携プロトコル (汎用独立クレート `crates/moult-update` による脱皮型スワップ＆ペア一括同期)**:
+    - リリースアセット標準命名規則: `vivivi-v<X.Y.Z>-<target-triple>.zip`（例: `vivivi-v0.1.0-x86_64-pc-windows-msvc.zip`）、配布 zip 内の構成仕様: `vivivi.exe`、`README.md`、`LICENSE`、`doc/help/`（オフライン完結ヘルプ一式）。
+  - **2. プログラム側連携プロトコル (汎用独立クレート `crates/moult-update` による脱皮型スワップ＆ペア一括同期)**:
     - **独立クレート設計 (`moult-update`)**: 他の自作Rustアプリでも再利用可能な汎用ライブラリとして分離構築。
     - **軽量HTTPクライアント (`ureq`)**: tokio不要の軽量同期通信を専用ワーカースレッドで駆動し、エディタUIスレッドを1msもブロックしない。
     - **GitHub Releases API 照会 & キャッシュ**: `latest` エンドポイント照会、24時間スロットリング、設定（`config.general.auto_update_check`）連動。
@@ -418,7 +414,7 @@
     - **GUI/TUI ペアバイナリ一括置換 (In-place Rename & Swap)**: 実行中バイナリを `.old` にリネームして新バイナリを配置すると同時に、隣にあるペアのバイナリ（`vivivi.exe` / `vivivi-gui.exe`）も一括最新化。
     - **シームレス再起動 & 起動時自動クリーンアップ**: 新プロセスを即時スポーンし旧プロセスを正常終了。次回起動時に残存する `*.old` を自動除去。
     - **UI/UX & Exコマンド**: ステータスバー進捗バッジ表示、`:checkupdate`, `:update`, `:restart` コマンド。
-  - **4. 外部パッケージマネージャー (Scoop / Winget) との協調・共存判定**:
+  - **3. 外部パッケージマネージャー (Scoop / Winget) との協調・共存判定**:
     - 実行中バイナリのパス判定（`scoop\apps\vivivi\` 配下や `WindowsApps` 配下等）により、パッケージマネージャー経由でインストールされているかを自動検出。
     - パッケージマネージャー管理下の場合は、バイナリ直接置換を自動抑止し、`scoop update vivivi` や `winget upgrade vivivi` のコマンド案内を提示して二重管理・不整合を防止。
 - [x] **【品質・極限性能】 性能測定ベンチマークスイート導入 (`benches/`)（優先度：中）**

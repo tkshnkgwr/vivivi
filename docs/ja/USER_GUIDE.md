@@ -344,8 +344,8 @@ Vi特有のモード体系に加えて、日常的なWindowsショートカッ�
 - `"+p` / `"*p`: OS クリップボードから直接貼り付け。
 - `:set clipboard=unnamed`: 通常の `y` / `p` を OS クリップボードと透過同期。
 
-### (7) 構文強調対応言語の拡充 (全18言語)
-- 標準の11言語に加え、Go (`.go`), Ruby (`.rb`), TOML (`.toml`), PowerShell (`.ps1`), YAML (`.yaml`), XML (`.xml`), Windows Batch (`.bat`, `.cmd`) を追加。ステータスバーに言語バッジが自動表示されます。
+### (7) 構文強調対応言語の拡充 (全20言語)
+- 標準の11言語に加え、Go (`.go`), Ruby (`.rb`), TOML (`.toml`), PowerShell (`.ps1`), YAML (`.yaml`), XML (`.xml`), Windows Batch (`.bat`, `.cmd`), Hosts (`hosts`, `*.hosts`), Cron (`crontab`, `*.cron`, `/etc/cron.d/*`) を追加。ステータスバーに言語バッジが自動表示されます（`:set ft=hosts` / `:set ft=cron` での手動切替にも対応）。
 
 ---
 
@@ -401,14 +401,15 @@ cargo run -p vivivi-gui -- path/to/file.rs
 - `x` キーでの1バイト削除、`u` / `Ctrl-r` での Undo / Redo にも対応しています。
 
 ### (2) LSP (Language Server Protocol) クライアント統合
-- `:lsp start [cmd]`: 現在のファイルに対応する言語サーバー（Rust なら `rust-analyzer`、C/C++ なら `clangd`、Python なら `pylsp` 等）をバックグラウンド起動します。
+- `:lsp start [cmd]`: 現在のファイルに対応する言語サーバー（`rust-analyzer`, `clangd`, `pyright-langserver`, `gopls`, `typescript-language-server`, `jdtls`, `solargraph`, `bash-language-server`, `taplo` 等）をバックグラウンド起動します。
 - `K` または `:lsp hover`: カーソル位置のシンボル型情報・ドキュメントをポップアップ表示します。
-- `gd` または `:lsp def`: カーソル位置のシンボル定義箇所へ即時ジャンプします。
+- `gd` または `:lsp def`: カーソル位置のシンボル定義箇所へ即時ジャンプします（別ファイル定義にも対応）。
+- `:lsp comp`: カーソル位置の LSP コード補完候補を取得してプレビュー一覧表示します（編集時の `didChange` も自動同期）。
 - `:lsp diag`: 診断エラー・警告一覧パネルの表示／非表示をトグルします。
 - `:lsp stop`: 稼働中の言語サーバーを停止します。
 
 ### (3) Tree-sitter 構文木ハイライト & スマート選択
-- Rust 等の対応言語において、抽象構文木（AST）に基づく高精度な多層シンタックスハイライトが自動適用されます。
+- **全 18 言語**（Rust, C/C++, Python, JS/TS, JSON, Markdown, SQL, PL/SQL, Java, HTML, Bash, Go, Ruby, TOML, PowerShell, YAML, XML, Batch）において、抽象構文木（AST）に基づく高精度な多層シンタックスハイライトが自動適用され、編集時は差分インクリメンタルパースで高速追従します。
 - **スマート選択拡大 / 縮小**: `Alt+Up`（または `Alt++`、`:smartselect expand`）でカーソル位置の識別子 ➔ 式 ➔ 文 ➔ ブロック ➔ 関数全体へと構文木階層に沿ってビジュアル選択を段階的に拡大し、`Alt+Down`（または `Alt+-`、`:smartselect shrink`）で直前の階層へ縮小します。
 - `:ast`: 現在のバッファの構文木（S式表現）をプレビューウィンドウに出力します。
 

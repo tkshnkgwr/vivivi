@@ -109,6 +109,8 @@ pub fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         vivivi_modes::SyntaxLang::Yaml => "YAML",
         vivivi_modes::SyntaxLang::Xml => "XML",
         vivivi_modes::SyntaxLang::Batch => "Batch",
+        vivivi_modes::SyntaxLang::Hosts => "Hosts",
+        vivivi_modes::SyntaxLang::Cron => "Cron",
     };
 
     let enc_info = format!(

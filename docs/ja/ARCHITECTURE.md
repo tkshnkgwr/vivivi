@@ -77,7 +77,7 @@ Vi/VimおよびViVi互換のモード状態遷移とコマンドパース、ex�
 ViVi特有のキラー編集支援機能およびモダンツール機能エンジン群を提供します。
 - `hex.rs`: 16進ダンプ＋ASCII並行表示によるバイナリ直接編集エンジン（`HexDocument`, `HexCursor`, ニブル編集, Undo/Redo, バイト検索）。
 - `lsp/`: LSP v3.17 クライアント基盤（`protocol.rs` JSON-RPC 2.0 / Content-Length, `client.rs` バックグラウンド stdio 通信, `manager.rs` 診断・ホバー・定義・補完管理）。
-- `treesitter.rs`: `tree-sitter` 抽象構文木（AST）解析、行トークン抽出、スマート選択拡大/縮小（`AstSelectionRange`）、インクリメンタルパース。
+- `treesitter.rs`: `tree-sitter` 抽象構文木（AST）解析（18言語対応: Rust / C・C++ / Python / JS・TS / JSON / Markdown / SQL / PL・SQL / Java / HTML / Bash / Go / Ruby / TOML / PowerShell / YAML / XML / Batch）、行トークン抽出、スマート選択拡大/縮小（`AstSelectionRange`）、自動差分インクリメンタルパース（`parse_incremental`）。
 - `trim.rs`: 半角・タブ・全角スペース対応のゼロコピー行末空白トリミング。
 - `diff.rs` / `difflog.rs`: LCSアルゴリズムに基づくUnified Diff生成と `.difflog` 世代バックアップ。
 - `template.rs` / `todo.rs` / `folding.rs` / `grep.rs` / `filer.rs` / `project.rs` / `print.rs`。

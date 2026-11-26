@@ -70,7 +70,7 @@
 | Encoding           | Explicit Encoding Reload & Format (:e ++enc)  | Common (ViVi / OpenViVi) | Force reopen with SJIS/EUC/UTF-8; convert CRLF/LF on save                   | Implemented (Phase 4.8)  |
 | Robustness         | Auto-Save & Crash Recovery (.swp)             | Common (ViVi / OpenViVi) | Periodic background swap dumps & unsaved recovery on startup                | Implemented (Phase 4.8)  |
 | OS Integration     | System Clipboard Integration ("+y, "*p)       | Common (ViVi / OpenViVi) | Bidirectional transparent sync with OS clipboard registers                  | Implemented (Phase 4.8)  |
-| Languages & Syntax | Syntax Highlighting Expansion (Go, Ruby, etc) | Common (ViVi / OpenViVi) | Syntax highlighting for Go, Ruby, TOML, PowerShell, YAML, XML, BAT          | Implemented (Phase 4.8)  |
+| Languages & Syntax | Syntax Highlighting Expansion (20 Languages)  | Common (ViVi / OpenViVi) | Syntax highlighting for Go, Ruby, TOML, PS, YAML, XML, Batch, Hosts, Cron   | Implemented (Phase 4.8+) |
 | UI/UX Visual       | Minimap Overview                              | OpenViVi                 | Bird's-eye code preview with viewport and search highlights                 | Implemented (vivivi-gui) |
 | UI/UX Visual       | Sidebar File Explorer (File Tree)             | ViVi 4 / Modern          | Hierarchical tree, async lazy loading, cloud/NAS-safe design                | Implemented (vivivi-gui) |
 | UI/UX Visual       | Gravity Drop Deletion Animation               | OpenViVi                 | Playful physical falling character animation upon deletion                  | Implemented (vivivi-gui) |
@@ -378,8 +378,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
 - [x] **[OpenViVi] Gravity Drop Character Deletion Animation (egui-backed)**
   - Playful physical falling character animation upon deletions (`vivivi-gui::particles`).
 - [x] **[ViVi 4 / Modern Extension] Sidebar File Explorer Async Cloud-Resilient Enhancements**
-  - Basic left-pane directory listing, parent `..` traversal, and click-to-open are implemented in `vivivi-gui`.
-  - Future enhancements: keyboard-driven tree navigation (`:tree` / `Ctrl-e`) and **async on-demand lazy loading with I/O timeouts** for network drives & cloud storage (Box/OneDrive).
+  - Implemented left-pane directory listing, parent `..` traversal, click-to-open, keyboard-driven toggle (`:tree` / `:explore` / `Ctrl-e`), and **async on-demand lazy loading with I/O timeouts & cloud placeholder safety** in `vivivi-gui` (`async_tree.rs`).
 - [x] **[ViVi 3 / ViVi 4] Binary / Hex Editor Mode**
   - Hex dump + ASCII parallel view and byte-level editing (`vivivi-modes::hex`).
   - 3-column synchronized grid: address offsets (8-digit HEX), hex byte dump (16 bytes/row with 8-byte space grouping), printable ASCII preview.
@@ -392,26 +391,23 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
   - Native embedding into desktop GUI (`egui::ViewportBuilder::with_icon`) and Windows `.exe` binaries (`winres`).
 - [ ] **[Original]** Gigabyte file (1GB+) handling via Piece Tree & Memory-Mapped Files (`memmap2`).
 - [x] **[Modern Extension] Tree-sitter Syntax Engine Integration**
-  - Integrate AST (Abstract Syntax Tree) parsing engine via `tree-sitter` crate (`vivivi-modes::treesitter::TreeSitterEngine`).
+  - Integrate AST (Abstract Syntax Tree) parsing engine via `tree-sitter` crate (`vivivi-modes::treesitter::TreeSitterEngine`, supporting 18 languages: Rust, C/C++, Python, JS/TS, JSON, Markdown, SQL, PL/SQL, Java, HTML, Bash, Go, Ruby, TOML, PowerShell, YAML, XML, Batch).
   - Accurate contextual highlighting for nested scopes, blocks, and identifiers (collaborating with builtin tokenizers through layered rendering).
   - Syntax node-based smart selection (expand/shrink visual selection by AST node via `Alt+Up` / `Alt+Down` / `Alt++` / `Alt+-`).
   - Ex commands `:smartselect [expand|shrink]` and `:ast` (AST S-expression preview inspection).
-  - Incremental parsing architecture guaranteeing zero input latency during typing (`edit` API).
+  - Incremental parsing architecture guaranteeing zero input latency during typing (`edit` / `parse_incremental` diff sync).
 - [x] **[Original] LSP (Language Server Protocol) Client Integration**
   - LSP v3.17 compliant asynchronous client engine (`vivivi-modes::lsp`).
-  - JSON-RPC 2.0 / Content-Length communication stream over background stdio child processes (`rust-analyzer`, `clangd`, etc.).
-  - Real-time diagnostic collection (`textDocument/publishDiagnostics`), hover documentation (`textDocument/hover`), definition navigation (`textDocument/definition`), and completion (`textDocument/completion`).
-  - TUI integration with `:lsp start [cmd]`, `:lsp stop`, `:lsp hover` (key: `K`), `:lsp def` (key: `gd`), and `:lsp diag` Ex commands.
+  - JSON-RPC 2.0 / Content-Length communication stream over background stdio child processes (`rust-analyzer`, `clangd`, `pyright-langserver`, `gopls`, `typescript-language-server`, `jdtls`, `solargraph`, `bash-language-server`, `taplo`, etc.).
+  - Automatic `textDocument/didChange` syncing, real-time diagnostics (`textDocument/publishDiagnostics`), hover (`textDocument/hover`), cross-file definition navigation (`textDocument/definition`), and completion (`textDocument/completion`).
+  - TUI/GUI integration with `:lsp start [cmd]`, `:lsp stop`, `:lsp hover` (key: `K`), `:lsp def` (key: `gd`), `:lsp comp`, and `:lsp diag` Ex commands.
 - [ ] **[Original]** Multi-cursor editing.
-- [x] **[Update Management & Operations] Update Check, Notification & Auto-Update Pipeline Preparation (Medium priority)**
-  - **1. GitHub Actions CI/CD Release Pipeline (`.github/workflows/release.yml`)**:
-    - Automated cross-compilation & release workflow triggered on `git push origin v*` (version tags).
-    - Windows x86_64 (`x86_64-pc-windows-msvc`) as primary priority, matrix support prepared for macOS / Linux.
-    - Standard release asset naming: `vivivi-v<X.Y.Z>-<target-triple>.zip` (e.g., `vivivi-v0.1.0-x86_64-pc-windows-msvc.zip`).
-  - **2. Release Standards & Versioning Conventions**:
+- [x] **[Update Management & Operations] Update Check, Notification & In-App Self-Update Client (`moult-update`) (Medium priority)**
+  - *(Note: actual `.github/workflows/release.yml` CI workflow file creation remains tracked as pending in Phase 6.)*
+  - **1. Release Standards & Versioning Conventions**:
     - Strict semantic versioning (`v<Major>.<Minor>.<Patch>`). Pre-releases use `v0.1.0-alpha.1` with automated pre-release flag.
-    - Zip bundle contents: `vivivi.exe`, `README.md`, `LICENSE`, and `doc/help/` (self-contained offline help documentation).
-  - **3. In-App Client Integration Protocol (Reusable Crate `crates/moult-update` for Moult Swap & Synchronized Pair Sync)**:
+    - Standard release asset naming (`vivivi-v<X.Y.Z>-<target-triple>.zip`, e.g., `vivivi-v0.1.0-x86_64-pc-windows-msvc.zip`) and zip bundle contents: `vivivi.exe`, `README.md`, `LICENSE`, and `doc/help/` (self-contained offline help documentation).
+  - **2. In-App Client Integration Protocol (Reusable Crate `crates/moult-update` for Moult Swap & Synchronized Pair Sync)**:
     - **Independent Crate Architecture (`moult-update`)**: Separated as an application-agnostic crate reusable across any custom Rust applications.
     - **Lightweight HTTP Client (`ureq`)**: tokio-free lightweight synchronous networking running in detached worker threads with 0ms UI impact.
     - **GitHub Releases API Query & Cache**: `latest` endpoint query, 24-hour rate-limit TTL, configuration-backed (`config.general.auto_update_check`).
@@ -419,7 +415,7 @@ Focusing on features essential for primary/daily driver use (Gvim-compatible wor
     - **GUI/TUI Pair Binary In-Place Replacement (Rename & Swap)**: Renames active binary to `.old` and deploys new binary while simultaneously updating the sibling executable (`vivivi.exe` / `vivivi-gui.exe`).
     - **Seamless Restart & Startup Cleanup**: Spawns fresh process and exits cleanly, automatically deleting legacy `*.old` files on subsequent launches.
     - **UI/UX & Ex Commands**: Statusline progress indicator, `:checkupdate`, `:update`, and `:restart` Ex commands.
-  - **4. Package Manager (Scoop / Winget) Coexistence & Detection**:
+  - **3. Package Manager (Scoop / Winget) Coexistence & Detection**:
     - Detect executable path (e.g. within `scoop\apps\vivivi\` or `WindowsApps`) to determine if installed via a package manager.
     - When managed by a package manager, inhibit in-app binary overwrites and guide users to execute `scoop update vivivi` or `winget upgrade vivivi`.
 - [x] **[Quality & Extreme Performance] Benchmarking Suite (`benches/`) (Medium priority)**

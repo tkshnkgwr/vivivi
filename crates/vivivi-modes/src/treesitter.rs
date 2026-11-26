@@ -86,6 +86,8 @@ pub struct TreeSitterEngine {
     current_lang: Option<SyntaxLang>,
     /// キャッシュされた最新の構文木 (AST)
     tree: Option<Tree>,
+    /// 差分計算用に保持する直近パース済みソーステキスト
+    last_source: String,
     /// スマート選択の拡大履歴スタック（縮小用）
     selection_history: Vec<AstSelectionRange>,
 }
@@ -97,17 +99,37 @@ impl TreeSitterEngine {
             parser: Parser::new(),
             current_lang: None,
             tree: None,
+            last_source: String::new(),
             selection_history: Vec::new(),
         }
     }
 
     /// 言語種別に応じた Tree-sitter 言語文法を設定します。
     ///
+    /// 対応言語: Rust, C/C++, Python, JavaScript/TypeScript, JSON, Markdown, SQL, PL/SQL,
+    /// Java, HTML, Bash, Go, Ruby, TOML, PowerShell, YAML, XML, Batch（計 18 言語）
+    ///
     /// # 戻り値
     /// 設定に成功した場合は `true`、未対応の言語の場合は `false` を返します。
     pub fn set_language(&mut self, lang: SyntaxLang) -> bool {
         let ts_lang: Option<Language> = match lang {
             SyntaxLang::Rust => Some(tree_sitter_rust::LANGUAGE.into()),
+            SyntaxLang::Cpp => Some(tree_sitter_cpp::LANGUAGE.into()),
+            SyntaxLang::Python => Some(tree_sitter_python::LANGUAGE.into()),
+            SyntaxLang::JavaScript => Some(tree_sitter_javascript::LANGUAGE.into()),
+            SyntaxLang::Json => Some(tree_sitter_json::LANGUAGE.into()),
+            SyntaxLang::Markdown => Some(tree_sitter_md::LANGUAGE.into()),
+            SyntaxLang::Sql | SyntaxLang::PlSql => Some(tree_sitter_sequel::LANGUAGE.into()),
+            SyntaxLang::Java => Some(tree_sitter_java::LANGUAGE.into()),
+            SyntaxLang::Html => Some(tree_sitter_html::LANGUAGE.into()),
+            SyntaxLang::Bash => Some(tree_sitter_bash::LANGUAGE.into()),
+            SyntaxLang::Go => Some(tree_sitter_go::LANGUAGE.into()),
+            SyntaxLang::Ruby => Some(tree_sitter_ruby::LANGUAGE.into()),
+            SyntaxLang::Toml => Some(tree_sitter_toml_ng::LANGUAGE.into()),
+            SyntaxLang::PowerShell => Some(tree_sitter_powershell::LANGUAGE.into()),
+            SyntaxLang::Yaml => Some(tree_sitter_yaml::LANGUAGE.into()),
+            SyntaxLang::Xml => Some(tree_sitter_xml::LANGUAGE_XML.into()),
+            SyntaxLang::Batch => Some(tree_sitter_batch::LANGUAGE.into()),
             _ => None,
         };
 
@@ -116,12 +138,14 @@ impl TreeSitterEngine {
         {
             self.current_lang = Some(lang);
             self.tree = None;
+            self.last_source.clear();
             self.selection_history.clear();
             return true;
         }
 
         self.current_lang = None;
         self.tree = None;
+        self.last_source.clear();
         false
     }
 
@@ -132,8 +156,7 @@ impl TreeSitterEngine {
 
     /// ソースコード全体をパースし、構文木（AST）を更新します。
     ///
-    /// 既存の構文木が存在する場合は、差分インクリメンタルパースを活用して
-    /// タイピング遅延ゼロで再構築します。
+    /// 既存の構文木が存在する場合は、既存のツリーを再利用して再構築します。
     pub fn parse(&mut self, source_code: &str) -> bool {
         if self.current_lang.is_none() {
             return false;
@@ -142,10 +165,108 @@ impl TreeSitterEngine {
         let new_tree = self.parser.parse(source_code, self.tree.as_ref());
         if let Some(tree) = new_tree {
             self.tree = Some(tree);
+            self.last_source.clear();
+            self.last_source.push_str(source_code);
             true
         } else {
             false
         }
+    }
+
+    /// 前回パースしたソースとの差分を自動検出し、[`Self::edit`] を適用したうえでインクリメンタルパースを行います。
+    ///
+    /// 前回の構文木が存在しない場合は通常の [`Self::parse`] にフォールバックし、
+    /// テキスト内容が同一の場合は再パースをスキップして `true` を返します。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::{SyntaxLang, TreeSitterEngine};
+    ///
+    /// let mut engine = TreeSitterEngine::new();
+    /// assert!(engine.set_language(SyntaxLang::Rust));
+    /// assert!(engine.parse("fn main() { let x = 1; }"));
+    /// assert!(engine.parse_incremental("fn main() { let x = 42; }"));
+    /// ```
+    pub fn parse_incremental(&mut self, source_code: &str) -> bool {
+        if self.current_lang.is_none() {
+            return false;
+        }
+        if self.tree.is_none() {
+            return self.parse(source_code);
+        }
+        if self.last_source == source_code {
+            return true;
+        }
+
+        let old = self.last_source.as_str();
+        let old_bytes = old.as_bytes();
+        let new_bytes = source_code.as_bytes();
+
+        // 先頭共通プレフィックスを探索し、双方の文字境界へ揃える
+        let min_len = old_bytes.len().min(new_bytes.len());
+        let mut start_byte = 0usize;
+        while start_byte < min_len && old_bytes[start_byte] == new_bytes[start_byte] {
+            start_byte += 1;
+        }
+        while start_byte > 0
+            && (!old.is_char_boundary(start_byte) || !source_code.is_char_boundary(start_byte))
+        {
+            start_byte -= 1;
+        }
+
+        // 末尾共通サフィックスを探索し、双方の文字境界へ揃える
+        let max_suffix = (old_bytes.len() - start_byte).min(new_bytes.len() - start_byte);
+        let mut suffix = 0usize;
+        while suffix < max_suffix
+            && old_bytes[old_bytes.len() - 1 - suffix] == new_bytes[new_bytes.len() - 1 - suffix]
+        {
+            suffix += 1;
+        }
+        while suffix > 0
+            && (!old.is_char_boundary(old_bytes.len() - suffix)
+                || !source_code.is_char_boundary(new_bytes.len() - suffix))
+        {
+            suffix -= 1;
+        }
+
+        let old_end_byte = old_bytes.len() - suffix;
+        let new_end_byte = new_bytes.len() - suffix;
+
+        let start_point = Self::byte_offset_to_point(old, start_byte);
+        let old_end_point = Self::byte_offset_to_point(old, old_end_byte);
+        let new_end_point = Self::byte_offset_to_point(source_code, new_end_byte);
+
+        self.edit(
+            start_byte,
+            old_end_byte,
+            new_end_byte,
+            start_point,
+            old_end_point,
+            new_end_point,
+        );
+
+        let new_tree = self.parser.parse(source_code, self.tree.as_ref());
+        if let Some(tree) = new_tree {
+            self.tree = Some(tree);
+            self.last_source.clear();
+            self.last_source.push_str(source_code);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// テキスト内のバイトオフセットから `(row, col)` を計算します。
+    fn byte_offset_to_point(text: &str, byte_offset: usize) -> (usize, usize) {
+        let clamped = byte_offset.min(text.len());
+        let prefix = &text[..clamped];
+        let row = prefix.bytes().filter(|&b| b == b'\n').count();
+        let col = prefix
+            .rfind('\n')
+            .map(|pos| clamped - (pos + 1))
+            .unwrap_or(clamped);
+        (row, col)
     }
 
     /// テキスト変更時のインクリメンタル編集（InputEdit）を構文木に適用します。
@@ -224,9 +345,11 @@ impl TreeSitterEngine {
 
         let mut tokens = Vec::new();
         let mut cursor = root.walk();
+        let lang = self.current_lang.unwrap_or(SyntaxLang::PlainText);
 
         Self::collect_tokens_for_line(
             &mut cursor,
+            lang,
             line_index,
             start_point,
             end_point,
@@ -294,6 +417,7 @@ impl TreeSitterEngine {
 
     fn collect_tokens_for_line(
         cursor: &mut tree_sitter::TreeCursor,
+        lang: SyntaxLang,
         target_row: usize,
         _line_start: Point,
         _line_end: Point,
@@ -311,38 +435,30 @@ impl TreeSitterEngine {
 
         // コメントや文字列/文字リテラル等は内部に子ノード（"//", "comment_content", "\"", "string_content" 等）を
         // 持つため、子へ降りずノード全体で単一トークンとして確定させる
-        let is_atomic_token_node = matches!(
-            node.kind(),
-            "line_comment"
-                | "block_comment"
-                | "comment"
-                | "string_literal"
-                | "raw_string_literal"
-                | "char_literal"
-        );
+        let is_atomic_token_node = Self::is_atomic_node(lang, node.kind());
 
         // 葉ノードまたは単一色複合ノードであればトークン化
         if node.child_count() == 0 || is_atomic_token_node {
-            if let Some(token_type) = Self::node_to_token_type(&node) {
-                let col_start = if start.row == target_row {
-                    start.column
-                } else {
-                    0
-                };
-                let col_end = if end.row == target_row {
-                    end.column
-                } else {
-                    line_text.len()
-                };
+            let col_start = if start.row == target_row {
+                start.column
+            } else {
+                0
+            };
+            let col_end = if end.row == target_row {
+                end.column
+            } else {
+                line_text.len()
+            };
 
-                let len = line_text.len();
-                if col_start < len {
-                    let clamped_end = col_end.min(len);
-                    if clamped_end > col_start
-                        && line_text.is_char_boundary(col_start)
-                        && line_text.is_char_boundary(clamped_end)
-                    {
-                        let text = &line_text[col_start..clamped_end];
+            let len = line_text.len();
+            if col_start < len {
+                let clamped_end = col_end.min(len);
+                if clamped_end > col_start
+                    && line_text.is_char_boundary(col_start)
+                    && line_text.is_char_boundary(clamped_end)
+                {
+                    let text = &line_text[col_start..clamped_end];
+                    if let Some(token_type) = Self::node_to_token_type(lang, &node, text) {
                         tokens.push(AstToken {
                             text: text.to_string(),
                             token_type,
@@ -360,6 +476,7 @@ impl TreeSitterEngine {
             loop {
                 Self::collect_tokens_for_line(
                     cursor,
+                    lang,
                     target_row,
                     _line_start,
                     _line_end,
@@ -374,13 +491,123 @@ impl TreeSitterEngine {
         }
     }
 
-    /// Tree-sitter ノードの種類（kind）を [`TokenType`] にマッピングします。
-    fn node_to_token_type(node: &Node) -> Option<TokenType> {
-        let kind = node.kind();
-        match kind {
-            // コメント
-            "line_comment" | "block_comment" | "comment" => Some(TokenType::Comment),
+    /// 子ノードへ降りず単一トークンとして扱う複合ノードかどうかを判定します。
+    fn is_atomic_node(lang: SyntaxLang, kind: &str) -> bool {
+        if matches!(
+            kind,
+            "line_comment"
+                | "block_comment"
+                | "comment"
+                | "string_literal"
+                | "raw_string_literal"
+                | "char_literal"
+        ) {
+            return true;
+        }
 
+        match lang {
+            SyntaxLang::Python => matches!(kind, "string"),
+            SyntaxLang::Bash => matches!(kind, "string" | "raw_string" | "heredoc_body"),
+            SyntaxLang::Sql => matches!(kind, "marginalia" | "literal"),
+            SyntaxLang::Markdown => matches!(
+                kind,
+                "atx_heading"
+                    | "setext_heading"
+                    | "indented_code_block"
+                    | "code_fence_content"
+                    | "info_string"
+                    | "link_destination"
+                    | "link_title"
+                    | "link_label"
+                    | "html_block"
+            ),
+            SyntaxLang::PowerShell => matches!(
+                kind,
+                "expandable_string_literal"
+                    | "verbatim_string_literal"
+                    | "expandable_here_string_literal"
+                    | "verbatim_here_string_literal"
+                    | "integer_literal"
+                    | "real_literal"
+                    | "type_spec"
+                    | "variable"
+            ),
+            SyntaxLang::Batch => matches!(
+                kind,
+                "string" | "label" | "variable_reference" | "for_variable" | "echo_off"
+            ),
+            SyntaxLang::Toml => matches!(kind, "string" | "quoted_key"),
+            SyntaxLang::Json => matches!(kind, "string"),
+            SyntaxLang::Yaml => matches!(
+                kind,
+                "double_quote_scalar" | "single_quote_scalar" | "block_scalar" | "string_scalar"
+            ),
+            SyntaxLang::JavaScript => matches!(kind, "string" | "template_string" | "regex"),
+            SyntaxLang::Cpp => matches!(
+                kind,
+                "string_literal" | "raw_string_literal" | "char_literal" | "system_lib_string"
+            ),
+            SyntaxLang::Java => matches!(kind, "string_literal" | "character_literal"),
+            SyntaxLang::Go => matches!(
+                kind,
+                "interpreted_string_literal" | "raw_string_literal" | "rune_literal"
+            ),
+            SyntaxLang::Ruby => matches!(
+                kind,
+                "string"
+                    | "bare_string"
+                    | "subshell"
+                    | "heredoc_body"
+                    | "regex"
+                    | "simple_symbol"
+                    | "delimited_symbol"
+                    | "hash_key_symbol"
+            ),
+            SyntaxLang::Html => matches!(kind, "attribute_value" | "quoted_attribute_value"),
+            SyntaxLang::Xml => matches!(
+                kind,
+                "AttValue" | "PseudoAttValue" | "EntityValue" | "Comment" | "CData"
+            ),
+            _ => false,
+        }
+    }
+
+    /// Tree-sitter ノードの種類（kind）を言語に応じて [`TokenType`] にマッピングします。
+    fn node_to_token_type(lang: SyntaxLang, node: &Node, text: &str) -> Option<TokenType> {
+        let kind = node.kind();
+
+        // 全言語共通のコメント
+        if matches!(
+            kind,
+            "line_comment" | "block_comment" | "comment" | "Comment"
+        ) {
+            return Some(TokenType::Comment);
+        }
+
+        match lang {
+            SyntaxLang::Rust => Self::rust_node_to_token_type(kind),
+            SyntaxLang::Cpp => Self::cpp_node_to_token_type(kind),
+            SyntaxLang::Python => Self::python_node_to_token_type(kind),
+            SyntaxLang::JavaScript => Self::javascript_node_to_token_type(kind),
+            SyntaxLang::Json => Self::json_node_to_token_type(node, kind),
+            SyntaxLang::Markdown => Self::markdown_node_to_token_type(kind),
+            SyntaxLang::Sql | SyntaxLang::PlSql => Self::sql_node_to_token_type(kind, text),
+            SyntaxLang::Java => Self::java_node_to_token_type(node, kind),
+            SyntaxLang::Html => Self::html_node_to_token_type(kind),
+            SyntaxLang::Bash => Self::bash_node_to_token_type(kind),
+            SyntaxLang::Go => Self::go_node_to_token_type(kind),
+            SyntaxLang::Ruby => Self::ruby_node_to_token_type(kind),
+            SyntaxLang::Toml => Self::toml_node_to_token_type(kind),
+            SyntaxLang::PowerShell => Self::powershell_node_to_token_type(kind),
+            SyntaxLang::Yaml => Self::yaml_node_to_token_type(node, kind),
+            SyntaxLang::Xml => Self::xml_node_to_token_type(kind),
+            SyntaxLang::Batch => Self::batch_node_to_token_type(kind, text),
+            _ => Self::rust_node_to_token_type(kind),
+        }
+    }
+
+    fn rust_node_to_token_type(kind: &str) -> Option<TokenType> {
+        match kind {
             // 文字列・リテラル
             "string_literal" | "raw_string_literal" | "char_literal" | "string_content" => {
                 Some(TokenType::StringLiteral)
@@ -410,6 +637,441 @@ impl TreeSitterEngine {
                 Some(TokenType::Punctuation)
             }
 
+            _ => None,
+        }
+    }
+
+    fn python_node_to_token_type(kind: &str) -> Option<TokenType> {
+        match kind {
+            "string" | "string_content" | "escape_sequence" => Some(TokenType::StringLiteral),
+            "integer" | "float" | "true" | "false" | "none" => Some(TokenType::Number),
+            "as" | "assert" | "async" | "await" | "break" | "class" | "continue" | "def"
+            | "del" | "elif" | "else" | "except" | "exec" | "finally" | "for" | "from"
+            | "global" | "if" | "import" | "in" | "is" | "is not" | "lambda" | "match" | "case"
+            | "nonlocal" | "not" | "not in" | "and" | "or" | "pass" | "print" | "raise"
+            | "return" | "try" | "while" | "with" | "yield" => Some(TokenType::Keyword),
+            "identifier" => Some(TokenType::Text),
+            "+" | "-" | "*" | "**" | "/" | "//" | "%" | "@" | "<<" | ">>" | "&" | "|" | "^"
+            | "~" | ":=" | "<" | ">" | "<=" | ">=" | "==" | "!=" | "=" | "+=" | "-=" | "*="
+            | "/=" | "//=" | "%=" | "**=" | "&=" | "|=" | "^=" | ">>=" | "<<=" | "@=" | "->"
+            | "(" | ")" | "[" | "]" | "{" | "}" | "," | ":" | "." | ";" => {
+                Some(TokenType::Punctuation)
+            }
+            _ => None,
+        }
+    }
+
+    fn bash_node_to_token_type(kind: &str) -> Option<TokenType> {
+        match kind {
+            "string" | "raw_string" | "string_content" | "heredoc_body" | "heredoc_start"
+            | "heredoc_end" => Some(TokenType::StringLiteral),
+            "number" | "file_descriptor" => Some(TokenType::Number),
+            "case" | "do" | "done" | "elif" | "else" | "esac" | "export" | "fi" | "for"
+            | "function" | "if" | "in" | "local" | "readonly" | "select" | "then" | "unset"
+            | "until" | "while" => Some(TokenType::Keyword),
+            "variable_name" | "special_variable_name" => Some(TokenType::Type),
+            "$" | "&&" | "||" | "|" | "|&" | ">" | ">>" | "<" | "<<" | "<<-" | "<<<" | "&>"
+            | "&>>" | "=" | "+=" | "==" | "!=" | ";" | ";;" | "(" | ")" | "{" | "}" | "[" | "]"
+            | "[[" | "]]" | "!" => Some(TokenType::Punctuation),
+            "word" => Some(TokenType::Text),
+            _ => None,
+        }
+    }
+
+    fn sql_node_to_token_type(kind: &str, text: &str) -> Option<TokenType> {
+        if kind == "marginalia" {
+            return Some(TokenType::Comment);
+        }
+        if kind == "literal" {
+            let trimmed = text.trim();
+            let is_num = !trimmed.is_empty()
+                && trimmed
+                    .trim_start_matches(['+', '-'])
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || c == '.');
+            return Some(if is_num {
+                TokenType::Number
+            } else {
+                TokenType::StringLiteral
+            });
+        }
+        if let Some(kw) = kind.strip_prefix("keyword_") {
+            return Some(match kw {
+                "true" | "false" => TokenType::Number,
+                "int" | "integer" | "smallint" | "mediumint" | "bigint" | "tinyint" | "decimal"
+                | "float" | "double" | "numeric" | "real" | "char" | "nchar" | "varchar"
+                | "nvarchar" | "text" | "string" | "boolean" | "binary" | "varbinary" | "bit"
+                | "date" | "datetime" | "datetime2" | "time" | "timestamp" | "timestamptz"
+                | "interval" | "uuid" | "json" | "jsonb" | "xml" | "bytea" | "serial"
+                | "smallserial" | "bigserial" | "money" | "smallmoney" | "enum" | "null" => {
+                    TokenType::Type
+                }
+                _ => TokenType::Keyword,
+            });
+        }
+        match kind {
+            "double" => Some(TokenType::Type),
+            "parameter" => Some(TokenType::Type),
+            "identifier" => Some(TokenType::Text),
+            "+" | "-" | "*" | "/" | "%" | "^" | ":=" | "=>" | "=" | "<" | "<=" | "!=" | ">="
+            | ">" | "<>" | "(" | ")" | ";" | "," | "." | "op_other" | "op_unary_other" => {
+                Some(TokenType::Punctuation)
+            }
+            _ => None,
+        }
+    }
+
+    fn markdown_node_to_token_type(kind: &str) -> Option<TokenType> {
+        match kind {
+            "atx_heading" | "setext_heading" => Some(TokenType::Keyword),
+            "indented_code_block" | "code_fence_content" | "link_title" | "link_destination" => {
+                Some(TokenType::StringLiteral)
+            }
+            "info_string" | "link_label" => Some(TokenType::Type),
+            "html_block" => Some(TokenType::Comment),
+            "atx_h1_marker"
+            | "atx_h2_marker"
+            | "atx_h3_marker"
+            | "atx_h4_marker"
+            | "atx_h5_marker"
+            | "atx_h6_marker"
+            | "setext_h1_underline"
+            | "setext_h2_underline"
+            | "fenced_code_block_delimiter"
+            | "list_marker_plus"
+            | "list_marker_minus"
+            | "list_marker_star"
+            | "list_marker_dot"
+            | "list_marker_parenthesis"
+            | "thematic_break"
+            | "block_quote_marker"
+            | "block_continuation"
+            | "backslash_escape" => Some(TokenType::Punctuation),
+            _ => None,
+        }
+    }
+
+    fn powershell_node_to_token_type(kind: &str) -> Option<TokenType> {
+        match kind {
+            "string_literal"
+            | "expandable_string_literal"
+            | "verbatim_string_literal"
+            | "expandable_here_string_literal"
+            | "verbatim_here_string_literal" => Some(TokenType::StringLiteral),
+            "integer_literal"
+            | "decimal_integer_literal"
+            | "hexadecimal_integer_literal"
+            | "real_literal" => Some(TokenType::Number),
+            "param" | "dynamicparam" | "begin" | "process" | "end" | "if" | "elseif" | "else"
+            | "switch" | "foreach" | "for" | "while" | "do" | "until" | "function" | "filter"
+            | "workflow" | "break" | "continue" | "throw" | "return" | "exit" | "trap" | "try"
+            | "catch" | "finally" | "data" | "inlinescript" | "parallel" | "sequence" | "in" => {
+                Some(TokenType::Keyword)
+            }
+            "type_spec" | "variable" | "command_name" | "function_name" => Some(TokenType::Type),
+            "+"
+            | "-"
+            | "*"
+            | "/"
+            | "\\"
+            | "%"
+            | "="
+            | "+="
+            | "-="
+            | "*="
+            | "/="
+            | "%="
+            | ".."
+            | "|"
+            | ";"
+            | ","
+            | "."
+            | "("
+            | ")"
+            | "{"
+            | "}"
+            | "["
+            | "]"
+            | "@"
+            | "command_invokation_operator" => Some(TokenType::Punctuation),
+            k if k.starts_with('-') => Some(TokenType::Punctuation),
+            _ => None,
+        }
+    }
+
+    fn batch_node_to_token_type(kind: &str, text: &str) -> Option<TokenType> {
+        match kind {
+            "string" | "for_set_literal" | "redirect_target" => Some(TokenType::StringLiteral),
+            "integer" => Some(TokenType::Number),
+            "echo_off" | "set_keyword" => Some(TokenType::Keyword),
+            "label" | "variable_reference" | "variable_name" | "for_variable" => {
+                Some(TokenType::Type)
+            }
+            "set_option" | "for_options" | "command_option" => Some(TokenType::Punctuation),
+            "comparison_op" | "redirect_op" | "fd_redirect" | "(" | ")" | "=" | "@" | "&"
+            | "&&" | "||" | "|" => Some(TokenType::Punctuation),
+            "command_name" => Some(TokenType::Keyword),
+            _ => {
+                let lower = text.trim().to_ascii_lowercase();
+                if matches!(
+                    lower.as_str(),
+                    "if" | "else"
+                        | "not"
+                        | "exist"
+                        | "defined"
+                        | "for"
+                        | "in"
+                        | "do"
+                        | "goto"
+                        | "call"
+                        | "setlocal"
+                        | "endlocal"
+                        | "exit"
+                        | "echo"
+                        | "set"
+                        | "on"
+                        | "off"
+                ) {
+                    Some(TokenType::Keyword)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    fn toml_node_to_token_type(kind: &str) -> Option<TokenType> {
+        match kind {
+            "bare_key" => Some(TokenType::Type),
+            "quoted_key" | "string" | "offset_date_time" | "local_date_time" | "local_date"
+            | "local_time" => Some(TokenType::StringLiteral),
+            "integer" | "float" => Some(TokenType::Number),
+            "boolean" => Some(TokenType::Keyword),
+            "." | "," | "=" | "[" | "]" | "[[" | "]]" | "{" | "}" => Some(TokenType::Punctuation),
+            _ => None,
+        }
+    }
+
+    fn json_node_to_token_type(node: &Node, kind: &str) -> Option<TokenType> {
+        match kind {
+            "string" => {
+                let is_key = node.parent().is_some_and(|p| {
+                    p.kind() == "pair"
+                        && p.child_by_field_name("key")
+                            .is_some_and(|k| k.id() == node.id())
+                });
+                Some(if is_key {
+                    TokenType::Type
+                } else {
+                    TokenType::StringLiteral
+                })
+            }
+            "number" => Some(TokenType::Number),
+            "true" | "false" | "null" => Some(TokenType::Keyword),
+            "{" | "}" | "[" | "]" | ":" | "," => Some(TokenType::Punctuation),
+            _ => None,
+        }
+    }
+
+    fn yaml_node_to_token_type(node: &Node, kind: &str) -> Option<TokenType> {
+        match kind {
+            "double_quote_scalar" | "single_quote_scalar" | "string_scalar" => {
+                // block_mapping_pair / flow_pair の key フィールド配下にある場合はキー色 (Type)
+                let mut cur = *node;
+                let mut is_key = false;
+                while let Some(parent) = cur.parent() {
+                    if matches!(parent.kind(), "block_mapping_pair" | "flow_pair") {
+                        is_key = parent
+                            .child_by_field_name("key")
+                            .is_some_and(|k| k.id() == cur.id());
+                        break;
+                    }
+                    cur = parent;
+                }
+                Some(if is_key {
+                    TokenType::Type
+                } else {
+                    TokenType::StringLiteral
+                })
+            }
+            "block_scalar" => Some(TokenType::StringLiteral),
+            "integer_scalar" | "float_scalar" => Some(TokenType::Number),
+            "boolean_scalar" | "null_scalar" => Some(TokenType::Keyword),
+            "anchor_name" | "alias_name" | "tag" | "yaml_directive" | "tag_directive"
+            | "reserved_directive" => Some(TokenType::Type),
+            "," | "-" | ":" | ">" | "?" | "|" | "[" | "]" | "{" | "}" | "*" | "&" | "---"
+            | "..." => Some(TokenType::Punctuation),
+            _ => None,
+        }
+    }
+
+    fn javascript_node_to_token_type(kind: &str) -> Option<TokenType> {
+        match kind {
+            "string" | "template_string" | "regex" => Some(TokenType::StringLiteral),
+            "number" => Some(TokenType::Number),
+            "true" | "false" | "null" | "undefined" | "this" | "super" | "as" | "async"
+            | "await" | "break" | "case" | "catch" | "class" | "const" | "continue"
+            | "debugger" | "default" | "delete" | "do" | "else" | "export" | "extends"
+            | "finally" | "for" | "from" | "function" | "get" | "if" | "import" | "in"
+            | "instanceof" | "let" | "new" | "of" | "return" | "set" | "static" | "switch"
+            | "target" | "throw" | "try" | "typeof" | "var" | "void" | "while" | "with"
+            | "yield" => Some(TokenType::Keyword),
+            "property_identifier" => Some(TokenType::Type),
+            "identifier" => Some(TokenType::Text),
+            ";" | "." | "," | "optional_chain" | "-" | "--" | "-=" | "+" | "++" | "+=" | "*"
+            | "*=" | "**" | "**=" | "/" | "/=" | "%" | "%=" | "<" | "<=" | "<<" | "<<=" | "="
+            | "==" | "===" | "!" | "!=" | "!==" | "=>" | ">" | ">=" | ">>" | ">>=" | ">>>"
+            | ">>>=" | "~" | "^" | "&" | "|" | "^=" | "&=" | "|=" | "&&" | "||" | "??" | "&&="
+            | "||=" | "??=" | "(" | ")" | "[" | "]" | "{" | "}" | ":" | "?" => {
+                Some(TokenType::Punctuation)
+            }
+            _ => None,
+        }
+    }
+
+    fn cpp_node_to_token_type(kind: &str) -> Option<TokenType> {
+        match kind {
+            "string_literal" | "raw_string_literal" | "char_literal" | "system_lib_string"
+            | "string_content" => Some(TokenType::StringLiteral),
+            "number_literal" | "true" | "false" => Some(TokenType::Number),
+            "auto" | "primitive_type" | "type_identifier" | "sized_type_specifier" => {
+                Some(TokenType::Type)
+            }
+            "break" | "case" | "catch" | "class" | "co_await" | "co_return" | "co_yield"
+            | "concept" | "const" | "constexpr" | "constinit" | "consteval" | "continue"
+            | "default" | "delete" | "do" | "else" | "enum" | "explicit" | "extern" | "final"
+            | "for" | "friend" | "goto" | "if" | "inline" | "mutable" | "namespace" | "new"
+            | "noexcept" | "nullptr" | "override" | "private" | "protected" | "public"
+            | "register" | "requires" | "return" | "sizeof" | "static" | "struct" | "switch"
+            | "template" | "this" | "throw" | "try" | "typedef" | "typename" | "union"
+            | "using" | "virtual" | "volatile" | "while" | "#include" | "#define" | "#ifdef"
+            | "#ifndef" | "#if" | "#else" | "#elif" | "#endif" | "#pragma" => {
+                Some(TokenType::Keyword)
+            }
+            "identifier" | "field_identifier" | "namespace_identifier" => Some(TokenType::Text),
+            "+" | "-" | "*" | "/" | "%" | "=" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&"
+            | "||" | "!" | "&" | "|" | "^" | "~" | "<<" | ">>" | "->" | "::" | "." | "," | ";"
+            | ":" | "(" | ")" | "[" | "]" | "{" | "}" | "?" | "+=" | "-=" | "*=" | "/=" | "++"
+            | "--" => Some(TokenType::Punctuation),
+            _ => None,
+        }
+    }
+
+    fn java_node_to_token_type(node: &Node, kind: &str) -> Option<TokenType> {
+        match kind {
+            "string_literal" | "character_literal" | "string_fragment" => {
+                Some(TokenType::StringLiteral)
+            }
+            "decimal_integer_literal"
+            | "hex_integer_literal"
+            | "octal_integer_literal"
+            | "binary_integer_literal"
+            | "decimal_floating_point_literal"
+            | "hex_floating_point_literal"
+            | "true"
+            | "false"
+            | "null_literal" => Some(TokenType::Number),
+            "type_identifier"
+            | "boolean_type"
+            | "integral_type"
+            | "floating_point_type"
+            | "void_type" => Some(TokenType::Type),
+            "abstract" | "assert" | "break" | "case" | "catch" | "class" | "continue"
+            | "default" | "do" | "else" | "enum" | "exports" | "extends" | "final" | "finally"
+            | "for" | "if" | "implements" | "import" | "instanceof" | "interface" | "module"
+            | "native" | "new" | "non-sealed" | "open" | "opens" | "package" | "permits"
+            | "private" | "protected" | "provides" | "public" | "record" | "requires"
+            | "return" | "sealed" | "static" | "strictfp" | "super" | "switch" | "synchronized"
+            | "this" | "throw" | "throws" | "to" | "transient" | "transitive" | "try" | "uses"
+            | "var" | "volatile" | "when" | "while" | "with" | "yield" => Some(TokenType::Keyword),
+            "identifier" => {
+                let is_type_decl = node.parent().is_some_and(|p| {
+                    matches!(
+                        p.kind(),
+                        "class_declaration" | "interface_declaration" | "enum_declaration"
+                    ) && p
+                        .child_by_field_name("name")
+                        .is_some_and(|n| n.id() == node.id())
+                });
+                Some(if is_type_decl {
+                    TokenType::Type
+                } else {
+                    TokenType::Text
+                })
+            }
+            "@" | "+" | "-" | "*" | "/" | "%" | "=" | "==" | "!=" | "<" | ">" | "<=" | ">="
+            | "&&" | "||" | "!" | "&" | "|" | "^" | "<<" | ">>" | ">>>" | "->" | "::" | "."
+            | "," | ";" | ":" | "(" | ")" | "[" | "]" | "{" | "}" | "?" | "++" | "--" | "+="
+            | "-=" => Some(TokenType::Punctuation),
+            _ => None,
+        }
+    }
+
+    fn go_node_to_token_type(kind: &str) -> Option<TokenType> {
+        match kind {
+            "interpreted_string_literal"
+            | "raw_string_literal"
+            | "rune_literal"
+            | "escape_sequence" => Some(TokenType::StringLiteral),
+            "int_literal" | "float_literal" | "imaginary_literal" | "true" | "false" | "nil"
+            | "iota" => Some(TokenType::Number),
+            "type_identifier" => Some(TokenType::Type),
+            "break" | "case" | "chan" | "const" | "continue" | "default" | "defer" | "else"
+            | "fallthrough" | "for" | "func" | "go" | "goto" | "if" | "import" | "interface"
+            | "map" | "package" | "range" | "return" | "select" | "struct" | "switch" | "type"
+            | "var" => Some(TokenType::Keyword),
+            "identifier" | "field_identifier" | "package_identifier" => Some(TokenType::Text),
+            "--" | "-" | "-=" | ":=" | "!" | "!=" | "..." | "*" | "*=" | "/" | "/=" | "&"
+            | "&&" | "&=" | "%" | "%=" | "^" | "^=" | "+" | "++" | "+=" | "<-" | "<" | "<<"
+            | "<<=" | "<=" | "=" | "==" | ">" | ">=" | ">>" | ">>=" | "|" | "|=" | "||" | "~"
+            | "(" | ")" | "[" | "]" | "{" | "}" | "," | "." | ";" | ":" => {
+                Some(TokenType::Punctuation)
+            }
+            _ => None,
+        }
+    }
+
+    fn ruby_node_to_token_type(kind: &str) -> Option<TokenType> {
+        match kind {
+            "string" | "bare_string" | "subshell" | "heredoc_body" | "heredoc_beginning"
+            | "regex" | "string_content" | "escape_sequence" => Some(TokenType::StringLiteral),
+            "simple_symbol" | "delimited_symbol" | "hash_key_symbol" | "bare_symbol"
+            | "constant" | "class_variable" | "instance_variable" => Some(TokenType::Type),
+            "integer" | "float" | "nil" | "true" | "false" => Some(TokenType::Number),
+            "alias" | "and" | "begin" | "break" | "case" | "class" | "def" | "do" | "else"
+            | "elsif" | "end" | "ensure" | "for" | "if" | "in" | "module" | "next" | "or"
+            | "rescue" | "retry" | "return" | "self" | "super" | "then" | "unless" | "until"
+            | "when" | "while" | "yield" | "defined?" => Some(TokenType::Keyword),
+            "identifier" => Some(TokenType::Text),
+            "=" | "=>" | "->" | "," | ";" | "." | "(" | ")" | "[" | "]" | "{" | "}" | "%w("
+            | "%i(" | "+" | "-" | "*" | "/" | "==" | "!=" => Some(TokenType::Punctuation),
+            _ => None,
+        }
+    }
+
+    fn html_node_to_token_type(kind: &str) -> Option<TokenType> {
+        match kind {
+            "tag_name" | "doctype" => Some(TokenType::Keyword),
+            "attribute_name" => Some(TokenType::Type),
+            "attribute_value" | "quoted_attribute_value" => Some(TokenType::StringLiteral),
+            "<" | ">" | "</" | "/>" | "=" | "<!" => Some(TokenType::Punctuation),
+            _ => None,
+        }
+    }
+
+    fn xml_node_to_token_type(kind: &str) -> Option<TokenType> {
+        match kind {
+            "Name" | "PITarget" => Some(TokenType::Keyword),
+            "EncName" | "AttValue" | "PseudoAttValue" | "EntityValue" | "CData" | "URI"
+            | "PubidLiteral" => Some(TokenType::StringLiteral),
+            "VersionNum" => Some(TokenType::Number),
+            "xml" | "DOCTYPE" | "ELEMENT" | "ATTLIST" | "ENTITY" | "NOTATION" | "PUBLIC"
+            | "SYSTEM" | "yes" | "no" => Some(TokenType::Keyword),
+            "EntityRef" | "CharRef" | "PEReference" | "StringType" | "TokenizedType" => {
+                Some(TokenType::Type)
+            }
+            "<?" | "?>" | "<!" | "]]>" | "<" | ">" | "</" | "/>" | "(" | ")" | "[" | "]" | "\""
+            | "'" | "," | "|" | "=" | "*" | "?" | "+" => Some(TokenType::Punctuation),
             _ => None,
         }
     }

@@ -123,6 +123,19 @@ fn test_from_path_extensions() {
     assert_eq!(SyntaxLang::from_path("app.xml"), SyntaxLang::Xml);
     assert_eq!(SyntaxLang::from_path("run.bat"), SyntaxLang::Batch);
     assert_eq!(SyntaxLang::from_path("run.cmd"), SyntaxLang::Batch);
+    assert_eq!(SyntaxLang::from_path("/etc/hosts"), SyntaxLang::Hosts);
+    assert_eq!(
+        SyntaxLang::from_path(r"C:\Windows\System32\drivers\etc\hosts"),
+        SyntaxLang::Hosts
+    );
+    assert_eq!(SyntaxLang::from_path("dev.hosts"), SyntaxLang::Hosts);
+    assert_eq!(SyntaxLang::from_path("/etc/crontab"), SyntaxLang::Cron);
+    assert_eq!(SyntaxLang::from_path("crontab.AbCdEf"), SyntaxLang::Cron);
+    assert_eq!(SyntaxLang::from_path("backup.cron"), SyntaxLang::Cron);
+    assert_eq!(
+        SyntaxLang::from_path("/etc/cron.d/nightly"),
+        SyntaxLang::Cron
+    );
 }
 
 #[test]
@@ -215,4 +228,86 @@ fn test_number_method_call_and_range() {
 
     let to_str = tokens.iter().find(|t| t.text == "to_string").unwrap();
     assert_eq!(to_str.token_type, TokenType::Text);
+}
+
+#[test]
+fn test_hosts_tokenization() {
+    let line = "127.0.0.1\tlocalhost localhost.localdomain # loopback";
+    let tokens = tokenize_line(line, SyntaxLang::Hosts);
+    let reconstructed: String = tokens.iter().map(|t| t.text.as_str()).collect();
+    assert_eq!(reconstructed, line);
+
+    assert!(
+        tokens
+            .iter()
+            .any(|t| t.text == "127.0.0.1" && t.token_type == TokenType::Number)
+    );
+    assert!(
+        tokens
+            .iter()
+            .any(|t| t.text == "localhost" && t.token_type == TokenType::Keyword)
+    );
+    assert!(
+        tokens
+            .iter()
+            .any(|t| t.text == "localhost.localdomain" && t.token_type == TokenType::Type)
+    );
+    assert_eq!(tokens.last().unwrap().token_type, TokenType::Comment);
+}
+
+#[test]
+fn test_cron_tokenization() {
+    // コメント行
+    let comment = "# nightly backup";
+    let c_tokens = tokenize_line(comment, SyntaxLang::Cron);
+    assert_eq!(c_tokens.len(), 1);
+    assert_eq!(c_tokens[0].token_type, TokenType::Comment);
+
+    // 環境変数行
+    let env_line = "MAILTO=\"admin@example.com\"";
+    let e_tokens = tokenize_line(env_line, SyntaxLang::Cron);
+    let e_reconstructed: String = e_tokens.iter().map(|t| t.text.as_str()).collect();
+    assert_eq!(e_reconstructed, env_line);
+    assert_eq!(e_tokens[0].text, "MAILTO");
+    assert_eq!(e_tokens[0].token_type, TokenType::Type);
+    assert_eq!(e_tokens[1].token_type, TokenType::Punctuation);
+    assert_eq!(e_tokens[2].token_type, TokenType::StringLiteral);
+
+    // 特殊スケジュール指定
+    let special = "@daily /usr/local/bin/backup.sh \"full\"";
+    let s_tokens = tokenize_line(special, SyntaxLang::Cron);
+    let s_reconstructed: String = s_tokens.iter().map(|t| t.text.as_str()).collect();
+    assert_eq!(s_reconstructed, special);
+    assert!(
+        s_tokens
+            .iter()
+            .any(|t| t.text == "@daily" && t.token_type == TokenType::Keyword)
+    );
+    assert!(
+        s_tokens
+            .iter()
+            .any(|t| t.text == "\"full\"" && t.token_type == TokenType::StringLiteral)
+    );
+
+    // 標準 5 フィールド + コマンド
+    let standard = "*/5 0-23 * * MON-FRI echo \"ok\" # ping";
+    let std_tokens = tokenize_line(standard, SyntaxLang::Cron);
+    let std_reconstructed: String = std_tokens.iter().map(|t| t.text.as_str()).collect();
+    assert_eq!(std_reconstructed, standard);
+    assert!(
+        std_tokens
+            .iter()
+            .any(|t| t.text == "5" && t.token_type == TokenType::Number)
+    );
+    assert!(
+        std_tokens
+            .iter()
+            .any(|t| t.text == "*" && t.token_type == TokenType::Punctuation)
+    );
+    assert!(
+        std_tokens
+            .iter()
+            .any(|t| t.text == "\"ok\"" && t.token_type == TokenType::StringLiteral)
+    );
+    assert_eq!(std_tokens.last().unwrap().token_type, TokenType::Comment);
 }

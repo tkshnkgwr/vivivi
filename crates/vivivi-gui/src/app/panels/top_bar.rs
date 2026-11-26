@@ -218,6 +218,10 @@ impl ViviviGuiApp {
                             self.core.request_lsp_definition();
                             ui.close_menu();
                         }
+                        if menu_item(ui, "LSP Completion", ":lsp comp") {
+                            self.core.request_lsp_completion();
+                            ui.close_menu();
+                        }
                         if menu_toggle_item(
                             ui,
                             &mut self.core.lsp_show_diagnostics_panel,

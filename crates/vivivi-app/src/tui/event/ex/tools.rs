@@ -37,6 +37,8 @@ pub(crate) fn handle_tools_command(app: &mut App, trimmed: &str) -> bool {
             app.request_lsp_hover();
         } else if rest == "def" || rest == "definition" {
             app.request_lsp_definition();
+        } else if rest == "comp" || rest == "completion" || rest == "complete" {
+            app.request_lsp_completion();
         } else if rest == "diag" || rest == "diagnostics" {
             app.lsp_show_diagnostics_panel = !app.lsp_show_diagnostics_panel;
             app.status_message = Some(format!(
@@ -48,7 +50,7 @@ pub(crate) fn handle_tools_command(app: &mut App, trimmed: &str) -> bool {
                 }
             ));
         } else {
-            app.status_message = Some("使用法: :lsp [start|stop|hover|def|diag]".to_string());
+            app.status_message = Some("使用法: :lsp [start|stop|hover|def|comp|diag]".to_string());
         }
         return true;
     }

@@ -77,7 +77,7 @@ Handles Vi/Vim/ViVi modal state transitions, key sequence parsing, and ex comman
 Houses editing assistance modes and tooling engines.
 - `hex.rs`: Binary hex editor engine (`HexDocument`, `HexCursor`, nibble editing, Undo/Redo, byte search).
 - `lsp/`: LSP v3.17 client (`protocol.rs` JSON-RPC 2.0 / Content-Length, `client.rs` background stdio transport, `manager.rs` diagnostics, hover, definition & completion orchestration).
-- `treesitter.rs`: `tree-sitter` AST parsing, line token extraction, smart selection expand/shrink (`AstSelectionRange`), incremental parsing.
+- `treesitter.rs`: `tree-sitter` AST parsing (18 languages: Rust, C/C++, Python, JS/TS, JSON, Markdown, SQL, PL/SQL, Java, HTML, Bash, Go, Ruby, TOML, PowerShell, YAML, XML, Batch), line token extraction, smart selection expand/shrink (`AstSelectionRange`), automatic diff incremental parsing (`parse_incremental`).
 - `trim.rs`: Zero-copy trailing whitespace trimming for ASCII spaces, tabs, and full-width spaces.
 - `diff.rs` / `difflog.rs`: LCS Unified Diff generation and `.difflog` revision backups.
 - `template.rs` / `todo.rs` / `folding.rs` / `grep.rs` / `filer.rs` / `project.rs` / `print.rs`.

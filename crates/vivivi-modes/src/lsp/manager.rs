@@ -77,10 +77,17 @@ impl LspManager {
         let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
         let (cmd, args): (&str, &[&str]) = match ext {
             "rs" => ("rust-analyzer", &[]),
-            "c" | "cpp" | "h" | "hpp" => ("clangd", &[]),
-            "py" => ("pyright-langserver", &["--stdio"]),
+            "c" | "cpp" | "cc" | "cxx" | "h" | "hpp" => ("clangd", &[]),
+            "py" | "pyw" => ("pyright-langserver", &["--stdio"]),
             "go" => ("gopls", &[]),
             "js" | "ts" | "jsx" | "tsx" => ("typescript-language-server", &["--stdio"]),
+            "java" => ("jdtls", &[]),
+            "rb" | "ruby" => ("solargraph", &["stdio"]),
+            "sh" | "bash" | "zsh" => ("bash-language-server", &["start"]),
+            "html" | "htm" => ("vscode-html-language-server", &["--stdio"]),
+            "json" => ("vscode-json-language-server", &["--stdio"]),
+            "yaml" | "yml" => ("yaml-language-server", &["--stdio"]),
+            "toml" => ("taplo", &["lsp", "stdio"]),
             _ => return Err(format!("未対応のファイル拡張子です: .{}", ext)),
         };
 
@@ -247,6 +254,20 @@ impl LspManager {
     /// 直近の補完候補一覧を取得します。
     pub fn latest_completions(&self) -> &[LspCompletionItem] {
         &self.latest_completions
+    }
+
+    /// 直近の補完候補一覧を取り出し、内部バッファをクリアします。
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vivivi_modes::LspManager;
+    ///
+    /// let mut mgr = LspManager::new();
+    /// assert!(mgr.take_latest_completions().is_empty());
+    /// ```
+    pub fn take_latest_completions(&mut self) -> Vec<LspCompletionItem> {
+        std::mem::take(&mut self.latest_completions)
     }
 
     /// 直近の定義ジャンプ位置を取得します。

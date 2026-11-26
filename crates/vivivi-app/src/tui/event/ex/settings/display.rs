@@ -422,21 +422,28 @@ pub(super) fn handle_display_set_command(app: &mut App, trimmed: &str) -> bool {
                 "rs" | "rust" => vivivi_modes::SyntaxLang::Rust,
                 "md" | "markdown" => vivivi_modes::SyntaxLang::Markdown,
                 "py" | "python" => vivivi_modes::SyntaxLang::Python,
-                "c" | "cpp" | "cxx" => vivivi_modes::SyntaxLang::Cpp,
-                "js" | "ts" | "javascript" | "typescript" => vivivi_modes::SyntaxLang::JavaScript,
+                "c" | "cpp" | "cxx" | "cc" | "h" | "hpp" => vivivi_modes::SyntaxLang::Cpp,
+                "js" | "ts" | "jsx" | "tsx" | "javascript" | "typescript" => {
+                    vivivi_modes::SyntaxLang::JavaScript
+                }
                 "json" => vivivi_modes::SyntaxLang::Json,
                 "sql" => vivivi_modes::SyntaxLang::Sql,
-                "html" => vivivi_modes::SyntaxLang::Html,
-                "sh" | "bash" => vivivi_modes::SyntaxLang::Bash,
+                "plsql" | "pls" | "plb" | "pks" | "pkb" => vivivi_modes::SyntaxLang::PlSql,
+                "java" => vivivi_modes::SyntaxLang::Java,
+                "html" | "htm" => vivivi_modes::SyntaxLang::Html,
+                "sh" | "bash" | "zsh" => vivivi_modes::SyntaxLang::Bash,
                 "go" => vivivi_modes::SyntaxLang::Go,
                 "rb" | "ruby" => vivivi_modes::SyntaxLang::Ruby,
                 "toml" => vivivi_modes::SyntaxLang::Toml,
-                "ps1" | "powershell" => vivivi_modes::SyntaxLang::PowerShell,
+                "ps1" | "psm1" | "psd1" | "powershell" => vivivi_modes::SyntaxLang::PowerShell,
                 "yaml" | "yml" => vivivi_modes::SyntaxLang::Yaml,
-                "xml" => vivivi_modes::SyntaxLang::Xml,
+                "xml" | "svg" | "xsd" | "xsl" => vivivi_modes::SyntaxLang::Xml,
                 "bat" | "cmd" | "batch" => vivivi_modes::SyntaxLang::Batch,
+                "hosts" => vivivi_modes::SyntaxLang::Hosts,
+                "cron" | "crontab" => vivivi_modes::SyntaxLang::Cron,
                 _ => vivivi_modes::SyntaxLang::PlainText,
             };
+            app.reinit_treesitter();
             app.refresh_outline();
             app.status_message = Some(format!(
                 "ファイルタイプを設定しました: {:?}",

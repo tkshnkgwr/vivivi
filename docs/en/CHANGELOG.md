@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [0.9.23-beta] - 2026-11-26
+
+### Added / Changed / Fixed
+- **Tree-sitter AST Highlighting Expansion (18 Languages) & Incremental Diff Parsing (`vivivi-modes`, `vivivi-app`)**:
+  - Expanded Tree-sitter grammar support from Rust-only to **18 languages** (Rust, C/C++, Python, JS/TS, JSON, Markdown, SQL, PL/SQL, Java, HTML, Bash, Go, Ruby, TOML, PowerShell, YAML, XML, and Windows Batch).
+  - Implemented `TreeSitterEngine::parse_incremental()` to automatically compute byte/point diffs against the previous buffer snapshot, invoke `edit()`, and re-parse incrementally in `sync_treesitter_if_dirty()` / `update_treesitter()`.
+- **Hosts & Cron File Syntax Highlighting (`vivivi-modes`, `vivivi-app`)**:
+  - Added `SyntaxLang::Hosts` (`hosts`, `*.hosts`) and `SyntaxLang::Cron` (`crontab`, `crontab.*`, `*.cron`, `*.crontab`, `/etc/cron.d/*`) with dedicated tokenizers, status bar badges, and `:set ft=hosts` / `:set ft=cron` support (20 languages total).
+- **Full LSP Client Integration (`vivivi-modes`, `vivivi-app`, `vivivi-gui`)**:
+  - Wired automatic `textDocument/didChange` synchronization (`sync_lsp_if_dirty`), `:lsp comp` (TUI) and `Tools -> LSP Completion` (GUI) preview listings, cross-file `textDocument/definition` jumps via `file_uri_to_path`, and expanded `languageId` / auto-start server mappings (`jdtls`, `solargraph`, `bash-language-server`, `vscode-*-language-server`, `yaml-language-server`, `taplo`, etc.).
+- **Multi-Language Outline Parsing & `:set ft=` Aliases (`vivivi-modes`, `vivivi-app`)**:
+  - Added dedicated outline parsers for `Go`, `Ruby`, `SQL/PL/SQL`, `PowerShell`, `Bash`, `TOML`, `YAML`, and `HTML`.
+  - Added missing `:set ft=` aliases (`java`, `plsql`, etc.) and wired immediate `reinit_treesitter()` on filetype switch.
+- **Bilingual Documentation Sync (`docs/`)**:
+  - Updated `TODO.md`, `USER_GUIDE.md`, `SPECIFICATION.md`, and `ARCHITECTURE.md` and resolved outdated/inconsistent entries.
+
+---
+
 ## [0.9.22-beta] - 2026-11-20
 
 ### Added / Changed / Fixed

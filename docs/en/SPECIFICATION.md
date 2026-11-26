@@ -515,10 +515,10 @@ High-speed bijective and unidirectional conversions across full-width, half-widt
 - **Provider Implementation**: `SystemClipboard` leveraging `arboard` in `vivivi-app`.
 - **Register Binding**: Transparent synchronization between `"+` / `"*` registers and the OS system clipboard. Unnamed register sync available via `:set clipboard=unnamed`.
 
-### 14.7 Syntax Highlighting Expansion (18 Languages)
-- **New Languages**: Go (`.go`), Ruby (`.rb`), TOML (`.toml`), PowerShell (`.ps1`), YAML (`.yaml`), XML (`.xml`), and Windows Batch (`.bat`, `.cmd`).
-- **Lexical Analysis**: Accurate tokenization of keywords, types/classes, strings, numbers, comments, symbols, and environment variables (Batch).
-- **Status Bar Badges**: Distinct language badges (`[Go]`, `[Ruby]`, `[TOML]`, `[PowerShell]`, `[YAML]`, `[XML]`, `[Batch]`) rendered in the status bar.
+### 14.7 Syntax Highlighting Expansion (20 Languages / 18 Tree-sitter Languages)
+- **Supported Languages (20 total)**: Rust, C/C++, Python, JavaScript/TypeScript, JSON, Markdown, SQL, PL/SQL, Java, HTML, Bash, Go, Ruby, TOML, PowerShell, YAML, XML, Windows Batch (`.bat`, `.cmd`), Hosts (`hosts`, `*.hosts`), and Cron (`crontab`, `crontab.*`, `*.cron`, `*.crontab`, `/etc/cron.d/*`). Manual `:set ft=<lang>` switching supports all languages including `java`, `plsql`, `hosts`, and `cron`.
+- **Tree-sitter AST Highlighting (18 languages)**: All 18 programming/markup/config languages (excluding Hosts and Cron) use AST-based syntax highlighting, smart selection, and incremental diff parsing (`parse_incremental`).
+- **Dedicated Tokenizers & Status Bar**: Dedicated line tokenizers for Hosts (IP, canonical hostname, aliases, comments) and Cron (comments, env assignments, `@daily` specials, 5-field schedules, command portions), with automatic status bar language badges.
 
 ---
 

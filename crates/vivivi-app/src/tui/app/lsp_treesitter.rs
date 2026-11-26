@@ -1,9 +1,85 @@
 //! LSP (Language Server Protocol) および Tree-sitter 構文木解析・スマート選択モジュール。
 
+use std::path::{Path, PathBuf};
+
 use super::App;
 use vivivi_core::CursorPosition;
 use vivivi_modes::{SyntaxLang, TreeSitterEngine};
 use vivivi_vi::ViMode;
+
+/// [`SyntaxLang`] を LSP 標準の `languageId` 文字列へ変換します。
+fn syntax_lang_to_lsp_id(lang: SyntaxLang) -> &'static str {
+    match lang {
+        SyntaxLang::Rust => "rust",
+        SyntaxLang::Cpp => "cpp",
+        SyntaxLang::Python => "python",
+        SyntaxLang::JavaScript => "javascript",
+        SyntaxLang::Json => "json",
+        SyntaxLang::Markdown => "markdown",
+        SyntaxLang::Sql => "sql",
+        SyntaxLang::PlSql => "plsql",
+        SyntaxLang::Java => "java",
+        SyntaxLang::Html => "html",
+        SyntaxLang::Bash => "shellscript",
+        SyntaxLang::Go => "go",
+        SyntaxLang::Ruby => "ruby",
+        SyntaxLang::Toml => "toml",
+        SyntaxLang::PowerShell => "powershell",
+        SyntaxLang::Yaml => "yaml",
+        SyntaxLang::Xml => "xml",
+        SyntaxLang::Batch => "bat",
+        SyntaxLang::Hosts | SyntaxLang::Cron | SyntaxLang::PlainText => "plaintext",
+    }
+}
+
+/// ローカルファイルパスを LSP 用 `file://` URI 文字列に変換します。
+fn path_to_file_uri(path: &Path) -> String {
+    let norm = path.to_string_lossy().replace('\\', "/");
+    if norm.starts_with('/') {
+        format!("file://{norm}")
+    } else {
+        format!("file:///{norm}")
+    }
+}
+
+/// LSP の `file://` URI をローカルファイルパスに変換します。
+fn file_uri_to_path(uri: &str) -> Option<PathBuf> {
+    let rest = uri.strip_prefix("file://")?;
+    let trimmed = if rest.starts_with('/') && rest.as_bytes().get(2) == Some(&b':') {
+        &rest[1..]
+    } else {
+        rest
+    };
+    let decoded = decode_percent_uri(trimmed);
+    #[cfg(windows)]
+    let normalized = decoded.replace('/', "\\");
+    #[cfg(not(windows))]
+    let normalized = decoded;
+    Some(PathBuf::from(normalized))
+}
+
+/// URI 内の基本的な `%XX` パーセントエンコードをデコードします。
+fn decode_percent_uri(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let (Some(hi), Some(lo)) = (
+                (bytes[i + 1] as char).to_digit(16),
+                (bytes[i + 2] as char).to_digit(16),
+            )
+        {
+            out.push(((hi << 4) | lo) as u8);
+            i += 3;
+            continue;
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
 
 impl App {
     /// LSP サーバーを開始します。
@@ -21,18 +97,17 @@ impl App {
             Ok(()) => {
                 let name = mgr.server_name().unwrap_or("LSP").to_string();
                 if let Some(ref path) = self.file_path {
-                    let uri = format!("file:///{}", path.to_string_lossy().replace('\\', "/"));
+                    let uri = path_to_file_uri(path);
                     let text = self.buffer.to_string();
-                    let lang_id = match self.syntax_lang {
-                        SyntaxLang::Rust => "rust",
-                        SyntaxLang::Cpp => "cpp",
-                        SyntaxLang::Python => "python",
-                        SyntaxLang::JavaScript => "javascript",
-                        SyntaxLang::Go => "go",
-                        _ => "plaintext",
-                    };
+                    let lang_id = syntax_lang_to_lsp_id(self.syntax_lang);
                     mgr.notify_did_open(&uri, lang_id, 1, &text);
+                    self.lsp_doc_version = 1;
+                    self.lsp_synced_revision = self.buffer.revision();
+                } else {
+                    self.lsp_doc_version = 0;
+                    self.lsp_synced_revision = 0;
                 }
+                self.lsp_completions.clear();
                 self.lsp_manager = Some(mgr);
                 self.status_message = Some(format!("LSP サーバー '{name}' を起動しました"));
             }
@@ -46,16 +121,35 @@ impl App {
     pub fn stop_lsp(&mut self) {
         if let Some(mut mgr) = self.lsp_manager.take() {
             mgr.stop_server();
+            self.lsp_doc_version = 0;
+            self.lsp_synced_revision = 0;
+            self.lsp_completions.clear();
             self.status_message = Some("LSP サーバーを停止しました".to_string());
         } else {
             self.status_message = Some("LSP サーバーは起動していません".to_string());
         }
     }
 
+    /// バッファ変更がある場合に LSP へ `textDocument/didChange` を送信して同期します。
+    pub fn sync_lsp_if_dirty(&mut self) {
+        let current_rev = self.buffer.revision();
+        if current_rev == self.lsp_synced_revision {
+            return;
+        }
+        if let (Some(mgr), Some(path)) = (&mut self.lsp_manager, &self.file_path) {
+            let uri = path_to_file_uri(path);
+            let text = self.buffer.to_string();
+            self.lsp_doc_version = self.lsp_doc_version.saturating_add(1).max(1);
+            mgr.notify_did_change(&uri, self.lsp_doc_version, &text);
+            self.lsp_synced_revision = current_rev;
+        }
+    }
+
     /// カーソル位置のホバー情報をリクエストします。
     pub fn request_lsp_hover(&mut self) {
+        self.sync_lsp_if_dirty();
         if let (Some(mgr), Some(path)) = (&mut self.lsp_manager, &self.file_path) {
-            let uri = format!("file:///{}", path.to_string_lossy().replace('\\', "/"));
+            let uri = path_to_file_uri(path);
             mgr.request_hover(
                 &uri,
                 self.cursor.pos.line as u32,
@@ -70,8 +164,9 @@ impl App {
 
     /// カーソル位置のシンボル定義ジャンプをリクエストします。
     pub fn request_lsp_definition(&mut self) {
+        self.sync_lsp_if_dirty();
         if let (Some(mgr), Some(path)) = (&mut self.lsp_manager, &self.file_path) {
-            let uri = format!("file:///{}", path.to_string_lossy().replace('\\', "/"));
+            let uri = path_to_file_uri(path);
             mgr.request_definition(
                 &uri,
                 self.cursor.pos.line as u32,
@@ -83,22 +178,75 @@ impl App {
         }
     }
 
+    /// カーソル位置のコード補完候補 (`textDocument/completion`) をリクエストします。
+    pub fn request_lsp_completion(&mut self) {
+        self.sync_lsp_if_dirty();
+        if let (Some(mgr), Some(path)) = (&mut self.lsp_manager, &self.file_path) {
+            let uri = path_to_file_uri(path);
+            mgr.request_completion(
+                &uri,
+                self.cursor.pos.line as u32,
+                self.cursor.pos.col as u32,
+            );
+            self.status_message = Some("LSP 補完候補を要求中...".to_string());
+        } else {
+            self.status_message = Some("LSP サーバーが起動していません (:lsp start)".to_string());
+        }
+    }
+
     /// LSP イベントの定期ポーリング
     pub fn poll_lsp(&mut self) {
-        let mut jump_target: Option<(usize, usize)> = None;
+        self.sync_lsp_if_dirty();
+
+        let mut jump_target: Option<(Option<PathBuf>, usize, usize)> = None;
+        let mut completions_received = Vec::new();
         if let Some(ref mut mgr) = self.lsp_manager {
             mgr.poll_events();
             if let Some(hover) = mgr.take_latest_hover() {
                 self.lsp_hover_text = Some(hover.contents);
             }
+            completions_received = mgr.take_latest_completions();
             if let Some(loc) = mgr.latest_definition() {
+                let target_path = file_uri_to_path(&loc.uri);
                 let target_line = loc.range.start.line as usize;
                 let target_col = loc.range.start.character as usize;
-                jump_target = Some((target_line, target_col));
+                jump_target = Some((target_path, target_line, target_col));
                 mgr.clear_latest_definition();
             }
         }
-        if let Some((target_line, target_col)) = jump_target {
+
+        if !completions_received.is_empty() {
+            self.lsp_completions = completions_received
+                .iter()
+                .map(|c| c.label.clone())
+                .collect();
+            let mut lines = vec![format!(
+                "=== LSP 補完候補 ({}件) ===",
+                completions_received.len()
+            )];
+            for item in &completions_received {
+                if let Some(ref detail) = item.detail {
+                    lines.push(format!("{}  -  {}", item.label, detail));
+                } else {
+                    lines.push(item.label.clone());
+                }
+            }
+            self.preview_lines = lines;
+            self.preview_scroll = 0;
+            self.show_preview = true;
+            self.status_message = Some(format!(
+                "LSP 補完候補を {} 件取得しました",
+                completions_received.len()
+            ));
+        }
+
+        if let Some((target_path, target_line, target_col)) = jump_target {
+            if let Some(path) = target_path {
+                let is_different = self.file_path.as_ref().is_none_or(|cur| cur != &path);
+                if is_different && path.exists() {
+                    let _ = self.open_file(path);
+                }
+            }
             self.cursor.pos.line = target_line.min(self.buffer.line_count().saturating_sub(1));
             self.cursor.pos.col = target_col;
             self.clamp_cursor();
@@ -134,7 +282,7 @@ impl App {
         if self.treesitter_revision != current_rev {
             if let Some(ref mut ts) = self.treesitter {
                 let text = self.buffer.to_string();
-                ts.parse(&text);
+                ts.parse_incremental(&text);
             }
             self.treesitter_revision = current_rev;
         }
@@ -144,7 +292,7 @@ impl App {
     pub fn update_treesitter(&mut self) {
         if let Some(ref mut ts) = self.treesitter {
             let text = self.buffer.to_string();
-            ts.parse(&text);
+            ts.parse_incremental(&text);
         }
         self.treesitter_lang = self.syntax_lang;
         self.treesitter_revision = self.buffer.revision();

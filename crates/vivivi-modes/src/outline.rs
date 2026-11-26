@@ -138,18 +138,19 @@ pub fn parse_outline(lines: &[String], lang: SyntaxLang) -> Vec<OutlineItem> {
                 parse_generic_outline(lines)
             }
         }
-        SyntaxLang::Sql
-        | SyntaxLang::PlSql
-        | SyntaxLang::Bash
-        | SyntaxLang::Html
-        | SyntaxLang::Json
-        | SyntaxLang::Go
-        | SyntaxLang::Ruby
-        | SyntaxLang::Toml
-        | SyntaxLang::PowerShell
-        | SyntaxLang::Yaml
+        SyntaxLang::Go => parse_go_outline(lines),
+        SyntaxLang::Ruby => parse_ruby_outline(lines),
+        SyntaxLang::Sql | SyntaxLang::PlSql => parse_sql_outline(lines),
+        SyntaxLang::PowerShell => parse_powershell_outline(lines),
+        SyntaxLang::Bash => parse_bash_outline(lines),
+        SyntaxLang::Toml => parse_toml_outline(lines),
+        SyntaxLang::Yaml => parse_yaml_outline(lines),
+        SyntaxLang::Html => parse_html_outline(lines),
+        SyntaxLang::Json
         | SyntaxLang::Xml
-        | SyntaxLang::Batch => parse_generic_outline(lines),
+        | SyntaxLang::Batch
+        | SyntaxLang::Hosts
+        | SyntaxLang::Cron => parse_generic_outline(lines),
     }
 }
 
@@ -432,6 +433,269 @@ fn parse_generic_outline(lines: &[String]) -> Vec<OutlineItem> {
     items
 }
 
+/// Go のシンボル (`func`, `type ... struct/interface`) を解析します。
+fn parse_go_outline(lines: &[String]) -> Vec<OutlineItem> {
+    let mut items = Vec::new();
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("//") || trimmed.starts_with("/*") {
+            continue;
+        }
+        if trimmed.starts_with("func ") {
+            items.push(OutlineItem {
+                line_idx: idx,
+                level: 0,
+                title: extract_signature(trimmed),
+                kind: OutlineKind::Function,
+            });
+        } else if trimmed.starts_with("type ") {
+            let kind = if trimmed.contains(" interface") {
+                OutlineKind::Trait
+            } else {
+                OutlineKind::Struct
+            };
+            items.push(OutlineItem {
+                line_idx: idx,
+                level: 0,
+                title: extract_signature(trimmed),
+                kind,
+            });
+        }
+    }
+    items
+}
+
+/// Ruby のシンボル (`module`, `class`, `def`) を解析します。
+fn parse_ruby_outline(lines: &[String]) -> Vec<OutlineItem> {
+    let mut items = Vec::new();
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') {
+            continue;
+        }
+        let leading_spaces = line.chars().take_while(|c| c.is_whitespace()).count();
+        let depth = (leading_spaces / 2).min(4);
+        if trimmed.starts_with("module ") {
+            items.push(OutlineItem {
+                line_idx: idx,
+                level: depth,
+                title: extract_signature(trimmed),
+                kind: OutlineKind::Module,
+            });
+        } else if trimmed.starts_with("class ") {
+            items.push(OutlineItem {
+                line_idx: idx,
+                level: depth,
+                title: extract_signature(trimmed),
+                kind: OutlineKind::Class,
+            });
+        } else if trimmed.starts_with("def ") {
+            items.push(OutlineItem {
+                line_idx: idx,
+                level: depth,
+                title: extract_signature(trimmed),
+                kind: OutlineKind::Function,
+            });
+        }
+    }
+    items
+}
+
+/// SQL / PL/SQL の DDL・プロシージャ定義 (`CREATE ...`) を解析します。
+fn parse_sql_outline(lines: &[String]) -> Vec<OutlineItem> {
+    let mut items = Vec::new();
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("--") || trimmed.starts_with("/*") {
+            continue;
+        }
+        let upper = trimmed.to_ascii_uppercase();
+        let rest = if let Some(r) = upper.strip_prefix("CREATE OR REPLACE ") {
+            r.trim_start()
+        } else if let Some(r) = upper.strip_prefix("CREATE ") {
+            r.trim_start()
+        } else {
+            continue;
+        };
+        let kind = if rest.starts_with("TABLE ")
+            || rest.starts_with("VIEW ")
+            || rest.starts_with("INDEX ")
+        {
+            Some(OutlineKind::Struct)
+        } else if rest.starts_with("PACKAGE ") {
+            Some(OutlineKind::Module)
+        } else if rest.starts_with("FUNCTION ")
+            || rest.starts_with("PROCEDURE ")
+            || rest.starts_with("TRIGGER ")
+        {
+            Some(OutlineKind::Function)
+        } else {
+            None
+        };
+        if let Some(kind) = kind {
+            items.push(OutlineItem {
+                line_idx: idx,
+                level: 0,
+                title: extract_signature(trimmed),
+                kind,
+            });
+        }
+    }
+    items
+}
+
+/// PowerShell のシンボル (`function`, `filter`, `class`) を解析します。
+fn parse_powershell_outline(lines: &[String]) -> Vec<OutlineItem> {
+    let mut items = Vec::new();
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') {
+            continue;
+        }
+        let lower = trimmed.to_ascii_lowercase();
+        let leading_spaces = line.chars().take_while(|c| c.is_whitespace()).count();
+        let depth = (leading_spaces / 4).min(4);
+        if lower.starts_with("class ") {
+            items.push(OutlineItem {
+                line_idx: idx,
+                level: depth,
+                title: extract_signature(trimmed),
+                kind: OutlineKind::Class,
+            });
+        } else if lower.starts_with("function ") || lower.starts_with("filter ") {
+            items.push(OutlineItem {
+                line_idx: idx,
+                level: depth,
+                title: extract_signature(trimmed),
+                kind: OutlineKind::Function,
+            });
+        }
+    }
+    items
+}
+
+/// Bash の関数定義 (`function name` / `name()`) を解析します。
+fn parse_bash_outline(lines: &[String]) -> Vec<OutlineItem> {
+    let mut items = Vec::new();
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') {
+            continue;
+        }
+        let is_func = trimmed.starts_with("function ")
+            || trimmed.split_once("()").is_some_and(|(name, after)| {
+                !name.is_empty()
+                    && name
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+                    && (after.trim().is_empty() || after.trim_start().starts_with('{'))
+            });
+        if is_func {
+            items.push(OutlineItem {
+                line_idx: idx,
+                level: 0,
+                title: extract_signature(trimmed),
+                kind: OutlineKind::Function,
+            });
+        }
+    }
+    items
+}
+
+/// TOML のセクション (`[table]`, `[[array_of_tables]]`) を解析します。
+fn parse_toml_outline(lines: &[String]) -> Vec<OutlineItem> {
+    let mut items = Vec::new();
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("[[") && trimmed.ends_with("]]") {
+            let title = trimmed[2..trimmed.len() - 2].trim();
+            if !title.is_empty() {
+                items.push(OutlineItem {
+                    line_idx: idx,
+                    level: 1,
+                    title: title.to_string(),
+                    kind: OutlineKind::Section,
+                });
+            }
+        } else if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            let title = trimmed[1..trimmed.len() - 1].trim();
+            if !title.is_empty() {
+                items.push(OutlineItem {
+                    line_idx: idx,
+                    level: 0,
+                    title: title.to_string(),
+                    kind: OutlineKind::Section,
+                });
+            }
+        }
+    }
+    items
+}
+
+/// YAML のトップレベルキー (`key:`) を解析します。
+fn parse_yaml_outline(lines: &[String]) -> Vec<OutlineItem> {
+    let mut items = Vec::new();
+    for (idx, line) in lines.iter().enumerate() {
+        if line.starts_with(char::is_whitespace) {
+            continue;
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty()
+            || trimmed.starts_with('#')
+            || trimmed.starts_with('-')
+            || trimmed == "..."
+        {
+            continue;
+        }
+        if let Some((key, _)) = trimmed.split_once(':') {
+            let k = key.trim();
+            if !k.is_empty() {
+                items.push(OutlineItem {
+                    line_idx: idx,
+                    level: 0,
+                    title: k.to_string(),
+                    kind: OutlineKind::Section,
+                });
+            }
+        }
+    }
+    items
+}
+
+/// HTML の見出しタグ (`<h1>`〜`<h6>`) を解析します。
+fn parse_html_outline(lines: &[String]) -> Vec<OutlineItem> {
+    let mut items = Vec::new();
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        let lower = trimmed.to_ascii_lowercase();
+        for level in 1..=6usize {
+            let open_prefix = format!("<h{level}");
+            let close_tag = format!("</h{level}>");
+            if lower.starts_with(&open_prefix)
+                && let Some(gt_pos) = trimmed.find('>')
+            {
+                let after_gt = &trimmed[gt_pos + 1..];
+                let inner = if let Some(end_pos) = after_gt.to_ascii_lowercase().find(&close_tag) {
+                    &after_gt[..end_pos]
+                } else {
+                    after_gt
+                };
+                let title = inner.trim();
+                if !title.is_empty() {
+                    items.push(OutlineItem {
+                        line_idx: idx,
+                        level: level - 1,
+                        title: title.to_string(),
+                        kind: OutlineKind::Heading(level),
+                    });
+                }
+                break;
+            }
+        }
+    }
+    items
+}
+
 /// 行末の波括弧、セミコロン、コロンを除去してシグネチャを整形します。
 fn extract_signature(line: &str) -> String {
     let s = line
@@ -519,5 +783,61 @@ mod tests {
         assert_eq!(outline[2].kind, OutlineKind::Function);
         assert_eq!(outline[3].kind, OutlineKind::Struct); // Type alias
         assert_eq!(outline[4].kind, OutlineKind::Function); // Macro
+    }
+
+    #[test]
+    fn test_extended_language_outlines() {
+        // Go
+        let go_lines = vec![
+            "type Config struct {".to_string(),
+            "type Reader interface {".to_string(),
+            "func main() {".to_string(),
+        ];
+        let go_out = parse_outline(&go_lines, SyntaxLang::Go);
+        assert_eq!(go_out.len(), 3);
+        assert_eq!(go_out[0].kind, OutlineKind::Struct);
+        assert_eq!(go_out[1].kind, OutlineKind::Trait);
+        assert_eq!(go_out[2].kind, OutlineKind::Function);
+
+        // Ruby
+        let rb_lines = vec![
+            "module App".to_string(),
+            "  class Runner".to_string(),
+            "    def run".to_string(),
+        ];
+        let rb_out = parse_outline(&rb_lines, SyntaxLang::Ruby);
+        assert_eq!(rb_out.len(), 3);
+        assert_eq!(rb_out[0].kind, OutlineKind::Module);
+        assert_eq!(rb_out[1].kind, OutlineKind::Class);
+        assert_eq!(rb_out[2].kind, OutlineKind::Function);
+
+        // SQL
+        let sql_lines = vec![
+            "CREATE TABLE users (id INT);".to_string(),
+            "CREATE OR REPLACE PROCEDURE sync_data IS".to_string(),
+        ];
+        let sql_out = parse_outline(&sql_lines, SyntaxLang::Sql);
+        assert_eq!(sql_out.len(), 2);
+        assert_eq!(sql_out[0].kind, OutlineKind::Struct);
+        assert_eq!(sql_out[1].kind, OutlineKind::Function);
+
+        // PowerShell & Bash
+        let ps_lines = vec![
+            "function Get-Item {}".to_string(),
+            "class Model {}".to_string(),
+        ];
+        assert_eq!(parse_outline(&ps_lines, SyntaxLang::PowerShell).len(), 2);
+        let bash_lines = vec!["deploy() {".to_string(), "function cleanup {".to_string()];
+        assert_eq!(parse_outline(&bash_lines, SyntaxLang::Bash).len(), 2);
+
+        // TOML, YAML, HTML
+        let toml_lines = vec!["[package]".to_string(), "[[bin]]".to_string()];
+        assert_eq!(parse_outline(&toml_lines, SyntaxLang::Toml).len(), 2);
+        let yaml_lines = vec!["name: vivivi".to_string(), "  nested: 1".to_string()];
+        assert_eq!(parse_outline(&yaml_lines, SyntaxLang::Yaml).len(), 1);
+        let html_lines = vec!["<h1>Title</h1>".to_string(), "<h2>Sub</h2>".to_string()];
+        let html_out = parse_outline(&html_lines, SyntaxLang::Html);
+        assert_eq!(html_out.len(), 2);
+        assert_eq!(html_out[0].title, "Title");
     }
 }

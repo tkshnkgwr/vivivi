@@ -4,6 +4,24 @@
 
 ---
 
+## [0.9.23-beta] - 2026-11-26
+
+### Added / Changed / Fixed
+- **Tree-sitter 構文木ハイライト 全 18 言語対応 & 差分インクリメンタルパース (`vivivi-modes`, `vivivi-app`)**:
+  - Rust のみだった Tree-sitter 対応を一気に **18 言語**（Rust, C/C++, Python, JS/TS, JSON, Markdown, SQL, PL/SQL, Java, HTML, Bash, Go, Ruby, TOML, PowerShell, YAML, XML, Windows Batch）へ拡充。
+  - 前回パース済みテキストとの前後差分を自動検出して `edit()` を適用する `TreeSitterEngine::parse_incremental()` を実装し、`sync_treesitter_if_dirty()` / `update_treesitter()` へ接続。
+- **Hosts / Cron ファイル構文強調対応 (`vivivi-modes`, `vivivi-app`)**:
+  - `SyntaxLang::Hosts`（`hosts`, `*.hosts`）および `SyntaxLang::Cron`（`crontab`, `crontab.*`, `*.cron`, `*.crontab`, `/etc/cron.d/*`）を追加し、専用トークナイザー・ステータスバー表示・`:set ft=hosts` / `:set ft=cron` に対応（構文強調 全 20 言語）。
+- **LSP クライアント本格接続 (`vivivi-modes`, `vivivi-app`, `vivivi-gui`)**:
+  - 編集時の `textDocument/didChange` 自動同期（`sync_lsp_if_dirty`）、`:lsp comp`（TUI）および `Tools -> LSP Completion`（GUI）によるコード補完候補プレビュー、`loc.uri` 変換による別ファイルへの定義ジャンプ、および全主要言語の `languageId`・自動起動サーバーマッピング（`jdtls`, `solargraph`, `bash-language-server`, `vscode-*-language-server`, `yaml-language-server`, `taplo` 等）を実装。
+- **アウトライン解析の多言語化 & `:set ft=` 補完 (`vivivi-modes`, `vivivi-app`)**:
+  - `Go`, `Ruby`, `SQL/PL/SQL`, `PowerShell`, `Bash`, `TOML`, `YAML`, `HTML` の専用アウトラインパーサーを追加。
+  - `:set ft=` に `java`, `plsql` 等の抜け漏れを補完し、切替時の `reinit_treesitter()` 即時再初期化を接続。
+- **ドキュメント日英同期 (`docs/`)**:
+  - `TODO.md`, `USER_GUIDE.md`, `SPECIFICATION.md`, `ARCHITECTURE.md` の最新化および不備・矛盾の訂正を実施。
+
+---
+
 ## [0.9.22-beta] - 2026-11-20
 
 ### Added / Changed / Fixed

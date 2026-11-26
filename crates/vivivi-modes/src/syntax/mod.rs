@@ -59,10 +59,14 @@ pub enum SyntaxLang {
     Xml,
     /// Windows Batch / CMD
     Batch,
+    /// hosts ファイル (`/etc/hosts`, `hosts`)
+    Hosts,
+    /// Cron / crontab ファイル (`crontab`, `*.cron`)
+    Cron,
 }
 
 impl SyntaxLang {
-    /// ファイルパスの拡張子から対応言語を自動判別します。
+    /// ファイルパスのファイル名または拡張子から対応言語を自動判別します。
     ///
     /// # Examples
     ///
@@ -78,11 +82,38 @@ impl SyntaxLang {
     /// assert_eq!(SyntaxLang::from_path("config.yaml"), SyntaxLang::Yaml);
     /// assert_eq!(SyntaxLang::from_path("pom.xml"), SyntaxLang::Xml);
     /// assert_eq!(SyntaxLang::from_path("build.bat"), SyntaxLang::Batch);
+    /// assert_eq!(SyntaxLang::from_path("/etc/hosts"), SyntaxLang::Hosts);
+    /// assert_eq!(SyntaxLang::from_path("/etc/crontab"), SyntaxLang::Cron);
     /// assert_eq!(SyntaxLang::from_path("unknown.xyz"), SyntaxLang::PlainText);
     /// ```
     pub fn from_path<P: AsRef<Path>>(path: P) -> Self {
-        let ext = path
-            .as_ref()
+        let path_ref = path.as_ref();
+
+        // 拡張子がない特殊なシステム設定ファイルをファイル名・親ディレクトリで判別
+        if let Some(file_name) = path_ref
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|s| s.to_ascii_lowercase())
+        {
+            if file_name == "hosts" {
+                return Self::Hosts;
+            }
+            if file_name == "crontab" || file_name.starts_with("crontab.") {
+                return Self::Cron;
+            }
+        }
+
+        if let Some(parent_name) = path_ref
+            .parent()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str())
+            .map(|s| s.to_ascii_lowercase())
+            && parent_name == "cron.d"
+        {
+            return Self::Cron;
+        }
+
+        let ext = path_ref
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("")
@@ -107,6 +138,8 @@ impl SyntaxLang {
             "yaml" | "yml" => Self::Yaml,
             "xml" | "xsd" | "xsl" | "svg" => Self::Xml,
             "bat" | "cmd" => Self::Batch,
+            "hosts" => Self::Hosts,
+            "cron" | "crontab" => Self::Cron,
             _ => Self::PlainText,
         }
     }
@@ -184,6 +217,14 @@ pub fn tokenize_line(line: &str, lang: SyntaxLang) -> Vec<SyntaxToken> {
             text: line.to_string(),
             token_type: TokenType::Text,
         }];
+    }
+
+    if lang == SyntaxLang::Hosts {
+        return tokenize_hosts_line(line);
+    }
+
+    if lang == SyntaxLang::Cron {
+        return tokenize_cron_line(line);
     }
 
     let mut tokens = Vec::new();
@@ -466,6 +507,190 @@ pub fn tokenize_line(line: &str, lang: SyntaxLang) -> Vec<SyntaxToken> {
     }
 
     tokens
+}
+
+/// hosts ファイル行専用トークナイザー。
+///
+/// IPv4/IPv6 アドレス（先頭フィールド）を [`TokenType::Number`]、
+/// 正規ホスト名（2 番目フィールド）を [`TokenType::Keyword`]、
+/// エイリアス（3 番目以降）を [`TokenType::Type`]、`#` 以降を [`TokenType::Comment`] に分類します。
+fn tokenize_hosts_line(line: &str) -> Vec<SyntaxToken> {
+    let mut tokens = Vec::new();
+    let chars: Vec<char> = line.chars().collect();
+    let len = chars.len();
+    let mut i = 0;
+    let mut field_index = 0usize;
+
+    while i < len {
+        if chars[i].is_whitespace() {
+            let start = i;
+            while i < len && chars[i].is_whitespace() {
+                i += 1;
+            }
+            tokens.push(SyntaxToken {
+                text: chars[start..i].iter().collect(),
+                token_type: TokenType::Text,
+            });
+            continue;
+        }
+
+        if chars[i] == '#' {
+            tokens.push(SyntaxToken {
+                text: chars[i..].iter().collect(),
+                token_type: TokenType::Comment,
+            });
+            break;
+        }
+
+        let start = i;
+        while i < len && !chars[i].is_whitespace() && chars[i] != '#' {
+            i += 1;
+        }
+        let text: String = chars[start..i].iter().collect();
+        let token_type = match field_index {
+            0 => TokenType::Number,
+            1 => TokenType::Keyword,
+            _ => TokenType::Type,
+        };
+        tokens.push(SyntaxToken { text, token_type });
+        field_index += 1;
+    }
+
+    tokens
+}
+
+/// Cron / crontab ファイル行専用トークナイザー。
+///
+/// コメント（`#`）、環境変数代入（`KEY=VALUE`）、特殊スケジュール指定（`@daily` 等）、
+/// 5 フィールドの時刻式（分・時・日・月・曜日）、および実行コマンド部を色分けします。
+fn tokenize_cron_line(line: &str) -> Vec<SyntaxToken> {
+    let mut tokens = Vec::new();
+    let bytes = line.as_bytes();
+    let len = line.len();
+    let mut idx = 0;
+
+    // 先頭の空白を保持
+    while idx < len && bytes[idx].is_ascii_whitespace() {
+        idx += 1;
+    }
+    if idx > 0 {
+        tokens.push(SyntaxToken {
+            text: line[..idx].to_string(),
+            token_type: TokenType::Text,
+        });
+    }
+    if idx >= len {
+        return tokens;
+    }
+
+    // コメント行
+    if bytes[idx] == b'#' {
+        tokens.push(SyntaxToken {
+            text: line[idx..].to_string(),
+            token_type: TokenType::Comment,
+        });
+        return tokens;
+    }
+
+    let rest = &line[idx..];
+
+    // 環境変数代入行 (例: MAILTO="admin@example.com", SHELL=/bin/bash)
+    if let Some(eq_pos) = rest.find('=') {
+        let key_part = &rest[..eq_pos];
+        if !key_part.is_empty()
+            && key_part
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            tokens.push(SyntaxToken {
+                text: key_part.to_string(),
+                token_type: TokenType::Type,
+            });
+            tokens.push(SyntaxToken {
+                text: "=".to_string(),
+                token_type: TokenType::Punctuation,
+            });
+            let val_part = &rest[eq_pos + 1..];
+            if !val_part.is_empty() {
+                tokens.push(SyntaxToken {
+                    text: val_part.to_string(),
+                    token_type: TokenType::StringLiteral,
+                });
+            }
+            return tokens;
+        }
+    }
+
+    // 特殊スケジュール指定 (@reboot, @daily, @hourly 等)
+    if rest.starts_with('@') {
+        let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+        tokens.push(SyntaxToken {
+            text: rest[..end].to_string(),
+            token_type: TokenType::Keyword,
+        });
+        if end < rest.len() {
+            tokens.extend(tokenize_line(&rest[end..], SyntaxLang::Bash));
+        }
+        return tokens;
+    }
+
+    // 標準 5 フィールドの時刻式 (分 時 日 月 曜日) + 実行コマンド部
+    let mut pos = idx;
+    let mut fields_parsed = 0usize;
+    while pos < len && fields_parsed < 5 {
+        let field_start = pos;
+        while pos < len && !bytes[pos].is_ascii_whitespace() {
+            pos += 1;
+        }
+        let field_text = &line[field_start..pos];
+        tokenize_cron_schedule_field(field_text, &mut tokens);
+        fields_parsed += 1;
+
+        let ws_start = pos;
+        while pos < len && bytes[pos].is_ascii_whitespace() {
+            pos += 1;
+        }
+        if pos > ws_start {
+            tokens.push(SyntaxToken {
+                text: line[ws_start..pos].to_string(),
+                token_type: TokenType::Text,
+            });
+        }
+    }
+
+    // 残りのコマンド部分は Bash トークナイザーで色分け
+    if pos < len {
+        tokens.extend(tokenize_line(&line[pos..], SyntaxLang::Bash));
+    }
+
+    tokens
+}
+
+/// Cron の時刻フィールド（例: `*/5`, `0-23`, `MON-FRI`）を数値/シンボルと区切り記号へ分割します。
+fn tokenize_cron_schedule_field(field: &str, tokens: &mut Vec<SyntaxToken>) {
+    let chars: Vec<char> = field.chars().collect();
+    let len = chars.len();
+    let mut i = 0;
+
+    while i < len {
+        let ch = chars[i];
+        if ch.is_ascii_alphanumeric() {
+            let start = i;
+            while i < len && chars[i].is_ascii_alphanumeric() {
+                i += 1;
+            }
+            tokens.push(SyntaxToken {
+                text: chars[start..i].iter().collect(),
+                token_type: TokenType::Number,
+            });
+        } else {
+            tokens.push(SyntaxToken {
+                text: ch.to_string(),
+                token_type: TokenType::Punctuation,
+            });
+            i += 1;
+        }
+    }
 }
 
 /// 予約語判定

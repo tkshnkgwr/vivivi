@@ -339,8 +339,8 @@ Persist user preferences and key mappings in `%USERPROFILE%\.vivivi\config.toml`
 - `"+p` / `"*p`: Paste text directly from OS clipboard.
 - `:set clipboard=unnamed`: Transparently sync default `y` and `p` operations with OS clipboard.
 
-### (7) Syntax Highlighting Expansion (18 Languages)
-- Expanded syntax highlighting to 18 languages: added Go (`.go`), Ruby (`.rb`), TOML (`.toml`), PowerShell (`.ps1`), YAML (`.yaml`), XML (`.xml`), and Windows Batch (`.bat`, `.cmd`). Status bar displays active language badges automatically.
+### (7) Syntax Highlighting Expansion (20 Languages)
+- Expanded syntax highlighting to 20 languages: includes Go (`.go`), Ruby (`.rb`), TOML (`.toml`), PowerShell (`.ps1`), YAML (`.yaml`), XML (`.xml`), Windows Batch (`.bat`, `.cmd`), Hosts (`hosts`, `*.hosts`), and Cron (`crontab`, `*.cron`, `/etc/cron.d/*`). Status bar displays active language badges automatically (`:set ft=hosts` / `:set ft=cron` supported).
 
 ---
 
@@ -394,14 +394,15 @@ cargo run -p vivivi-gui -- path/to/file.rs
 - Supports `x` to delete a byte and `u` / `Ctrl-r` for Undo / Redo.
 
 ### (2) LSP (Language Server Protocol) Client Integration
-- `:lsp start [cmd]`: Launches the language server for the active file in the background (e.g. `rust-analyzer`, `clangd`, `pylsp`).
+- `:lsp start [cmd]`: Launches the language server for the active file in the background (e.g. `rust-analyzer`, `clangd`, `pyright-langserver`, `gopls`, `typescript-language-server`, `jdtls`, `solargraph`, `bash-language-server`, `taplo`).
 - `K` or `:lsp hover`: Displays hover documentation and type signatures at the cursor position.
-- `gd` or `:lsp def`: Jumps directly to the symbol definition.
+- `gd` or `:lsp def`: Jumps directly to the symbol definition (including cross-file definitions).
+- `:lsp comp`: Requests LSP completion candidates at the cursor and displays them in the preview pane (edits automatically sync via `didChange`).
 - `:lsp diag`: Toggles the real-time diagnostics (errors/warnings) panel.
 - `:lsp stop`: Stops the running language server.
 
 ### (3) Tree-sitter AST Highlighting & Smart Selection
-- Applies accurate multi-layered AST syntax highlighting for supported languages.
+- Applies accurate multi-layered AST syntax highlighting and incremental diff parsing across **18 supported languages** (Rust, C/C++, Python, JS/TS, JSON, Markdown, SQL, PL/SQL, Java, HTML, Bash, Go, Ruby, TOML, PowerShell, YAML, XML, and Batch).
 - **Smart Selection Expand / Shrink**: Press `Alt+Up` (or `Alt++`, `:smartselect expand`) to progressively expand visual selection along AST nodes (identifier ➔ expression ➔ statement ➔ block ➔ function), and `Alt+Down` (or `Alt+-`, `:smartselect shrink`) to shrink back.
 - `:ast`: Opens a preview window inspecting the buffer's Tree-sitter S-expression AST.
 

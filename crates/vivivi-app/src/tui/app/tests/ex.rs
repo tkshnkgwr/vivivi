@@ -608,6 +608,25 @@ fn test_ex_lsp_commands() {
             .unwrap()
             .contains("起動していません")
     );
+
+    // 3. :lsp comp (未起動時)
+    crate::tui::event::ex::execute_ex_command(&mut app, "lsp comp");
+    assert!(
+        app.status_message
+            .as_ref()
+            .unwrap()
+            .contains("起動していません")
+    );
+
+    // 4. :set ft=java / :set ft=plsql / :set ft=hosts / :set ft=cron
+    crate::tui::event::ex::execute_ex_command(&mut app, "set ft=java");
+    assert_eq!(app.syntax_lang, vivivi_modes::SyntaxLang::Java);
+    crate::tui::event::ex::execute_ex_command(&mut app, "set ft=plsql");
+    assert_eq!(app.syntax_lang, vivivi_modes::SyntaxLang::PlSql);
+    crate::tui::event::ex::execute_ex_command(&mut app, "set ft=hosts");
+    assert_eq!(app.syntax_lang, vivivi_modes::SyntaxLang::Hosts);
+    crate::tui::event::ex::execute_ex_command(&mut app, "set ft=cron");
+    assert_eq!(app.syntax_lang, vivivi_modes::SyntaxLang::Cron);
 }
 
 #[test]

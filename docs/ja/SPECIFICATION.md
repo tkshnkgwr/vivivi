@@ -563,10 +563,10 @@ stateDiagram-v2
 - **システム実装**: `vivivi-app` 側で `arboard::Clipboard` をラップした `SystemClipboard` を注入。
 - **レジスタ連携**: `"+` および `"*` レジスタへのヤンク／プット時に OS クリップボードと透過同期。`:set clipboard=unnamed` により無名レジスタ操作も自動同期。
 
-### 14.7 構文強調対応言語仕様 (全18言語)
-- **拡充言語**: Go (`.go`), Ruby (`.rb`), TOML (`.toml`), PowerShell (`.ps1`, `.psm1`, `.psd1`), YAML (`.yaml`, `.yml`), XML (`.xml`), Windows Batch (`.bat`, `.cmd`)。
-- **字句解析**: キーワード、型・クラス名、文字列（シングル/ダブル/生文字列）、数値、コメント、記号、環境変数（Batch）等のトークン分離。
-- **ステータスバー言語バッジ**: 各言語の標準バッジ（`[Go]`, `[Ruby]`, `[TOML]`, `[PowerShell]`, `[YAML]`, `[XML]`, `[Batch]`）をステータスバーに表示。
+### 14.7 構文強調対応言語仕様 (全20言語 / Tree-sitter 18言語)
+- **対応言語 (全20言語)**: Rust, C/C++, Python, JavaScript/TypeScript, JSON, Markdown, SQL, PL/SQL, Java, HTML, Bash, Go, Ruby, TOML, PowerShell, YAML, XML, Windows Batch (`.bat`, `.cmd`), Hosts (`hosts`, `*.hosts`), Cron (`crontab`, `crontab.*`, `*.cron`, `*.crontab`, `/etc/cron.d/*`)。`:set ft=<lang>`（`java`, `plsql`, `hosts`, `cron` 含む全言語）での手動切替にも対応。
+- **Tree-sitter AST ハイライト (18言語)**: Hosts・Cron を除く 18 言語すべてで抽象構文木（AST）に基づく高精度ハイライト・スマート選択および差分インクリメンタルパース（`parse_incremental`）を適用。
+- **専用字句解析・ステータスバー**: Hosts（IP・正規ホスト名・エイリアス・コメント）および Cron（コメント・環境変数・`@daily` 等の特殊指定・5フィールド時刻式・実行コマンド）の専用トークナイザーを実装し、ステータスバーに各言語バッジを表示。
 
 ---
 

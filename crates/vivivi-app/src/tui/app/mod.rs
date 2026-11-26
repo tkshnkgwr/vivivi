@@ -211,6 +211,9 @@ pub struct App {
     pub lsp_hover_text: Option<String>,
     pub lsp_show_hover: bool,
     pub lsp_show_diagnostics_panel: bool,
+    pub lsp_synced_revision: u64,
+    pub lsp_doc_version: i32,
+    pub lsp_completions: Vec<String>,
 
     // --- Tree-sitter 構文木解析 & スマート選択 ---
     pub treesitter: Option<TreeSitterEngine>,
@@ -527,6 +530,9 @@ impl App {
             lsp_hover_text: None,
             lsp_show_hover: false,
             lsp_show_diagnostics_panel: false,
+            lsp_synced_revision: 0,
+            lsp_doc_version: 0,
+            lsp_completions: Vec::new(),
 
             treesitter,
             treesitter_revision,
