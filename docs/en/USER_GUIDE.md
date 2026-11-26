@@ -369,7 +369,7 @@ cargo run -p vivivi-gui -- path/to/file.rs
   - Project files appear as nodes with radius reflecting file size and glow intensity encoding edit freshness. Dependency edges (`use`, `mod`, `#include`) pull related files together via simulated spring forces.
   - Nodes can be freely dragged; clicking any node opens the target file in the editor and returns to code view.
 - **Central Split Editor Canvas & Right Minimap**:
-  - Renders nested `:split` and `:vsplit` windows with isolated pane wheel scrolling. Clicking inside any split pane switches active window focus and positions the cursor at the clicked cell.
+  - Renders nested `:split` and `:vsplit` windows with isolated pane wheel scrolling. Clicking inside any split pane switches active window focus and positions the cursor at the clicked cell, dragging with the left button selects a range in Visual mode, and `Shift+Click` extends selection from the current cursor.
   - Clicking or dragging along the right-side Minimap jumps the viewport scroll directly to the line-proportional document position.
 - **Inline Japanese IME Composition**:
   - In Insert, Replace, CommandLine (`:` / `/`), and Migemo (`g/`) modes, OS IME composition is automatically enabled.

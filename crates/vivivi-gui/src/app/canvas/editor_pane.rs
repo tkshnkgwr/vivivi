@@ -13,24 +13,33 @@ use super::helpers::{
     draw_keisen_glyph, resolve_wrapped_char_col,
 };
 
+/// エディタキャンバスへ渡すマウスポインター入力状態。
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct EditorPointerInput {
+    /// マウス左ボタン押下開始位置
+    pub pressed_pos: Option<Pos2>,
+    /// マウス左ボタン押下中（ドラッグ中）の現在位置
+    pub drag_pos: Option<Pos2>,
+    /// Shift キーが押下されているか
+    pub shift_held: bool,
+    /// マウス左ボタンが押下中か
+    pub primary_down: bool,
+}
+
 impl ViviviGuiApp {
-    /// ウィンドウクリック時のフォーカス切替およびクリック座標からのカーソル位置解決を行います。
+    /// スクリーン座標からバッファ上のカーソル位置 `(line, col)` を解決します。
     #[allow(clippy::too_many_arguments)]
-    fn handle_window_click(
-        &mut self,
-        win_idx: usize,
-        click_pos: Pos2,
+    fn resolve_pointer_position(
+        &self,
+        pos: Pos2,
         text_start_x: f32,
         text_start_y: f32,
         char_width: f32,
         line_height: f32,
         wrap_cols: Option<usize>,
-    ) {
-        self.core.switch_to_window(win_idx);
-        let clicked_vis_row = ((click_pos.y - text_start_y) / line_height)
-            .floor()
-            .max(0.0) as usize;
-        let clicked_vis_col = ((click_pos.x - text_start_x) / char_width).floor().max(0.0) as usize;
+    ) -> CursorPosition {
+        let clicked_vis_row = ((pos.y - text_start_y) / line_height).floor().max(0.0) as usize;
+        let clicked_vis_col = ((pos.x - text_start_x) / char_width).floor().max(0.0) as usize;
         let tab_w = self.core.tab_width.max(1);
 
         let (target_line, resolved_col) = if let Some(max_cols) = wrap_cols {
@@ -96,9 +105,79 @@ impl ViviviGuiApp {
             (target_line, resolved_col)
         };
 
-        self.core.cursor.pos.line = target_line;
-        self.core.cursor.pos.col = resolved_col;
-        self.core.clamp_cursor();
+        CursorPosition::new(target_line, resolved_col)
+    }
+
+    /// ウィンドウ上のマウス押下・ドラッグ・Shift+クリックを処理し、フォーカス移動と範囲選択を更新します。
+    #[allow(clippy::too_many_arguments)]
+    fn handle_window_pointer(
+        &mut self,
+        win_idx: usize,
+        win_rect: Rect,
+        pointer: EditorPointerInput,
+        text_start_x: f32,
+        text_start_y: f32,
+        char_width: f32,
+        line_height: f32,
+        wrap_cols: Option<usize>,
+    ) {
+        if let Some(press_pos) = pointer.pressed_pos
+            && win_rect.contains(press_pos)
+        {
+            self.core.switch_to_window(win_idx);
+            let target = self.resolve_pointer_position(
+                press_pos,
+                text_start_x,
+                text_start_y,
+                char_width,
+                line_height,
+                wrap_cols,
+            );
+            if pointer.shift_held {
+                if self.core.cursor.anchor.is_none() {
+                    self.core.cursor.anchor = Some(self.core.cursor.pos);
+                }
+                self.core.cursor.pos = target;
+                self.core.clamp_cursor();
+                self.core.vi.set_mode(ViMode::Visual);
+            } else {
+                self.core.cursor.anchor = None;
+                if self.core.mode().is_visual() {
+                    self.core.vi.set_mode(ViMode::Normal);
+                }
+                self.core.cursor.pos = target;
+                self.core.clamp_cursor();
+            }
+            self.mouse_drag_window = Some(win_idx);
+            return;
+        }
+
+        if pointer.pressed_pos.is_none()
+            && pointer.primary_down
+            && self.mouse_drag_window == Some(win_idx)
+            && let Some(raw_pos) = pointer.drag_pos
+        {
+            let clamped = Pos2::new(
+                raw_pos.x.clamp(win_rect.min.x, win_rect.max.x),
+                raw_pos.y.clamp(win_rect.min.y, win_rect.max.y),
+            );
+            let target = self.resolve_pointer_position(
+                clamped,
+                text_start_x,
+                text_start_y,
+                char_width,
+                line_height,
+                wrap_cols,
+            );
+            if target != self.core.cursor.pos {
+                if self.core.cursor.anchor.is_none() {
+                    self.core.cursor.anchor = Some(self.core.cursor.pos);
+                }
+                self.core.cursor.pos = target;
+                self.core.clamp_cursor();
+                self.core.vi.set_mode(ViMode::Visual);
+            }
+        }
     }
 
     /// 1つのエディタウィンドウ領域（ガター・行番号・本文・ハイライト・IME・カーソル・枠線）を描画します。
@@ -109,7 +188,7 @@ impl ViviviGuiApp {
         win_idx: usize,
         win_rect: Rect,
         window_count: usize,
-        pointer_click_pos: Option<Pos2>,
+        pointer_input: EditorPointerInput,
         font_id: &FontId,
         char_width: f32,
         line_height: f32,
@@ -133,19 +212,16 @@ impl ViviviGuiApp {
             None
         };
 
-        if let Some(click_pos) = pointer_click_pos
-            && win_rect.contains(click_pos)
-        {
-            self.handle_window_click(
-                win_idx,
-                click_pos,
-                text_start_x,
-                text_start_y,
-                char_width,
-                line_height,
-                wrap_cols,
-            );
-        }
+        self.handle_window_pointer(
+            win_idx,
+            win_rect,
+            pointer_input,
+            text_start_x,
+            text_start_y,
+            char_width,
+            line_height,
+            wrap_cols,
+        );
 
         let is_active_window = win_idx == self.core.active_window;
         if is_active_window {

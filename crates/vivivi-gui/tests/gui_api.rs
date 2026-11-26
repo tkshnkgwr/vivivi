@@ -1612,3 +1612,137 @@ fn test_gui_cursor_shape_and_corner_radius_customization() {
     render_once(&mut gui);
     assert!(gui.last_cursor_rect.is_some());
 }
+
+/// シナリオ 22: マウス左ドラッグによる範囲選択（Visual 移行）・単一クリック解除・Shift+クリック選択の検証
+#[test]
+fn test_gui_mouse_drag_and_shift_click_selection() {
+    let core = App::new(
+        "hello world\nsecond line",
+        None,
+        CharEncoding::Utf8,
+        NewlineType::Lf,
+    );
+    let mut gui = ViviviGuiApp::from_core(core);
+    gui.sidebar_open = false;
+    gui.minimap_open = false;
+
+    let ctx = egui::Context::default();
+    let run_events = |gui: &mut ViviviGuiApp, events: Vec<Event>, modifiers: Modifiers| {
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    egui::vec2(640.0, 480.0),
+                )),
+                events,
+                modifiers,
+                ..Default::default()
+            },
+            |ctx| gui.render_central_panel(ctx),
+        );
+    };
+
+    // 初回描画でテキスト原点座標と文字幅を確定
+    run_events(&mut gui, vec![], Modifiers::NONE);
+    let origin = gui.last_active_text_origin;
+    let cw = gui.last_char_width;
+
+    // 1. 0行目1列目で左押下 -> 5列目までドラッグ
+    let start_pos = Pos2::new(origin.x + cw * 1.5, origin.y + 4.0);
+    let drag_pos = Pos2::new(origin.x + cw * 5.5, origin.y + 4.0);
+    run_events(
+        &mut gui,
+        vec![
+            Event::PointerMoved(start_pos),
+            Event::PointerButton {
+                pos: start_pos,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Modifiers::NONE,
+            },
+        ],
+        Modifiers::NONE,
+    );
+    run_events(
+        &mut gui,
+        vec![Event::PointerMoved(drag_pos)],
+        Modifiers::NONE,
+    );
+
+    assert_eq!(gui.core.mode(), ViMode::Visual);
+    assert_eq!(
+        gui.core.cursor.anchor,
+        Some(vivivi_core::CursorPosition::new(0, 1))
+    );
+    assert_eq!(
+        gui.core.cursor_pos(),
+        vivivi_core::CursorPosition::new(0, 5)
+    );
+
+    // ボタンを離したあと別位置を単一クリックすると選択が解除される
+    run_events(
+        &mut gui,
+        vec![Event::PointerButton {
+            pos: drag_pos,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        }],
+        Modifiers::NONE,
+    );
+    let click_pos = Pos2::new(origin.x + cw * 2.5, origin.y + 4.0);
+    run_events(
+        &mut gui,
+        vec![
+            Event::PointerMoved(click_pos),
+            Event::PointerButton {
+                pos: click_pos,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Modifiers::NONE,
+            },
+        ],
+        Modifiers::NONE,
+    );
+    run_events(
+        &mut gui,
+        vec![Event::PointerButton {
+            pos: click_pos,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        }],
+        Modifiers::NONE,
+    );
+    assert_eq!(gui.core.mode(), ViMode::Normal);
+    assert_eq!(gui.core.cursor.anchor, None);
+    assert_eq!(
+        gui.core.cursor_pos(),
+        vivivi_core::CursorPosition::new(0, 2)
+    );
+
+    // 2. Shift+クリックで現在位置 (0, 2) から (0, 7) まで範囲選択
+    let shift_pos = Pos2::new(origin.x + cw * 7.5, origin.y + 4.0);
+    run_events(
+        &mut gui,
+        vec![
+            Event::PointerMoved(shift_pos),
+            Event::PointerButton {
+                pos: shift_pos,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Modifiers::SHIFT,
+            },
+        ],
+        Modifiers::SHIFT,
+    );
+    assert_eq!(gui.core.mode(), ViMode::Visual);
+    assert_eq!(
+        gui.core.cursor.anchor,
+        Some(vivivi_core::CursorPosition::new(0, 2))
+    );
+    assert_eq!(
+        gui.core.cursor_pos(),
+        vivivi_core::CursorPosition::new(0, 7)
+    );
+}

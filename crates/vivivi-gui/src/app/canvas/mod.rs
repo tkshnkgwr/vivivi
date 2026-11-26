@@ -184,17 +184,34 @@ impl ViviviGuiApp {
                     ctx.set_cursor_icon(egui::CursorIcon::Text);
                 }
 
-                // マウスクリックによるウィンドウフォーカス＆カーソル位置移動判定（モーダル中は無効化）
-                let pointer_click_pos = if self.is_any_modal_open() {
-                    None
+                // マウスクリック・ドラッグ選択によるウィンドウフォーカス＆カーソル/範囲選択判定（モーダル中は無効化）
+                let pointer_input = if self.is_any_modal_open() {
+                    self.mouse_drag_window = None;
+                    super::canvas::editor_pane::EditorPointerInput::default()
                 } else {
-                    ui.input(|i| {
-                        if i.pointer.primary_clicked() {
+                    let input = ui.input(|i| {
+                        let primary_down = i.pointer.primary_down();
+                        let pressed_pos = if i.pointer.primary_pressed() {
                             i.pointer.interact_pos()
                         } else {
                             None
+                        };
+                        let drag_pos = if primary_down {
+                            i.pointer.interact_pos().or_else(|| i.pointer.latest_pos())
+                        } else {
+                            None
+                        };
+                        super::canvas::editor_pane::EditorPointerInput {
+                            pressed_pos,
+                            drag_pos,
+                            shift_held: i.modifiers.shift,
+                            primary_down,
                         }
-                    })
+                    });
+                    if !input.primary_down {
+                        self.mouse_drag_window = None;
+                    }
+                    input
                 };
 
                 let mut active_cursor_screen_rect: Option<Rect> = None;
@@ -227,7 +244,7 @@ impl ViviviGuiApp {
                         *win_idx,
                         win_rect,
                         window_count,
-                        pointer_click_pos,
+                        pointer_input,
                         &font_id,
                         char_width,
                         line_height,

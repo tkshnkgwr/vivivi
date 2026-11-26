@@ -13,7 +13,10 @@ use std::time::Duration;
 use crossterm::{
     event::{self as ct_event, Event as CtEvent},
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{
+        BeginSynchronizedUpdate, EndSynchronizedUpdate, EnterAlternateScreen, LeaveAlternateScreen,
+        disable_raw_mode, enable_raw_mode,
+    },
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 
@@ -44,6 +47,7 @@ pub fn run(mut app: App) -> anyhow::Result<()> {
         let _ = disable_raw_mode();
         let _ = execute!(
             stdout(),
+            EndSynchronizedUpdate,
             LeaveAlternateScreen,
             crossterm::cursor::SetCursorStyle::DefaultUserShape
         );
@@ -59,6 +63,8 @@ pub fn run(mut app: App) -> anyhow::Result<()> {
     // 3. メインイベントループ
     let tick_rate = Duration::from_millis(50);
     let mut last_cursor_mode = None;
+    let mut needs_redraw = true;
+    let mut last_update_status = format!("{:?}", app.update_status());
 
     while !app.should_quit {
         // モード連動のカーソル形状変更 (Normal/Visual: Block, Insert: Bar, Replace: Underline)
@@ -72,27 +78,70 @@ pub fn run(mut app: App) -> anyhow::Result<()> {
             };
             execute!(terminal.backend_mut(), cursor_style)?;
             last_cursor_mode = Some(current_mode);
+            needs_redraw = true;
         }
 
-        // LSP イベントの定期ポーリング
+        // LSP イベントの定期ポーリング（状態変化時のみ再描画を要求）
+        let prev_status = app.status_message.clone();
+        let prev_hover = app.lsp_hover_text.clone();
+        let prev_preview = app.show_preview;
+        let prev_pos = app.cursor.pos;
+        let prev_path = app.file_path.clone();
         app.poll_lsp();
+        if app.status_message != prev_status
+            || app.lsp_hover_text != prev_hover
+            || app.show_preview != prev_preview
+            || app.cursor.pos != prev_pos
+            || app.file_path != prev_path
+        {
+            needs_redraw = true;
+        }
+
+        let current_update_status = format!("{:?}", app.update_status());
+        if current_update_status != last_update_status {
+            last_update_status = current_update_status;
+            needs_redraw = true;
+        }
+
         // バッファ変更時の AST 構文木・アウトライン自動同期
         app.sync_treesitter_if_dirty();
         if app.show_outline {
             app.sync_outline_if_dirty();
         }
 
-        // 画面描画
-        terminal.draw(|frame| {
-            ui::render(frame, &mut app);
-        })?;
+        // 画面描画（同期出力でフレーム途中のチラつきを防止し、アイドル時は再描画をスキップ）
+        if needs_redraw {
+            execute!(terminal.backend_mut(), BeginSynchronizedUpdate)?;
+            let draw_res = terminal
+                .draw(|frame| {
+                    ui::render(frame, &mut app);
+                })
+                .map(|_| ());
+            let end_res = execute!(terminal.backend_mut(), EndSynchronizedUpdate);
+            draw_res?;
+            end_res?;
+            needs_redraw = false;
+        }
 
-        // イベント待機 (50ms タイムアウトでポーリング)
-        if ct_event::poll(tick_rate)?
-            && let CtEvent::Key(key) = ct_event::read()?
-            && key.kind != ct_event::KeyEventKind::Release
-        {
-            event::handle_key_event(&mut app, key);
+        // イベント待機 (50ms タイムアウトでポーリングし、連続キー入力は最大 8 件までまとめて消化)
+        if ct_event::poll(tick_rate)? {
+            let mut processed = 0usize;
+            loop {
+                match ct_event::read()? {
+                    CtEvent::Key(key) if key.kind != ct_event::KeyEventKind::Release => {
+                        event::handle_key_event(&mut app, key);
+                        needs_redraw = true;
+                    }
+                    CtEvent::Resize(_, _) | CtEvent::FocusGained => {
+                        needs_redraw = true;
+                    }
+                    _ => {}
+                }
+                processed += 1;
+                if app.should_quit || processed >= 8 || !ct_event::poll(Duration::ZERO)? {
+                    break;
+                }
+            }
         }
     }
 
@@ -100,6 +149,7 @@ pub fn run(mut app: App) -> anyhow::Result<()> {
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
+        EndSynchronizedUpdate,
         LeaveAlternateScreen,
         crossterm::cursor::SetCursorStyle::DefaultUserShape
     )?;

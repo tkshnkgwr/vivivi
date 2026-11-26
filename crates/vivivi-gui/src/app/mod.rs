@@ -117,6 +117,8 @@ pub struct ViviviGuiApp {
     pub async_tree: AsyncFileTree,
     /// プロジェクト可視化グラフ (Visualize / ViVi 4)
     pub visualize_graph: Option<crate::visualize::ForceGraph>,
+    /// マウス左ドラッグ選択中の分割ウィンドウインデックス
+    pub(crate) mouse_drag_window: Option<usize>,
 }
 
 impl ViviviGuiApp {
@@ -194,6 +196,7 @@ impl ViviviGuiApp {
             settings_dialog: SettingsDialogState::new(&initial_config),
             async_tree,
             visualize_graph: None,
+            mouse_drag_window: None,
         }
     }
 

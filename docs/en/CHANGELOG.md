@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [0.9.24-beta] - 2026-11-26
+
+### Added / Changed / Fixed
+- **TUI Synchronized Output & Idle Redraw Skipping (`vivivi-app`)**:
+  - Added `BeginSynchronizedUpdate` / `EndSynchronizedUpdate` (DEC mode 2026) around `terminal.draw` (including panic cleanup and shutdown restore) to eliminate upper-screen flicker while scrolling.
+  - Added `needs_redraw` tracking to skip redundant idle redraws every 50ms and batch up to 8 consecutive queued key events per frame.
+- **GUI Mouse Drag & Shift+Click Text Selection (`vivivi-gui`)**:
+  - Implemented left-button drag selection (`ViMode::Visual` tracking), single-click selection clear, and `Shift+Click` range extension on the editor canvas, along with integration test `test_gui_mouse_drag_and_shift_click_selection`.
+- **Bilingual Documentation Sync (`docs/`, `README*.md`)**:
+  - Synchronized `USER_GUIDE.md`, `README.md`, `README_JA.md`, and `CHANGELOG.md` with the latest behavior and version.
+
+---
+
 ## [0.9.23-beta] - 2026-11-26
 
 ### Added / Changed / Fixed

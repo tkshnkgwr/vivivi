@@ -4,6 +4,19 @@
 
 ---
 
+## [0.9.24-beta] - 2026-11-26
+
+### Added / Changed / Fixed
+- **TUI 描画の同期出力対応 & アイドル時再描画スキップ (`vivivi-app`)**:
+  - `crossterm::terminal::BeginSynchronizedUpdate` / `EndSynchronizedUpdate`（DEC モード 2026）を導入し、スクロール時のフレーム途中描画による画面上部のチラつきを防止（パニックフックおよび終了復元にも `EndSynchronizedUpdate` を組み込み）。
+  - `needs_redraw` フラグによるオンデマンド再描画（アイドル時の 50ms 毎無条件再描画を停止）および連続キー入力のバッチ消化（1 フレーム最大 8 件）を実装。
+- **GUI エディタキャンバスのマウスドラッグ選択 & Shift+クリック範囲選択対応 (`vivivi-gui`)**:
+  - 左ボタンドラッグによるリアルタイムのテキスト範囲選択（`ViMode::Visual` 自動移行）、単一クリックによる選択解除、`Shift+クリック` による選択範囲拡張を実装し、統合テスト（`test_gui_mouse_drag_and_shift_click_selection`）を追加。
+- **日英ドキュメント同期 (`docs/`, `README*.md`)**:
+  - `USER_GUIDE.md`, `README.md`, `README_JA.md`, `CHANGELOG.md` を最新仕様・バージョンへ同期。
+
+---
+
 ## [0.9.23-beta] - 2026-11-26
 
 ### Added / Changed / Fixed
