@@ -128,6 +128,47 @@ impl ViviviGuiApp {
         self.process_egui_events_internal(events, current_modifiers, true);
     }
 
+    /// 現在のビジュアル選択範囲をクリップボードへコピーし、ビジュアルモードを解除します。
+    pub(crate) fn copy_selection_to_clipboard(&mut self) -> bool {
+        if self.core.mode().is_visual()
+            && let Some(text) = self.core.get_selected_text()
+        {
+            let count = text.chars().count();
+            self.core.set_clipboard_text(&text);
+            self.core.status_message = Some(format!("{count} 文字をコピーしました"));
+            self.core.cursor.anchor = None;
+            self.core.vi.set_mode(ViMode::Normal);
+            return true;
+        }
+        false
+    }
+
+    /// 現在のビジュアル選択範囲をクリップボードへコピーして削除（切り取り）します。
+    pub(crate) fn cut_selection_to_clipboard(&mut self) -> bool {
+        if self.core.mode().is_visual()
+            && let Some(text) = self.core.get_selected_text()
+        {
+            let count = text.chars().count();
+            self.core.set_clipboard_text(&text);
+            self.core.delete_selected_text();
+            self.core.status_message = Some(format!("{count} 文字を切り取りました"));
+            return true;
+        }
+        false
+    }
+
+    /// バッファ全体を選択（`VisualLine`）します。
+    pub(crate) fn select_all_buffer(&mut self) {
+        let total_lines = self.core.buffer.line_count();
+        if total_lines > 0 {
+            self.core.vi.set_mode(ViMode::VisualLine);
+            self.core.cursor.anchor = Some(vivivi_core::CursorPosition::new(0, 0));
+            self.core.cursor.pos =
+                vivivi_core::CursorPosition::new(total_lines.saturating_sub(1), 0);
+            self.core.status_message = Some("-- 全選択 --".to_string());
+        }
+    }
+
     /// ホイールイベントを除外して入力イベントを処理します（描画時に領域判定付きでホイールを処理する場合に使用）。
     pub(crate) fn process_egui_events_without_wheel(
         &mut self,
@@ -297,7 +338,19 @@ impl ViviviGuiApp {
                     }
                 }
 
-                // 3. ペースト（Ctrl+V 等）イベント
+                // 3. コピー・切り取り・ペースト（Ctrl+C / Ctrl+X / Ctrl+V 等）イベント
+                Event::Copy => {
+                    if !is_modal_active {
+                        self.copy_selection_to_clipboard();
+                    }
+                }
+
+                Event::Cut => {
+                    if !is_modal_active {
+                        self.cut_selection_to_clipboard();
+                    }
+                }
+
                 Event::Paste(text) => {
                     if is_modal_active {
                         continue;
@@ -360,6 +413,14 @@ impl ViviviGuiApp {
                     // Ctrl+E (サイドバー・ファイルエクスプローラーの表示トグル)
                     if modifiers.ctrl && *key == Key::E {
                         self.sidebar_open = !self.sidebar_open;
+                        continue;
+                    }
+
+                    // GUI 版では Ctrl+C でアプリを終了させず、選択テキストのコピーのみを実行する
+                    if modifiers.ctrl && !modifiers.shift && !modifiers.alt && *key == Key::C {
+                        if !is_modal_active {
+                            self.copy_selection_to_clipboard();
+                        }
                         continue;
                     }
 

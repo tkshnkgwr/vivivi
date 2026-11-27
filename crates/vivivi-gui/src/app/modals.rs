@@ -59,16 +59,16 @@ impl ViviviGuiApp {
                     egui::ScrollArea::both()
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            for line in &self.core.help_lines {
-                                ui.add(
-                                    egui::Label::new(
-                                        egui::RichText::new(line)
-                                            .color(pal.fg_text)
-                                            .family(egui::FontFamily::Monospace),
-                                    )
-                                    .wrap_mode(egui::TextWrapMode::Extend),
-                                );
-                            }
+                            let joined = self.core.help_lines.join("\n");
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(joined)
+                                        .color(pal.fg_text)
+                                        .family(egui::FontFamily::Monospace),
+                                )
+                                .wrap_mode(egui::TextWrapMode::Extend)
+                                .selectable(true),
+                            );
                         });
                 });
             self.core.show_help = open;
@@ -90,13 +90,15 @@ impl ViviviGuiApp {
                     });
                     ui.separator();
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        for line in &self.core.preview_lines {
-                            ui.label(
-                                egui::RichText::new(line)
+                        let joined = self.core.preview_lines.join("\n");
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(joined)
                                     .color(pal.fg_text)
                                     .family(egui::FontFamily::Monospace),
-                            );
-                        }
+                            )
+                            .selectable(true),
+                        );
                     });
                 });
             self.core.show_preview = open;
@@ -251,13 +253,14 @@ impl ViviviGuiApp {
                 .default_size([480.0, 220.0])
                 .show(ctx, |ui| {
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        for line in hover_text.lines() {
-                            ui.label(
-                                egui::RichText::new(line)
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(&hover_text)
                                     .color(pal.fg_text)
                                     .family(egui::FontFamily::Monospace),
-                            );
-                        }
+                            )
+                            .selectable(true),
+                        );
                     });
                 });
             if !open {

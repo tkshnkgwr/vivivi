@@ -1746,3 +1746,138 @@ fn test_gui_mouse_drag_and_shift_click_selection() {
         vivivi_core::CursorPosition::new(0, 7)
     );
 }
+
+/// シナリオ 23: `Event::Copy` / `Event::Cut` / `Ctrl+C` の安全なコピー・切り取りと非終了検証
+#[test]
+fn test_gui_copy_cut_events_and_ctrl_c_safety() {
+    let core = App::new(
+        "hello world\nsecond line",
+        None,
+        CharEncoding::Utf8,
+        NewlineType::Lf,
+    );
+    let mut gui = ViviviGuiApp::from_core(core);
+    gui.core
+        .vi
+        .set_clipboard_provider(vivivi_app::tui::clipboard::MockClipboard::new_shared());
+
+    // 1. 未選択状態で Ctrl+C を押してもアプリが終了しないこと
+    gui.process_egui_events(
+        &[Event::Key {
+            key: Key::C,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::CTRL,
+        }],
+        Modifiers::CTRL,
+    );
+    assert!(!gui.core.should_quit);
+
+    // 2. Visual 選択中に Event::Copy でクリップボードへコピーされ選択解除されること
+    gui.core.vi.set_mode(ViMode::Visual);
+    gui.core.cursor.anchor = Some(vivivi_core::CursorPosition::new(0, 0));
+    gui.core.cursor.pos = vivivi_core::CursorPosition::new(0, 4);
+    gui.process_egui_events(&[Event::Copy], Modifiers::CTRL);
+    assert_eq!(gui.core.mode(), ViMode::Normal);
+    assert_eq!(gui.core.cursor.anchor, None);
+    assert_eq!(gui.core.get_clipboard_text().as_deref(), Some("hello"));
+
+    // 3. Visual 選択中に Event::Cut でクリップボードへコピー＋削除されること
+    gui.core.vi.set_mode(ViMode::Visual);
+    gui.core.cursor.anchor = Some(vivivi_core::CursorPosition::new(0, 0));
+    gui.core.cursor.pos = vivivi_core::CursorPosition::new(0, 5);
+    gui.process_egui_events(&[Event::Cut], Modifiers::CTRL);
+    assert_eq!(gui.core.mode(), ViMode::Normal);
+    assert_eq!(gui.core.get_clipboard_text().as_deref(), Some("hello "));
+    assert_eq!(gui.core.buffer.get_line(0).as_deref(), Some("world"));
+}
+
+/// シナリオ 24: ダブルクリックによる単語選択とトリプルクリックによる行選択の検証
+#[test]
+fn test_gui_double_and_triple_click_selection() {
+    let core = App::new(
+        "hello world\nsecond line",
+        None,
+        CharEncoding::Utf8,
+        NewlineType::Lf,
+    );
+    let mut gui = ViviviGuiApp::from_core(core);
+    gui.sidebar_open = false;
+    gui.minimap_open = false;
+
+    let ctx = egui::Context::default();
+    let run_events = |gui: &mut ViviviGuiApp, events: Vec<Event>, time: f64| {
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    egui::vec2(640.0, 480.0),
+                )),
+                time: Some(time),
+                events,
+                ..Default::default()
+            },
+            |ctx| gui.render_central_panel(ctx),
+        );
+    };
+
+    run_events(&mut gui, vec![], 0.0);
+    let origin = gui.last_active_text_origin;
+    let cw = gui.last_char_width;
+    let click_pos = Pos2::new(origin.x + cw * 7.5, origin.y + 4.0); // "world" 上
+
+    let mut t = 1.0;
+    let click = |gui: &mut ViviviGuiApp, t_val: f64| {
+        run_events(
+            gui,
+            vec![
+                Event::PointerMoved(click_pos),
+                Event::PointerButton {
+                    pos: click_pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+            t_val,
+        );
+        run_events(
+            gui,
+            vec![Event::PointerButton {
+                pos: click_pos,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: Modifiers::NONE,
+            }],
+            t_val + 0.02,
+        );
+    };
+
+    // 1. ダブルクリックで単語 "world" (6..=10) が選択される
+    click(&mut gui, t);
+    t += 0.1;
+    click(&mut gui, t);
+    assert_eq!(gui.core.mode(), ViMode::Visual);
+    assert_eq!(
+        gui.core.cursor.anchor,
+        Some(vivivi_core::CursorPosition::new(0, 6))
+    );
+    assert_eq!(
+        gui.core.cursor_pos(),
+        vivivi_core::CursorPosition::new(0, 10)
+    );
+
+    // 2. トリプルクリックで行全体が選択される
+    t += 0.1;
+    click(&mut gui, t);
+    assert_eq!(gui.core.mode(), ViMode::VisualLine);
+    assert_eq!(
+        gui.core.cursor.anchor,
+        Some(vivivi_core::CursorPosition::new(0, 0))
+    );
+    assert_eq!(
+        gui.core.cursor_pos(),
+        vivivi_core::CursorPosition::new(0, 10)
+    );
+}

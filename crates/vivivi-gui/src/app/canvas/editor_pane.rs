@@ -24,6 +24,44 @@ pub(super) struct EditorPointerInput {
     pub shift_held: bool,
     /// マウス左ボタンが押下中か
     pub primary_down: bool,
+    /// ダブルクリックが検出されたか
+    pub double_clicked: bool,
+    /// トリプルクリックが検出されたか
+    pub triple_clicked: bool,
+}
+
+/// 指定行・列位置の単語範囲 `(start_col, end_col)`（両端含む）を返します。
+fn resolve_word_range(line_str: &str, col: usize) -> (usize, usize) {
+    let chars: Vec<char> = line_str.chars().collect();
+    if chars.is_empty() {
+        return (0, 0);
+    }
+    let idx = col.min(chars.len() - 1);
+    #[derive(PartialEq, Eq)]
+    enum CharClass {
+        Space,
+        Word,
+        Punct,
+    }
+    let classify = |ch: char| {
+        if ch.is_whitespace() {
+            CharClass::Space
+        } else if ch.is_alphanumeric() || ch == '_' {
+            CharClass::Word
+        } else {
+            CharClass::Punct
+        }
+    };
+    let target_class = classify(chars[idx]);
+    let mut start = idx;
+    while start > 0 && classify(chars[start - 1]) == target_class {
+        start -= 1;
+    }
+    let mut end = idx;
+    while end + 1 < chars.len() && classify(chars[end + 1]) == target_class {
+        end += 1;
+    }
+    (start, end)
 }
 
 impl ViviviGuiApp {
@@ -121,6 +159,56 @@ impl ViviviGuiApp {
         line_height: f32,
         wrap_cols: Option<usize>,
     ) {
+        if pointer.triple_clicked
+            && let Some(pos) = pointer.drag_pos.or(pointer.pressed_pos)
+            && win_rect.contains(pos)
+        {
+            self.core.switch_to_window(win_idx);
+            let target = self.resolve_pointer_position(
+                pos,
+                text_start_x,
+                text_start_y,
+                char_width,
+                line_height,
+                wrap_cols,
+            );
+            let last_col = self
+                .core
+                .buffer
+                .get_line(target.line)
+                .map(|s| s.chars().count().saturating_sub(1))
+                .unwrap_or(0);
+            self.core.cursor.anchor = Some(CursorPosition::new(target.line, 0));
+            self.core.cursor.pos = CursorPosition::new(target.line, last_col);
+            self.core.clamp_cursor();
+            self.core.vi.set_mode(ViMode::VisualLine);
+            self.mouse_drag_window = None;
+            return;
+        }
+
+        if pointer.double_clicked
+            && let Some(pos) = pointer.drag_pos.or(pointer.pressed_pos)
+            && win_rect.contains(pos)
+        {
+            self.core.switch_to_window(win_idx);
+            let target = self.resolve_pointer_position(
+                pos,
+                text_start_x,
+                text_start_y,
+                char_width,
+                line_height,
+                wrap_cols,
+            );
+            let line_str = self.core.buffer.get_line(target.line).unwrap_or_default();
+            let (w_start, w_end) = resolve_word_range(&line_str, target.col);
+            self.core.cursor.anchor = Some(CursorPosition::new(target.line, w_start));
+            self.core.cursor.pos = CursorPosition::new(target.line, w_end);
+            self.core.clamp_cursor();
+            self.core.vi.set_mode(ViMode::Visual);
+            self.mouse_drag_window = None;
+            return;
+        }
+
         if let Some(press_pos) = pointer.pressed_pos
             && win_rect.contains(press_pos)
         {
@@ -157,6 +245,15 @@ impl ViviviGuiApp {
             && self.mouse_drag_window == Some(win_idx)
             && let Some(raw_pos) = pointer.drag_pos
         {
+            // ドラッグがウィンドウ上下端を超えた場合は自動スクロール
+            if raw_pos.y < win_rect.min.y {
+                self.core.scroll.0 = self.core.scroll.0.saturating_sub(1);
+            } else if raw_pos.y > win_rect.max.y {
+                let max_line = self.core.buffer.line_count().saturating_sub(1);
+                if self.core.scroll.0 < max_line {
+                    self.core.scroll.0 += 1;
+                }
+            }
             let clamped = Pos2::new(
                 raw_pos.x.clamp(win_rect.min.x, win_rect.max.x),
                 raw_pos.y.clamp(win_rect.min.y, win_rect.max.y),
@@ -618,7 +715,7 @@ impl ViviviGuiApp {
                         let c = pal.accent_yellow;
                         painter.rect_filled(
                             cell_rect,
-                            2.0,
+                            0.0,
                             Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), 90),
                         );
                     } else if is_paren_match {

@@ -176,19 +176,44 @@ impl ViviviGuiApp {
                     }
                 }
 
+                // エディタ領域のインタラクション判定（ダブル/トリプルクリック、右クリックコンテキストメニュー）
+                let editor_response = if !self.is_any_modal_open() {
+                    Some(ui.interact(
+                        editor_rect,
+                        ui.id().with("editor_canvas_interact"),
+                        egui::Sense::click_and_drag(),
+                    ))
+                } else {
+                    None
+                };
+
+                let context_menu_open = editor_response
+                    .as_ref()
+                    .is_some_and(|r| r.context_menu_opened());
+
                 // エディタ中央ペイン領域のマウスホバー連動「Iビーム（テキスト入力）」カーソル変更
                 if !self.is_any_modal_open()
+                    && !context_menu_open
                     && let Some(pos) = ui.input(|i| i.pointer.hover_pos())
                     && editor_rect.contains(pos)
                 {
                     ctx.set_cursor_icon(egui::CursorIcon::Text);
                 }
 
-                // マウスクリック・ドラッグ選択によるウィンドウフォーカス＆カーソル/範囲選択判定（モーダル中は無効化）
-                let pointer_input = if self.is_any_modal_open() {
+                // マウスクリック・ドラッグ選択によるウィンドウフォーカス＆カーソル/範囲選択判定（モーダル・右クリックメニュー表示中は無効化）
+                let pointer_input = if self.is_any_modal_open() || context_menu_open {
                     self.mouse_drag_window = None;
                     super::canvas::editor_pane::EditorPointerInput::default()
                 } else {
+                    let (double_clicked, triple_clicked) = editor_response
+                        .as_ref()
+                        .map(|r| {
+                            (
+                                r.double_clicked_by(egui::PointerButton::Primary),
+                                r.triple_clicked_by(egui::PointerButton::Primary),
+                            )
+                        })
+                        .unwrap_or((false, false));
                     let input = ui.input(|i| {
                         let primary_down = i.pointer.primary_down();
                         let pressed_pos = if i.pointer.primary_pressed() {
@@ -196,7 +221,7 @@ impl ViviviGuiApp {
                         } else {
                             None
                         };
-                        let drag_pos = if primary_down {
+                        let drag_pos = if primary_down || double_clicked || triple_clicked {
                             i.pointer.interact_pos().or_else(|| i.pointer.latest_pos())
                         } else {
                             None
@@ -206,6 +231,8 @@ impl ViviviGuiApp {
                             drag_pos,
                             shift_held: i.modifiers.shift,
                             primary_down,
+                            double_clicked,
+                            triple_clicked,
                         }
                     });
                     if !input.primary_down {
@@ -255,6 +282,45 @@ impl ViviviGuiApp {
                     ) {
                         active_cursor_screen_rect = Some(rect);
                     }
+                }
+
+                // 4.3.5 エディタ右クリックコンテキストメニュー
+                if let Some(resp) = editor_response {
+                    resp.context_menu(|ui| {
+                        let has_selection = self.core.mode().is_visual();
+                        if ui
+                            .add_enabled(has_selection, egui::Button::new("📋 コピー (Ctrl+C)"))
+                            .clicked()
+                        {
+                            self.copy_selection_to_clipboard();
+                            ui.close_menu();
+                        }
+                        if ui
+                            .add_enabled(has_selection, egui::Button::new("✂ 切り取り (Ctrl+X)"))
+                            .clicked()
+                        {
+                            self.cut_selection_to_clipboard();
+                            ui.close_menu();
+                        }
+                        if ui.button("📄 貼り付け (Ctrl+V)").clicked() {
+                            if let Some(clip_text) = self.core.get_clipboard_text() {
+                                if self.core.mode().is_visual() {
+                                    self.core.delete_selected_text();
+                                }
+                                self.core.insert_text_at_cursor(&clip_text);
+                                self.core.status_message = Some(format!(
+                                    "{} 文字を貼り付けました",
+                                    clip_text.chars().count()
+                                ));
+                            }
+                            ui.close_menu();
+                        }
+                        ui.separator();
+                        if ui.button("🔠 すべて選択 (Ctrl+A)").clicked() {
+                            self.select_all_buffer();
+                            ui.close_menu();
+                        }
+                    });
                 }
 
                 // 4.4 削除文字落下パーティクルの物理更新 ＆ オーバーレイ描画

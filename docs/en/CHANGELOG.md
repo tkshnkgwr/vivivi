@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [0.9.25-beta] - 2026-11-27
+
+### Added / Changed / Fixed
+- **Enhanced GUI Mouse Selection, Copy/Cut Handling, and Context Menu (`vivivi-gui`)**:
+  - Handled `egui::Event::Copy` / `Event::Cut` for OS clipboard copy/cut via `Ctrl+C` / `Ctrl+X`, and prevented accidental app termination when pressing `Ctrl+C` without selection.
+  - Added right-click context menu (Copy / Cut / Paste / Select All), double-click word selection, triple-click line selection, and auto-scrolling while dragging past top/bottom window edges.
+  - Combined modal text lines (Help, Preview, LSP Hover) into single selectable `Label` blocks for multi-line drag selection and copying.
+- **Flat Search Highlight Rendering (`vivivi-gui`)**:
+  - Removed per-character corner rounding (`2.0` -> `0.0`) on search match highlights in the GUI editor canvas.
+
+---
+
 ## [0.9.24-beta] - 2026-11-26
 
 ### Added / Changed / Fixed
